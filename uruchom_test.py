@@ -2,7 +2,7 @@
 import sys
 import random
 from typing import Union
-from silnik_gry import Gracz, Druzyna, Rozdanie, Karta, FazaGry
+from silnik_gry import Gracz, Druzyna, Rozdanie, Karta, FazaGry, Kontrakt
 
 def znajdz_legalny_ruch(rozdanie: Rozdanie, gracz: Gracz) -> Union[Karta, None]:
     """Prosta AI: znajduje pierwszą legalną kartę do zagrania z ręki gracza."""
@@ -24,7 +24,7 @@ def formatuj_akcje(akcje: list[dict]) -> str:
             opisy.append(f"{typ_akcji}{atut_str}")
         else:
             opisy.append(akcja['typ'].replace('_', ' ').capitalize())
-    return ", ".join(opisy)
+    return ", ".join(sorted(opisy))
 
 def uruchom_symulacje_rozdania(numer_rozdania: int, druzyny: list[Druzyna]):
     print(f"--- ROZDANIE #{numer_rozdania} ---")
@@ -40,6 +40,9 @@ def uruchom_symulacje_rozdania(numer_rozdania: int, druzyny: list[Druzyna]):
     
     rozdajacy_idx = (numer_rozdania - 1) % 4
     rozdanie = Rozdanie(gracze=gracze, druzyny=druzyny, rozdajacy_idx=rozdajacy_idx)
+    # Ręczne ustawienie punktów do testowania opcji "do końca"
+    # druzyny[0].punkty_meczu = 50
+    # druzyny[1].punkty_meczu = 60
     print(f"Rozdającym jest: {gracze[rozdajacy_idx].nazwa}")
     
     rozdanie.rozpocznij_nowe_rozdanie()
@@ -47,54 +50,77 @@ def uruchom_symulacje_rozdania(numer_rozdania: int, druzyny: list[Druzyna]):
     for gracz in gracze:
         print(f"  Ręka gracza '{gracz.nazwa}': {', '.join(map(str, gracz.reka))}")
 
-    if rozdanie.faza == FazaGry.DEKLARACJA_1:
-        print("\n--- ETAP: Deklaracja 1 ---")
-        gracz_deklarujacy = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-        mozliwe_akcje = rozdanie.get_mozliwe_akcje(gracz_deklarujacy)
-        wybrana_akcja = random.choice(mozliwe_akcje)
-        print(f"  Deklaruje: {gracz_deklarujacy.nazwa}")
-        print(f"  Możliwe akcje: {formatuj_akcje(mozliwe_akcje)}")
-        atut_str = wybrana_akcja.get('atut').name if wybrana_akcja.get('atut') else "Brak"
-        print(f"  Decyzja: {wybrana_akcja['kontrakt'].name}, Atut: {atut_str}")
-        rozdanie.wykonaj_akcje(gracz_deklarujacy, wybrana_akcja)
+    faza_naglowek_mapa = {
+        FazaGry.DEKLARACJA_1: "--- ETAP: Deklaracja 1 ---",
+        FazaGry.LUFA: "--- ETAP: Faza Lufy ---",
+        FazaGry.FAZA_PYTANIA: "--- ETAP: Faza Pytania ---",
+        FazaGry.LICYTACJA: "--- ETAP: Licytacja 2 (Przebicie) ---"
+    }
+    wyswietlono_naglowek_fazy = {faza: False for faza in faza_naglowek_mapa}
 
-    if rozdanie.faza == FazaGry.LUFA:
-        print("\n--- ETAP: Faza Lufy ---")
-        while rozdanie.faza == FazaGry.LUFA:
-            gracz = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-            print(f"  Decyzję podejmuje: {gracz.nazwa}")
-            akcje_lufa = rozdanie.get_mozliwe_akcje(gracz)
-            # AI: 50% szansy na podbicie, reszta to pas
-            akcja = random.choice(akcje_lufa) if random.random() > 0.5 and len(akcje_lufa) > 1 else {'typ': 'pas_lufa'}
-            print(f"  Decyzja: {akcja['typ'].replace('_lufa', '').capitalize()}")
-            rozdanie.wykonaj_akcje(gracz, akcja)
-            if 'lufa' in akcja['typ'] or 'kontra' in akcja['typ']:
-                print(f"  Stawka podbita do x{rozdanie.mnoznik_lufy}")
+    while rozdanie.faza not in [FazaGry.ROZGRYWKA, FazaGry.ZAKONCZONE]:
+        aktualna_faza = rozdanie.faza
+        if not wyswietlono_naglowek_fazy.get(aktualna_faza, True):
+            print(f"\n{faza_naglowek_mapa[aktualna_faza]}")
+            wyswietlono_naglowek_fazy[aktualna_faza] = True
 
-    if rozdanie.faza == FazaGry.FAZA_PYTANIA:
-        print("\n--- ETAP: Faza Pytania ---")
         gracz = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-        print(f"  Ponownie decyduje: {gracz.nazwa}")
         akcje = rozdanie.get_mozliwe_akcje(gracz)
-        wybrana_akcja = random.choice(akcje)
-        decyzja_str = f"Zmień na {wybrana_akcja['kontrakt'].name}" if 'kontrakt' in wybrana_akcja else "Pytam"
-        print(f"  Możliwe akcje: {formatuj_akcje(akcje)}")
-        print(f"  Decyzja: {decyzja_str}")
-        rozdanie.wykonaj_akcje(gracz, wybrana_akcja)
+        if not akcje: break
 
-    if rozdanie.faza == FazaGry.LICYTACJA:
-        print("\n--- ETAP: LicytacjA 2 (Przebicie) ---")
-        for _ in range(3):
-            if rozdanie.faza != FazaGry.LICYTACJA: break
-            gracz = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-            akcje = rozdanie.get_mozliwe_akcje(gracz)
-            if not akcje: continue
-            wybrana_akcja = random.choice(akcje)
-            decyzja = "Pas" if wybrana_akcja['typ'] == 'pas' else f"Przebijam na {wybrana_akcja['kontrakt'].name}"
+        wybrana_akcja = random.choice(akcje)
+        
+        if aktualna_faza == FazaGry.DEKLARACJA_1:
+            atut_str = wybrana_akcja.get('atut').name if wybrana_akcja.get('atut') else "Brak"
+            print(f"  Deklaruje: {gracz.nazwa}")
+            print(f"  Możliwe akcje: {formatuj_akcje(akcje)}")
+            print(f"  Decyzja: {wybrana_akcja['kontrakt'].name}, Atut: {atut_str}")
+            rozdanie.wykonaj_akcje(gracz, wybrana_akcja)
+
+        elif aktualna_faza == FazaGry.LUFA:
+            if any(a['typ'] == 'do_konca' for a in akcje) and random.random() > 0.5:
+                 wybrana_akcja = {'typ': 'do_konca'}
+            elif len(akcje) > 1 and random.random() > 0.5:
+                wybrana_akcja = next(a for a in akcje if a['typ'] != 'pas_lufa')
+            else:
+                wybrana_akcja = {'typ': 'pas_lufa'}
+
+            print(f"  Decyzję podejmuje: {gracz.nazwa}")
+            print(f"  Decyzja: {wybrana_akcja['typ'].replace('_', ' ').capitalize()}")
+            poprzedni_mnoznik = rozdanie.mnoznik_lufy
+            rozdanie.wykonaj_akcje(gracz, wybrana_akcja)
+            if rozdanie.mnoznik_lufy > poprzedni_mnoznik:
+                print(f"  Stawka podbita do x{rozdanie.mnoznik_lufy}")
+        
+        elif aktualna_faza == FazaGry.FAZA_PYTANIA:
+            decyzja_str = f"Zmień na {wybrana_akcja['kontrakt'].name}" if 'kontrakt' in wybrana_akcja else "Pytam"
+            print(f"  Ponownie decyduje: {gracz.nazwa}")
+            print(f"  Możliwe akcje: {formatuj_akcje(akcje)}")
+            print(f"  Decyzja: {decyzja_str}")
+            rozdanie.wykonaj_akcje(gracz, wybrana_akcja)
+            if aktualna_faza != rozdanie.faza: 
+                wyswietlono_naglowek_fazy[FazaGry.LUFA] = False
+        
+        elif aktualna_faza == FazaGry.LICYTACJA:
+            decyzja = "NIEZNANA"
+            if wybrana_akcja['typ'] == 'lufa': decyzja = "Lufa"
+            elif wybrana_akcja['typ'] == 'pas': decyzja = "Pas"
+            elif wybrana_akcja['typ'] == 'przebicie': decyzja = f"Przebijam na {wybrana_akcja['kontrakt'].name}"
+            
             print(f"  Licytuje: {gracz.nazwa}\n  Możliwe akcje: {formatuj_akcje(akcje)}\n  Decyzja: {decyzja}")
             rozdanie.wykonaj_akcje(gracz, wybrana_akcja)
+            if aktualna_faza != rozdanie.faza:
+                wyswietlono_naglowek_fazy[FazaGry.LICYTACJA] = False
+                wyswietlono_naglowek_fazy[FazaGry.LUFA] = False
+    
+    if rozdanie.mnoznik_lufy > 1:
+        print(f"  Stawka ostatecznie wynosi x{rozdanie.mnoznik_lufy}")
       
     if rozdanie.faza == FazaGry.ROZGRYWKA:
+        print("\n--- PEŁNE RĘCE PRZED ROZGRYWKĄ ---")
+        for gracz in rozdanie.gracze:
+            print(f"  Ręka gracza '{gracz.nazwa}': {', '.join(map(str, gracz.reka))}")
+
         print("\n" + "="*25 + "\n--- ETAP: Rozgrywka ---")
         if rozdanie.nieaktywny_gracz:
             print(f"INFO: Gra 1 vs 2. Gracz '{rozdanie.nieaktywny_gracz.nazwa}' nie bierze udziału w rozgrywce.")
@@ -104,12 +130,14 @@ def uruchom_symulacje_rozdania(numer_rozdania: int, druzyny: list[Druzyna]):
             print(f"\n-- Lewa #{numer_lewy} --")
             
             for i in range(rozdanie.liczba_aktywnych_graczy):
+                if rozdanie.faza != FazaGry.ROZGRYWKA: break
                 gracz = rozdanie.gracze[rozdanie.kolej_gracza_idx]
                 if i == 0: print(f"  Rozpoczyna: {gracz.nazwa}")
 
                 karta = znajdz_legalny_ruch(rozdanie, gracz)
                 if not karta:
-                    print(f"BŁĄD: Gracz {gracz.nazwa} nie ma legalnego ruchu!")
+                    print(f"BŁĄD KRYTYCZNY: Gracz {gracz.nazwa} nie ma żadnego legalnego ruchu w ręce: {gracz.reka}!")
+                    print(f"Karty na stole: {rozdanie.aktualna_lewa}")
                     return
 
                 wynik = rozdanie.zagraj_karte(gracz, karta)
@@ -123,13 +151,13 @@ def uruchom_symulacje_rozdania(numer_rozdania: int, druzyny: list[Druzyna]):
     if rozdanie.rozdanie_zakonczone and rozdanie.powod_zakonczenia:
          print(f"\n!!! Rozdanie zakończone przed czasem: {rozdanie.powod_zakonczenia} !!!")
 
-    druzyna_wygrana, punkty_dodane, mnoznik = rozdanie.rozlicz_rozdanie()
+    druzyna_wygrana, punkty_dodane, mnoznik_gry, mnoznik_lufy = rozdanie.rozlicz_rozdanie()
 
     print("\n" + "="*25)
     print("--- WYNIK KOŃCOWY ROZDANIA ---")
     print(f"  Grany kontrakt: {rozdanie.kontrakt.name}")
     
-    if rozdanie.rozdanie_zakonczone and druzyna_wygrana != rozdanie.grajacy.druzyna:
+    if rozdanie.zwyciezca_rozdania and rozdanie.zwyciezca_rozdania != rozdanie.grajacy.druzyna and "osiągnięcie" not in rozdanie.powod_zakonczenia:
         print(f"  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę '{rozdanie.grajacy.druzyna.nazwa}'")
     else:
         punkty_a = rozdanie.punkty_w_rozdaniu[druzyny[0].nazwa]
@@ -137,15 +165,18 @@ def uruchom_symulacje_rozdania(numer_rozdania: int, druzyny: list[Druzyna]):
         print(f"  Punkty z kart (z bonusem): {druzyny[0].nazwa} {punkty_a} - {punkty_b} {druzyny[1].nazwa}")
     
     print(f"  Rozdanie wygrywa: {druzyna_wygrana.nazwa}")
-    print(f"  Przyznane punkty meczowe: {punkty_dodane} (mnożnik: x{mnoznik})")
+    
+    mnoznik_str = f"lufa: x{mnoznik_lufy}"
+    if rozdanie.kontrakt == Kontrakt.NORMALNA:
+        mnoznik_str += f", gra: x{mnoznik_gry}"
+    print(f"  Przyznane punkty meczowe: {punkty_dodane} (mnożniki: {mnoznik_str})")
+    
     print(f"  OGÓLNY WYNIK MECZU: {druzyny[0].nazwa} {druzyny[0].punkty_meczu} - {druzyny[1].nazwa} {druzyny[1].punkty_meczu}")
     print("="*25 + "\n")
 
 if __name__ == "__main__":
-    # >>> POCZĄTEK ZMIANY: Zwiększenie liczby partii <<<
-    LICZBA_PARTII = 15
-    # >>> KONIEC ZMIANY <<<
-    NAZWA_PLIKU_LOGU = "log_finalny_poprawiony.txt"
+    LICZBA_PARTII = 20
+    NAZWA_PLIKU_LOGU = "log_finalny.txt"
     
     oryginalny_stdout = sys.stdout 
     with open(NAZWA_PLIKU_LOGU, 'w', encoding='utf-8') as f:
@@ -171,4 +202,4 @@ if __name__ == "__main__":
             print("#"*30)
 
     sys.stdout = oryginalny_stdout
-    print(f"✅ Symulacja zakończona. Pełny, poprawiony log z {LICZBA_PARTII} partii zapisano do pliku: {NAZWA_PLIKU_LOGU}")
+    print(f"✅ Symulacja zakończona. Pełny, finalny log z {LICZBA_PARTII} partii zapisano do pliku: {NAZWA_PLIKU_LOGU}")
