@@ -1,0 +1,3088 @@
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #1 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Wino, Dziewiatka Zoladz, Walet Zoladz
+  Ręka gracza 'Przeciwnik1': Dama Zoladz, Dama Czerwien, Dziesiatka Dzwonek
+  Ręka gracza 'Nasz': Dziesiatka Czerwien, Dama Dzwonek, Dziesiatka Wino
+  Ręka gracza 'Przeciwnik2': As Czerwien, Dama Wino, Krol Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: WINO
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik1
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na LEPSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dama Zoladz
+  [Nasz] zagrywa: Dziesiatka Czerwien
+  [Jakub] zagrywa: Dziewiatka Zoladz
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dama Czerwien
+  [Nasz] zagrywa: Dama Dzwonek
+  [Jakub] zagrywa: Walet Wino
+
+-- Lewa #3 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziesiatka Dzwonek
+  [Nasz] zagrywa: Walet Dzwonek
+  [Jakub] zagrywa: Krol Dzwonek
+
+-- Lewa #4 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Walet Czerwien
+  [Nasz] zagrywa: Dziesiatka Wino
+  [Jakub] zagrywa: Walet Zoladz
+
+-- Lewa #5 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Zoladz
+  [Nasz] zagrywa: Dziewiatka Dzwonek
+  [Jakub] zagrywa: Dziesiatka Zoladz
+
+-- Lewa #6 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Krol Zoladz
+  [Nasz] zagrywa: As Dzwonek
+  [Jakub] zagrywa: Dziewiatka Wino
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): My 0 - 87 Oni
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 48 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 0 - Oni 48
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Wino, Dziewiatka Czerwien, Krol Dzwonek
+  Ręka gracza 'Przeciwnik1': Walet Dzwonek, Dziesiatka Dzwonek, Dama Dzwonek
+  Ręka gracza 'Nasz': As Czerwien, Krol Zoladz, Dziewiatka Zoladz
+  Ręka gracza 'Przeciwnik2': Dziesiatka Czerwien, Walet Czerwien, As Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Nasz
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na BEZ_PYTANIA
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: As Czerwien
+  [Przeciwnik2] zagrywa: Dziesiatka Czerwien
+  [Jakub] zagrywa: Dziewiatka Czerwien
+  [Przeciwnik1] zagrywa: Krol Czerwien
+
+-- Lewa #2 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Krol Zoladz
+  [Przeciwnik2] zagrywa: As Zoladz
+  [Jakub] zagrywa: Walet Zoladz
+  [Przeciwnik1] zagrywa: Walet Dzwonek
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 0 - Oni 54
+=========================
+
+--- ROZDANIE #3 ---
+Rozdającym jest: Nasz
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Wino, Dama Dzwonek, Dziesiatka Dzwonek
+  Ręka gracza 'Przeciwnik1': Krol Dzwonek, As Czerwien, Krol Zoladz
+  Ręka gracza 'Nasz': Dama Zoladz, Dziesiatka Wino, Krol Czerwien
+  Ręka gracza 'Przeciwnik2': Dziesiatka Czerwien, Dziewiatka Zoladz, Dziewiatka Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik2
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: WINO
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik2
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na LEPSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik1' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziesiatka Czerwien
+  [Jakub] zagrywa: Dama Wino
+  [Nasz] zagrywa: Krol Czerwien
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziewiatka Zoladz
+  [Jakub] zagrywa: Dama Dzwonek
+  [Nasz] zagrywa: Dama Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 12 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 12 - Oni 54
+=========================
+
+--- ROZDANIE #4 ---
+Rozdającym jest: Przeciwnik2
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': As Wino, Dziesiatka Dzwonek, Walet Dzwonek
+  Ręka gracza 'Przeciwnik1': Krol Zoladz, Dama Dzwonek, Dziesiatka Czerwien
+  Ręka gracza 'Nasz': Krol Wino, Walet Zoladz, As Czerwien
+  Ręka gracza 'Przeciwnik2': Dama Wino, Dama Zoladz, Dziesiatka Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Jakub
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: CZERWIEN
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Jakub
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na BEZ_PYTANIA
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: As Wino
+  [Przeciwnik1] zagrywa: Dziewiatka Wino
+  [Nasz] zagrywa: Krol Wino
+  [Przeciwnik2] zagrywa: Dama Wino
+
+-- Lewa #2 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Dziesiatka Dzwonek
+  [Przeciwnik1] zagrywa: Dama Dzwonek
+  [Nasz] zagrywa: Krol Dzwonek
+  [Przeciwnik2] zagrywa: Dziewiatka Dzwonek
+
+-- Lewa #3 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Walet Dzwonek
+  [Przeciwnik1] zagrywa: Dziesiatka Czerwien
+  [Nasz] zagrywa: As Czerwien
+  [Przeciwnik2] zagrywa: Krol Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 12 - Oni 60
+=========================
+
+--- ROZDANIE #5 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Dzwonek, Walet Dzwonek, Dziewiatka Wino
+  Ręka gracza 'Przeciwnik1': As Czerwien, Dama Wino, Dziesiatka Zoladz
+  Ręka gracza 'Nasz': As Zoladz, Dziesiatka Dzwonek, Dama Czerwien
+  Ręka gracza 'Przeciwnik2': Dziewiatka Zoladz, Dziesiatka Wino, Dziewiatka Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: ZOLADZ
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Czerwien
+  [Nasz] zagrywa: Dama Czerwien
+  [Przeciwnik2] zagrywa: Dziewiatka Zoladz
+  [Jakub] zagrywa: Dziesiatka Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 24 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 36 - Oni 60
+=========================
+
+--- ROZDANIE #6 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziesiatka Zoladz, Dziewiatka Czerwien, Dziewiatka Wino
+  Ręka gracza 'Przeciwnik1': As Zoladz, Dziesiatka Czerwien, Dama Dzwonek
+  Ręka gracza 'Nasz': Dziesiatka Dzwonek, As Wino, Dziewiatka Dzwonek
+  Ręka gracza 'Przeciwnik2': Dama Czerwien, Walet Wino, As Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: GORSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x16
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Jakub' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Dziesiatka Dzwonek
+  [Przeciwnik2] zagrywa: As Dzwonek
+  [Przeciwnik1] zagrywa: Dama Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dama Czerwien
+  [Przeciwnik1] zagrywa: Dziesiatka Czerwien
+  [Nasz] zagrywa: As Czerwien
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 96 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 36 - Oni 156
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: Oni
+OSTATECZNY WYNIK: My 36 - Oni 156
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #2 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Krol Czerwien, Walet Wino, As Dzwonek
+  Ręka gracza 'Przeciwnik1': As Zoladz, Dama Zoladz, Dziesiatka Wino
+  Ręka gracza 'Nasz': Dziewiatka Dzwonek, Dziewiatka Wino, As Czerwien
+  Ręka gracza 'Przeciwnik2': Dziewiatka Zoladz, Dama Czerwien, Walet Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: CZERWIEN
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x1
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik1
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na BEZ_PYTANIA
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Zoladz
+  [Nasz] zagrywa: Walet Zoladz
+  [Przeciwnik2] zagrywa: Dziewiatka Zoladz
+  [Jakub] zagrywa: Krol Zoladz
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dama Zoladz
+  [Nasz] zagrywa: As Czerwien
+  [Przeciwnik2] zagrywa: Dziesiatka Zoladz
+  [Jakub] zagrywa: Krol Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziewiatka Zoladz, Dziewiatka Dzwonek, Dziewiatka Wino
+  Ręka gracza 'Przeciwnik1': Dziewiatka Czerwien, Krol Wino, Krol Czerwien
+  Ręka gracza 'Nasz': As Czerwien, Walet Wino, As Dzwonek
+  Ręka gracza 'Przeciwnik2': Dziesiatka Dzwonek, Dama Dzwonek, Dziesiatka Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x16
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: As Czerwien
+  [Przeciwnik2] zagrywa: Dziesiatka Dzwonek
+  [Jakub] zagrywa: Dziewiatka Dzwonek
+  [Przeciwnik1] zagrywa: Dziewiatka Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 96 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 96
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: Oni
+OSTATECZNY WYNIK: My 6 - Oni 96
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #3 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziesiatka Czerwien, Walet Zoladz, Dziewiatka Czerwien
+  Ręka gracza 'Przeciwnik1': As Dzwonek, Walet Dzwonek, Krol Wino
+  Ręka gracza 'Nasz': Walet Czerwien, Dama Wino, As Wino
+  Ręka gracza 'Przeciwnik2': Dama Zoladz, Dziewiatka Zoladz, Krol Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik1
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Pytam
+
+--- ETAP: LicytacjA 2 (Przebicie) ---
+  Licytuje: Nasz
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Pas
+  Licytuje: Przeciwnik2
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Przebijam na GORSZA
+  Licytuje: Jakub
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Przebijam na GORSZA
+  INFO: Licytację przebił Przeciwnik2 z kontraktem GORSZA.
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik1' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dama Zoladz
+  [Jakub] zagrywa: Walet Zoladz
+  [Nasz] zagrywa: As Zoladz
+
+-- Lewa #2 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Walet Czerwien
+  [Przeciwnik2] zagrywa: As Czerwien
+  [Jakub] zagrywa: Dziesiatka Czerwien
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 96 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 96 - Oni 0
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 96 - Oni 0
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #4 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': As Czerwien, Dziewiatka Zoladz, Walet Dzwonek
+  Ręka gracza 'Przeciwnik1': Krol Zoladz, Krol Dzwonek, Krol Czerwien
+  Ręka gracza 'Nasz': As Zoladz, Dama Zoladz, Dziesiatka Czerwien
+  Ręka gracza 'Przeciwnik2': Dama Dzwonek, Dziesiatka Zoladz, Dama Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: CZERWIEN
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Krol Zoladz
+  [Nasz] zagrywa: As Zoladz
+  [Przeciwnik2] zagrywa: Dziesiatka Zoladz
+  [Jakub] zagrywa: Dziewiatka Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 24 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 24 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Zoladz, Dziesiatka Czerwien, Dziewiatka Zoladz
+  Ręka gracza 'Przeciwnik1': Dama Wino, As Wino, Krol Zoladz
+  Ręka gracza 'Nasz': As Czerwien, Dziesiatka Zoladz, Walet Czerwien
+  Ręka gracza 'Przeciwnik2': Dama Czerwien, Dziewiatka Wino, Walet Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: ZOLADZ
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Lufa
+  Stawka podbita do x32
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x64
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x64
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x64
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: As Czerwien
+  [Przeciwnik2] zagrywa: Dama Czerwien
+  [Jakub] zagrywa: Dziesiatka Czerwien
+  [Przeciwnik1] zagrywa: Krol Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 384 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 24 - Oni 384
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: Oni
+OSTATECZNY WYNIK: My 24 - Oni 384
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #5 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': As Wino, Walet Wino, Walet Zoladz
+  Ręka gracza 'Przeciwnik1': Krol Wino, As Dzwonek, Dama Czerwien
+  Ręka gracza 'Nasz': Dziesiatka Czerwien, Krol Dzwonek, Walet Czerwien
+  Ręka gracza 'Przeciwnik2': As Zoladz, Dziewiatka Wino, Krol Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: LEPSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Krol Wino
+  [Nasz] zagrywa: Dziesiatka Czerwien
+  [Jakub] zagrywa: As Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Jakub !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 192 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 192 - Oni 0
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 192 - Oni 0
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #6 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Krol Czerwien, Dziesiatka Wino, As Dzwonek
+  Ręka gracza 'Przeciwnik1': Dziewiatka Czerwien, Dziesiatka Czerwien, Krol Zoladz
+  Ręka gracza 'Nasz': Dziewiatka Wino, As Czerwien, As Zoladz
+  Ręka gracza 'Przeciwnik2': Walet Czerwien, Dziesiatka Zoladz, Walet Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: CZERWIEN
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziewiatka Czerwien
+  [Nasz] zagrywa: As Czerwien
+  [Przeciwnik2] zagrywa: Walet Czerwien
+  [Jakub] zagrywa: Krol Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 96 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 96 - Oni 0
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 96 - Oni 0
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #7 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Dzwonek, Dziesiatka Czerwien, Dziesiatka Zoladz
+  Ręka gracza 'Przeciwnik1': As Wino, Dama Zoladz, Dama Czerwien
+  Ręka gracza 'Nasz': Walet Dzwonek, Dziewiatka Czerwien, Krol Czerwien
+  Ręka gracza 'Przeciwnik2': As Zoladz, Dziesiatka Dzwonek, Dama Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: LEPSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Wino
+  [Nasz] zagrywa: Walet Dzwonek
+  [Jakub] zagrywa: Dziesiatka Wino
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dama Zoladz
+  [Nasz] zagrywa: Krol Zoladz
+  [Jakub] zagrywa: Dziesiatka Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Jakub !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 192 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 192 - Oni 0
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 192 - Oni 0
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #8 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Zoladz, Dziesiatka Wino, As Zoladz
+  Ręka gracza 'Przeciwnik1': Dziesiatka Dzwonek, Krol Wino, As Dzwonek
+  Ręka gracza 'Nasz': Dziewiatka Wino, Krol Dzwonek, Dama Wino
+  Ręka gracza 'Przeciwnik2': Walet Wino, Dziewiatka Zoladz, As Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: CZERWIEN
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x1
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik1
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na GORSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziesiatka Dzwonek
+  [Nasz] zagrywa: Krol Dzwonek
+  [Jakub] zagrywa: Walet Dzwonek
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziesiatka Zoladz, Walet Wino, Dziewiatka Dzwonek
+  Ręka gracza 'Przeciwnik1': Dama Wino, Dama Czerwien, Walet Czerwien
+  Ręka gracza 'Nasz': Dziewiatka Czerwien, Krol Czerwien, As Zoladz
+  Ręka gracza 'Przeciwnik2': Krol Dzwonek, Dziesiatka Dzwonek, Krol Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Dziewiatka Czerwien
+  [Przeciwnik2] zagrywa: Krol Dzwonek
+  [Jakub] zagrywa: Dziesiatka Czerwien
+  [Przeciwnik1] zagrywa: Dama Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 6
+=========================
+
+--- ROZDANIE #3 ---
+Rozdającym jest: Nasz
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziesiatka Dzwonek, Krol Wino, Dziewiatka Czerwien
+  Ręka gracza 'Przeciwnik1': Dziesiatka Zoladz, As Dzwonek, Krol Dzwonek
+  Ręka gracza 'Nasz': Dama Czerwien, Dziesiatka Czerwien, Walet Czerwien
+  Ręka gracza 'Przeciwnik2': Walet Zoladz, As Zoladz, Walet Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik2
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: ZOLADZ
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x16
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik2
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na LEPSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik1' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Walet Zoladz
+  [Jakub] zagrywa: Dziesiatka Dzwonek
+  [Nasz] zagrywa: Dama Czerwien
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: As Zoladz
+  [Jakub] zagrywa: Krol Wino
+  [Nasz] zagrywa: Dziesiatka Czerwien
+
+-- Lewa #3 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Walet Wino
+  [Jakub] zagrywa: Dziesiatka Wino
+  [Nasz] zagrywa: Dziewiatka Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Jakub !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 192 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 198 - Oni 6
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 198 - Oni 6
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #9 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Zoladz, Dziesiatka Dzwonek, Dziewiatka Zoladz
+  Ręka gracza 'Przeciwnik1': As Dzwonek, Dziesiatka Wino, Dziewiatka Dzwonek
+  Ręka gracza 'Nasz': As Zoladz, As Czerwien, Krol Wino
+  Ręka gracza 'Przeciwnik2': Walet Zoladz, Dziesiatka Czerwien, Dama Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Dzwonek
+  [Nasz] zagrywa: As Zoladz
+  [Przeciwnik2] zagrywa: Dama Dzwonek
+  [Jakub] zagrywa: Dziesiatka Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziesiatka Wino
+  [Nasz] zagrywa: Krol Wino
+  [Przeciwnik2] zagrywa: As Wino
+  [Jakub] zagrywa: Dama Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 24 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 24 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Zoladz, As Czerwien, Walet Czerwien
+  Ręka gracza 'Przeciwnik1': Dziesiatka Dzwonek, Dziewiatka Czerwien, Dama Wino
+  Ręka gracza 'Nasz': Krol Wino, Dziewiatka Wino, Walet Zoladz
+  Ręka gracza 'Przeciwnik2': Krol Czerwien, Dziesiatka Wino, Dziewiatka Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Krol Wino
+  [Przeciwnik2] zagrywa: Dziesiatka Wino
+  [Jakub] zagrywa: Walet Wino
+  [Przeciwnik1] zagrywa: Dama Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 24 - Oni 6
+=========================
+
+--- ROZDANIE #3 ---
+Rozdającym jest: Nasz
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': As Dzwonek, As Czerwien, Dziesiatka Wino
+  Ręka gracza 'Przeciwnik1': Krol Wino, Dziewiatka Wino, As Wino
+  Ręka gracza 'Nasz': Dziewiatka Zoladz, Walet Zoladz, Krol Zoladz
+  Ręka gracza 'Przeciwnik2': Dama Dzwonek, Walet Wino, Dziesiatka Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik2
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: GORSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik1' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dama Dzwonek
+  [Jakub] zagrywa: As Dzwonek
+  [Nasz] zagrywa: Dziewiatka Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: As Czerwien
+  [Nasz] zagrywa: Dziesiatka Czerwien
+  [Przeciwnik2] zagrywa: Walet Wino
+
+-- Lewa #3 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Dziesiatka Wino
+  [Nasz] zagrywa: Dziewiatka Zoladz
+  [Przeciwnik2] zagrywa: Dziesiatka Dzwonek
+
+-- Lewa #4 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Walet Czerwien
+  [Nasz] zagrywa: Walet Zoladz
+  [Przeciwnik2] zagrywa: Walet Dzwonek
+
+-- Lewa #5 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Dama Czerwien
+  [Nasz] zagrywa: Krol Zoladz
+  [Przeciwnik2] zagrywa: Dziesiatka Zoladz
+
+-- Lewa #6 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Krol Dzwonek
+  [Nasz] zagrywa: Dama Zoladz
+  [Przeciwnik2] zagrywa: As Zoladz
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): My 98 - 0 Oni
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 24 - Oni 12
+=========================
+
+--- ROZDANIE #4 ---
+Rozdającym jest: Przeciwnik2
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': As Czerwien, Dziewiatka Wino, Dziesiatka Zoladz
+  Ręka gracza 'Przeciwnik1': Dama Czerwien, Walet Dzwonek, Krol Wino
+  Ręka gracza 'Nasz': Dziesiatka Wino, Dziesiatka Czerwien, Krol Dzwonek
+  Ręka gracza 'Przeciwnik2': Dziesiatka Dzwonek, Dama Wino, Dama Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Jakub
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x4
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Jakub
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Pytam
+
+--- ETAP: LicytacjA 2 (Przebicie) ---
+  Licytuje: Przeciwnik1
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Przebijam na GORSZA
+  Licytuje: Nasz
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Przebijam na GORSZA
+  Licytuje: Przeciwnik2
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Przebijam na LEPSZA
+  INFO: Licytację przebił Przeciwnik2 z kontraktem LEPSZA.
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik1' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziesiatka Dzwonek
+  [Jakub] zagrywa: As Czerwien
+  [Nasz] zagrywa: Krol Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dama Wino
+  [Jakub] zagrywa: Dziewiatka Wino
+  [Nasz] zagrywa: Dziesiatka Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 48 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 72 - Oni 12
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 72 - Oni 12
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #10 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Dzwonek, Dziewiatka Zoladz, As Czerwien
+  Ręka gracza 'Przeciwnik1': As Dzwonek, Dama Dzwonek, Krol Zoladz
+  Ręka gracza 'Nasz': Dziesiatka Dzwonek, Dziewiatka Czerwien, Dziesiatka Wino
+  Ręka gracza 'Przeciwnik2': Dama Czerwien, Dziesiatka Zoladz, As Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: WINO
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x64
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x64
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x64
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Dzwonek
+  [Nasz] zagrywa: Dziesiatka Dzwonek
+  [Przeciwnik2] zagrywa: As Wino
+  [Jakub] zagrywa: Walet Dzwonek
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 384 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 384 - Oni 0
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 384 - Oni 0
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #11 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziewiatka Wino, Krol Zoladz, Walet Wino
+  Ręka gracza 'Przeciwnik1': Dziewiatka Zoladz, Dziesiatka Wino, Dziewiatka Dzwonek
+  Ręka gracza 'Nasz': As Dzwonek, As Zoladz, Dama Czerwien
+  Ręka gracza 'Przeciwnik2': Dama Dzwonek, As Wino, Krol Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziewiatka Zoladz
+  [Nasz] zagrywa: As Zoladz
+  [Przeciwnik2] zagrywa: Dama Zoladz
+  [Jakub] zagrywa: Krol Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 24 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 24 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Zoladz, Krol Zoladz, Dziewiatka Dzwonek
+  Ręka gracza 'Przeciwnik1': Dama Wino, Dziesiatka Czerwien, Walet Dzwonek
+  Ręka gracza 'Nasz': Dziewiatka Wino, As Czerwien, Dama Zoladz
+  Ręka gracza 'Przeciwnik2': Dziewiatka Zoladz, As Dzwonek, Krol Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: CZERWIEN
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x32
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x64
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x64
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x64
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Nasz
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na GORSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Jakub' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Dziewiatka Wino
+  [Przeciwnik2] zagrywa: Krol Wino
+  [Przeciwnik1] zagrywa: Dama Wino
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziewiatka Zoladz
+  [Przeciwnik1] zagrywa: As Zoladz
+  [Nasz] zagrywa: Dama Zoladz
+
+-- Lewa #3 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziesiatka Czerwien
+  [Nasz] zagrywa: As Czerwien
+  [Przeciwnik2] zagrywa: Krol Czerwien
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 384 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 24 - Oni 384
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: Oni
+OSTATECZNY WYNIK: My 24 - Oni 384
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #12 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziesiatka Czerwien, Dziewiatka Dzwonek, Walet Zoladz
+  Ręka gracza 'Przeciwnik1': As Wino, Dziewiatka Czerwien, As Czerwien
+  Ręka gracza 'Nasz': Dziesiatka Dzwonek, Dziewiatka Zoladz, Walet Czerwien
+  Ręka gracza 'Przeciwnik2': Dama Wino, Dziewiatka Wino, Dama Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: WINO
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Wino
+  [Nasz] zagrywa: Dziesiatka Dzwonek
+  [Przeciwnik2] zagrywa: Dama Wino
+  [Jakub] zagrywa: Dziesiatka Wino
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziewiatka Czerwien
+  [Nasz] zagrywa: Walet Czerwien
+  [Przeciwnik2] zagrywa: Dziewiatka Wino
+  [Jakub] zagrywa: Dziesiatka Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Wino, Krol Wino, Walet Zoladz
+  Ręka gracza 'Przeciwnik1': Dziesiatka Zoladz, Dziewiatka Wino, Dama Czerwien
+  Ręka gracza 'Nasz': Dama Wino, Dama Dzwonek, Dziesiatka Dzwonek
+  Ręka gracza 'Przeciwnik2': Walet Dzwonek, As Czerwien, Dziewiatka Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Dama Wino
+  [Przeciwnik2] zagrywa: Walet Dzwonek
+  [Jakub] zagrywa: Walet Wino
+  [Przeciwnik1] zagrywa: Dziewiatka Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 6
+=========================
+
+--- ROZDANIE #3 ---
+Rozdającym jest: Nasz
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziewiatka Czerwien, Krol Wino, Walet Wino
+  Ręka gracza 'Przeciwnik1': Walet Czerwien, Walet Zoladz, Dziesiatka Wino
+  Ręka gracza 'Nasz': Krol Dzwonek, Walet Dzwonek, Dziewiatka Dzwonek
+  Ręka gracza 'Przeciwnik2': As Czerwien, Dziesiatka Zoladz, Dama Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik2
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: WINO
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: As Czerwien
+  [Jakub] zagrywa: Dziewiatka Czerwien
+  [Przeciwnik1] zagrywa: Walet Czerwien
+  [Nasz] zagrywa: Dama Czerwien
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziesiatka Zoladz
+  [Jakub] zagrywa: Krol Wino
+  [Przeciwnik1] zagrywa: Walet Zoladz
+  [Nasz] zagrywa: Krol Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Jakub !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 24 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 30 - Oni 6
+=========================
+
+--- ROZDANIE #4 ---
+Rozdającym jest: Przeciwnik2
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Krol Dzwonek, Krol Czerwien, Dziesiatka Zoladz
+  Ręka gracza 'Przeciwnik1': As Wino, Dziesiatka Dzwonek, Walet Zoladz
+  Ręka gracza 'Nasz': Krol Wino, Dziewiatka Czerwien, Dama Zoladz
+  Ręka gracza 'Przeciwnik2': Dama Czerwien, Walet Dzwonek, Walet Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Jakub
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Krol Dzwonek
+  [Przeciwnik1] zagrywa: Dziesiatka Dzwonek
+  [Nasz] zagrywa: Dziewiatka Dzwonek
+  [Przeciwnik2] zagrywa: Walet Dzwonek
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 30 - Oni 12
+=========================
+
+--- ROZDANIE #5 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Zoladz, Dziewiatka Wino, Dziewiatka Czerwien
+  Ręka gracza 'Przeciwnik1': Dziewiatka Zoladz, Dama Wino, Krol Dzwonek
+  Ręka gracza 'Nasz': Dziewiatka Dzwonek, As Wino, Walet Czerwien
+  Ręka gracza 'Przeciwnik2': Krol Wino, Walet Wino, Dama Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x32
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x64
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x128
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x128
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x256
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x256
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x256
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik1
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na GORSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziewiatka Zoladz
+  [Nasz] zagrywa: Krol Zoladz
+  [Jakub] zagrywa: Walet Zoladz
+
+-- Lewa #2 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Dziewiatka Dzwonek
+  [Jakub] zagrywa: Dziewiatka Wino
+  [Przeciwnik1] zagrywa: Krol Dzwonek
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 1536 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 1566 - Oni 12
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 1566 - Oni 12
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #13 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Wino, Walet Dzwonek, Dziesiatka Wino
+  Ręka gracza 'Przeciwnik1': Krol Dzwonek, Krol Zoladz, Dziesiatka Zoladz
+  Ręka gracza 'Nasz': Walet Zoladz, Dziewiatka Zoladz, Dama Zoladz
+  Ręka gracza 'Przeciwnik2': Krol Wino, Dziewiatka Czerwien, Dziewiatka Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: LEPSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Krol Dzwonek
+  [Nasz] zagrywa: Walet Zoladz
+  [Jakub] zagrywa: Walet Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Krol Zoladz
+  [Nasz] zagrywa: Dziewiatka Zoladz
+  [Jakub] zagrywa: Walet Wino
+
+-- Lewa #3 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziesiatka Zoladz
+  [Nasz] zagrywa: Dama Zoladz
+  [Jakub] zagrywa: Dziesiatka Wino
+
+-- Lewa #4 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dama Czerwien
+  [Nasz] zagrywa: Krol Czerwien
+  [Jakub] zagrywa: Walet Czerwien
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 12 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 12 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziesiatka Czerwien, Dama Wino, Krol Zoladz
+  Ręka gracza 'Przeciwnik1': Dziewiatka Wino, Dama Czerwien, Krol Wino
+  Ręka gracza 'Nasz': Walet Zoladz, Dziesiatka Wino, Dziesiatka Zoladz
+  Ręka gracza 'Przeciwnik2': Dziesiatka Dzwonek, Walet Wino, As Czerwien
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Walet Zoladz
+  [Przeciwnik2] zagrywa: Dziesiatka Dzwonek
+  [Jakub] zagrywa: Krol Zoladz
+  [Przeciwnik1] zagrywa: Dziewiatka Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik2 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 12 - Oni 6
+=========================
+
+--- ROZDANIE #3 ---
+Rozdającym jest: Nasz
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziewiatka Wino, Krol Dzwonek, As Dzwonek
+  Ręka gracza 'Przeciwnik1': Walet Czerwien, Dama Czerwien, Walet Dzwonek
+  Ręka gracza 'Nasz': Dziesiatka Dzwonek, Dziesiatka Czerwien, Dziesiatka Wino
+  Ręka gracza 'Przeciwnik2': As Czerwien, Krol Czerwien, As Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik2
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: LEPSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik1' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: As Czerwien
+  [Jakub] zagrywa: Dziewiatka Czerwien
+  [Nasz] zagrywa: Dziesiatka Czerwien
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Krol Czerwien
+  [Jakub] zagrywa: Dziewiatka Wino
+  [Nasz] zagrywa: Dziesiatka Dzwonek
+
+-- Lewa #3 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: As Zoladz
+  [Jakub] zagrywa: Walet Zoladz
+  [Nasz] zagrywa: Dziewiatka Zoladz
+
+-- Lewa #4 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziewiatka Dzwonek
+  [Jakub] zagrywa: Krol Dzwonek
+  [Nasz] zagrywa: Dziesiatka Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Jakub !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 48 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 60 - Oni 6
+=========================
+
+--- ROZDANIE #4 ---
+Rozdającym jest: Przeciwnik2
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dama Dzwonek, Dziewiatka Wino, Dziewiatka Czerwien
+  Ręka gracza 'Przeciwnik1': Dziesiatka Zoladz, Dziesiatka Czerwien, Krol Dzwonek
+  Ręka gracza 'Nasz': Walet Wino, As Dzwonek, As Zoladz
+  Ręka gracza 'Przeciwnik2': As Czerwien, Krol Wino, Dziewiatka Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Jakub
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: WINO
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x16
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Jakub
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Pytam
+
+--- ETAP: LicytacjA 2 (Przebicie) ---
+  Licytuje: Przeciwnik1
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Pas
+  Licytuje: Nasz
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Przebijam na GORSZA
+  Licytuje: Przeciwnik2
+  Możliwe akcje: Pas, Przebij na LEPSZA, Przebij na GORSZA
+  Decyzja: Przebijam na GORSZA
+  INFO: Licytację przebił Nasz z kontraktem GORSZA.
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Jakub' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Walet Wino
+  [Przeciwnik2] zagrywa: Krol Wino
+  [Przeciwnik1] zagrywa: Dziesiatka Zoladz
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: As Czerwien
+  [Przeciwnik1] zagrywa: Dziesiatka Czerwien
+  [Nasz] zagrywa: Walet Czerwien
+
+-- Lewa #3 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziewiatka Dzwonek
+  [Przeciwnik1] zagrywa: Krol Dzwonek
+  [Nasz] zagrywa: As Dzwonek
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 96 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 60 - Oni 102
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: Oni
+OSTATECZNY WYNIK: My 60 - Oni 102
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #14 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': As Dzwonek, Dziesiatka Zoladz, As Zoladz
+  Ręka gracza 'Przeciwnik1': Dziesiatka Dzwonek, Dziewiatka Czerwien, Dama Zoladz
+  Ręka gracza 'Nasz': Dziesiatka Czerwien, Dziesiatka Wino, Dama Wino
+  Ręka gracza 'Przeciwnik2': Dziewiatka Zoladz, Dziewiatka Dzwonek, Walet Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: ZOLADZ
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik1
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na GORSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziesiatka Dzwonek
+  [Nasz] zagrywa: Dziesiatka Czerwien
+  [Jakub] zagrywa: As Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Dziesiatka Zoladz
+  [Przeciwnik1] zagrywa: Dama Zoladz
+  [Nasz] zagrywa: Dziesiatka Wino
+
+-- Lewa #3 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: As Zoladz
+  [Przeciwnik1] zagrywa: Dziewiatka Czerwien
+  [Nasz] zagrywa: Dama Wino
+
+-- Lewa #4 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Dziewiatka Wino
+  [Przeciwnik1] zagrywa: Dama Czerwien
+  [Nasz] zagrywa: As Wino
+
+-- Lewa #5 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Walet Czerwien
+  [Jakub] zagrywa: Walet Wino
+  [Przeciwnik1] zagrywa: Krol Dzwonek
+
+-- Lewa #6 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Krol Wino
+  [Jakub] zagrywa: Dama Dzwonek
+  [Przeciwnik1] zagrywa: Walet Dzwonek
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): My 99 - 0 Oni
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 24 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 0 - Oni 24
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Dziewiatka Zoladz, As Czerwien, Dziewiatka Czerwien
+  Ręka gracza 'Przeciwnik1': As Dzwonek, Dama Dzwonek, Dziesiatka Czerwien
+  Ręka gracza 'Nasz': Dziewiatka Dzwonek, Dama Wino, Dama Czerwien
+  Ręka gracza 'Przeciwnik2': Walet Czerwien, Dziesiatka Dzwonek, Walet Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: DZWONEK
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Dziewiatka Dzwonek
+  [Przeciwnik2] zagrywa: Dziesiatka Dzwonek
+  [Jakub] zagrywa: Dziewiatka Zoladz
+  [Przeciwnik1] zagrywa: As Dzwonek
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 0 - Oni 30
+=========================
+
+--- ROZDANIE #3 ---
+Rozdającym jest: Nasz
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Walet Czerwien, Dama Zoladz, Dziesiatka Zoladz
+  Ręka gracza 'Przeciwnik1': Dziesiatka Wino, Dziewiatka Czerwien, Walet Wino
+  Ręka gracza 'Nasz': Dziewiatka Zoladz, Dama Wino, Krol Dzwonek
+  Ręka gracza 'Przeciwnik2': As Zoladz, Dziewiatka Wino, Dziewiatka Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik2
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: NORMALNA, Atut: WINO
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x4
+
+--- ETAP: Faza Pytania ---
+  Ponownie decyduje: Przeciwnik2
+  Możliwe akcje: Zmień na LEPSZA, Zmień na GORSZA, Zmień na BEZ_PYTANIA, Pytanie
+  Decyzja: Zmień na LEPSZA
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik1' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: As Zoladz
+  [Jakub] zagrywa: Dama Zoladz
+  [Nasz] zagrywa: Dziewiatka Zoladz
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dziewiatka Wino
+  [Jakub] zagrywa: Krol Wino
+  [Nasz] zagrywa: Dama Wino
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Jakub !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: LEPSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 48 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 48 - Oni 30
+=========================
+
+--- ROZDANIE #4 ---
+Rozdającym jest: Przeciwnik2
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Krol Zoladz, Dziesiatka Czerwien, Krol Czerwien
+  Ręka gracza 'Przeciwnik1': As Czerwien, Dziewiatka Czerwien, Dziesiatka Wino
+  Ręka gracza 'Nasz': Walet Wino, Dama Dzwonek, Krol Dzwonek
+  Ręka gracza 'Przeciwnik2': As Dzwonek, Dziesiatka Dzwonek, Walet Dzwonek
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Jakub
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: CZERWIEN
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x4
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Krol Zoladz (MELDUNEK! +20 pkt)
+  [Przeciwnik1] zagrywa: As Czerwien
+  [Nasz] zagrywa: Dziewiatka Zoladz
+  [Przeciwnik2] zagrywa: Walet Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 24 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 48 - Oni 54
+=========================
+
+--- ROZDANIE #5 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Krol Dzwonek, Dziewiatka Wino, Dziewiatka Zoladz
+  Ręka gracza 'Przeciwnik1': As Dzwonek, Dziesiatka Dzwonek, Dziewiatka Czerwien
+  Ręka gracza 'Nasz': Walet Dzwonek, Dama Czerwien, Dziesiatka Czerwien
+  Ręka gracza 'Przeciwnik2': Krol Czerwien, Krol Wino, Dama Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: BEZ_PYTANIA, Atut: ZOLADZ
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Nasz
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x8
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x16
+
+=========================
+--- ETAP: Rozgrywka ---
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: As Dzwonek
+  [Nasz] zagrywa: Walet Dzwonek
+  [Przeciwnik2] zagrywa: Dziewiatka Dzwonek
+  [Jakub] zagrywa: Krol Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dziesiatka Dzwonek
+  [Nasz] zagrywa: Dama Dzwonek
+  [Przeciwnik2] zagrywa: Dama Zoladz
+  [Jakub] zagrywa: Krol Zoladz
+
+!!! Rozdanie zakończone przed czasem: przejęcie lewy przez gracza Jakub !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: BEZ_PYTANIA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 96 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 144 - Oni 54
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: My
+OSTATECZNY WYNIK: My 144 - Oni 54
+##############################
+
+########################################
+### ROZPOCZYNAMY PARTIĘ #15 ###
+########################################
+
+--- ROZDANIE #1 ---
+Rozdającym jest: Jakub
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': As Dzwonek, Dama Czerwien, Dama Wino
+  Ręka gracza 'Przeciwnik1': Krol Dzwonek, Dama Dzwonek, Dziesiatka Dzwonek
+  Ręka gracza 'Nasz': Krol Wino, As Wino, Dziewiatka Wino
+  Ręka gracza 'Przeciwnik2': Walet Dzwonek, Krol Zoladz, Dziesiatka Wino
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Przeciwnik1
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: GORSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Nasz
+  Decyzja: Pas
+  Stawka podbita do x1
+  Decyzję podejmuje: Jakub
+  Decyzja: Pas
+  Stawka podbita do x1
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Przeciwnik2' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Krol Dzwonek
+  [Nasz] zagrywa: Krol Wino
+  [Jakub] zagrywa: As Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Jakub
+  [Jakub] zagrywa: Dama Czerwien
+  [Przeciwnik1] zagrywa: As Czerwien
+  [Nasz] zagrywa: Dziesiatka Czerwien
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Przeciwnik1 !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'Oni'
+  Rozdanie wygrywa: My
+  Przyznane punkty meczowe: 6 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 0
+=========================
+
+--- ROZDANIE #2 ---
+Rozdającym jest: Przeciwnik1
+
+--- ETAP: Rozdanie 3 kart ---
+  Ręka gracza 'Jakub': Krol Zoladz, Dziewiatka Dzwonek, Dziesiatka Czerwien
+  Ręka gracza 'Przeciwnik1': Dama Czerwien, As Wino, Dziewiatka Wino
+  Ręka gracza 'Nasz': Dama Dzwonek, Dziesiatka Zoladz, Dziewiatka Zoladz
+  Ręka gracza 'Przeciwnik2': As Zoladz, Krol Czerwien, Dama Zoladz
+
+--- ETAP: Deklaracja 1 ---
+  Deklaruje: Nasz
+  Możliwe akcje: NORMALNA (CZERWIEN), NORMALNA (DZWONEK), NORMALNA (ZOLADZ), NORMALNA (WINO), BEZ_PYTANIA (CZERWIEN), BEZ_PYTANIA (DZWONEK), BEZ_PYTANIA (ZOLADZ), BEZ_PYTANIA (WINO), GORSZA, LEPSZA
+  Decyzja: GORSZA, Atut: Brak
+
+--- ETAP: Faza Lufy ---
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Lufa
+  Stawka podbita do x2
+  Decyzję podejmuje: Jakub
+  Decyzja: Kontra
+  Stawka podbita do x4
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Lufa
+  Stawka podbita do x8
+  Decyzję podejmuje: Nasz
+  Decyzja: Kontra
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik2
+  Decyzja: Pas
+  Stawka podbita do x16
+  Decyzję podejmuje: Przeciwnik1
+  Decyzja: Pas
+  Stawka podbita do x16
+
+=========================
+--- ETAP: Rozgrywka ---
+INFO: Gra 1 vs 2. Gracz 'Jakub' nie bierze udziału w rozgrywce.
+
+-- Lewa #1 --
+  Rozpoczyna: Nasz
+  [Nasz] zagrywa: Dama Dzwonek
+  [Przeciwnik2] zagrywa: As Zoladz
+  [Przeciwnik1] zagrywa: Dziesiatka Dzwonek
+
+-- Lewa #2 --
+  Rozpoczyna: Przeciwnik1
+  [Przeciwnik1] zagrywa: Dama Czerwien
+  [Nasz] zagrywa: Walet Czerwien
+  [Przeciwnik2] zagrywa: Krol Czerwien
+
+-- Lewa #3 --
+  Rozpoczyna: Przeciwnik2
+  [Przeciwnik2] zagrywa: Dama Zoladz
+  [Przeciwnik1] zagrywa: As Wino
+  [Nasz] zagrywa: Dziesiatka Zoladz
+
+!!! Rozdanie zakończone przed czasem: wzięcie lewy przez gracza Nasz !!!
+
+=========================
+--- WYNIK KOŃCOWY ROZDANIA ---
+  Grany kontrakt: GORSZA
+  Punkty z kart (z bonusem): Kontrakt niespełniony przez drużynę 'My'
+  Rozdanie wygrywa: Oni
+  Przyznane punkty meczowe: 96 (mnożnik: x1)
+  OGÓLNY WYNIK MECZU: My 6 - Oni 96
+=========================
+
+
+##############################
+!!! KONIEC GRY !!!
+Partię wygrywa drużyna: Oni
+OSTATECZNY WYNIK: My 6 - Oni 96
+##############################
