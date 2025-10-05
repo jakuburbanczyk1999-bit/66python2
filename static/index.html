@@ -2,31 +2,39 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>Gra w 66 - Panel Testowy</title>
+    <title>Gra w 66</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <h1>Panel Testowy Gry w 66</h1>
-    <div class="kontener-gry">
-        <div class="lewy-panel"> <div id="info-gry" class="panel">
-                <h2>Stan Gry</h2>
-                <button id="nowa-gra-btn">Rozpocznij Nową Grę</button>
+    <div id="ekran-gry">
+        <h1>Panel Testowy Gry w 66</h1>
+        <div class="kontener-gry">
+            <div class="lewy-panel">
+                <div id="info-gry" class="panel">
+                    <h2>Stan Gry</h2>
+                </div>
+                <div id="historia-panel" class="panel">
+                    <h2>Historia Rozdania</h2>
+                    <div id="historia-lista"></div>
+                </div>
             </div>
-            <div id="historia-panel" class="panel">
-                <h2>Historia Rozdania</h2>
-                <div id="historia-lista"></div>
+            <div id="strefa-graczy" class="panel">
+                <h2>Gracze i Akcje</h2>
+                <div id="gracze-kontener"></div>
+            </div>
+            <div id="stol" class="panel">
+                <h2>Stół</h2>
+                <div id="karty-na-stole-kontener" style="display: flex; gap: 15px;"></div>
             </div>
         </div>
-        <div id="strefa-graczy" class="panel">
-            <h2>Gracze i Akcje</h2>
-            <div id="gracze-kontener"></div>
-        </div>
-        <div id="stol" class="panel">
-            <h2>Stół</h2>
-            <div id="karty-na-stole-kontener" style="display: flex; gap: 15px;"></div>
+        <div id="modal-overlay" class="hidden">
+            <div id="podsumowanie-rozdania" class="panel">
+                <h2 id="podsumowanie-tytul">Koniec Rozdania!</h2>
+                <div id="podsumowanie-tresc"></div>
+                <button id="nastepne-rozdanie-btn">Dalej</button>
+            </div>
         </div>
     </div>
-
     <script src="/static/script.js"></script>
 </body>
 </html>

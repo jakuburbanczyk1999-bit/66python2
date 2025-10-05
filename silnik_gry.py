@@ -93,6 +93,7 @@ class FazaGry(Enum):
     LICYTACJA = auto() 
     LUFA = auto()
     ROZGRYWKA = auto()
+    PODSUMOWANIE_ROZDANIA = auto()
     ZAKONCZONE = auto()
     FAZA_PYTANIA = auto()
 
@@ -128,6 +129,43 @@ class Rozdanie:
         self.liczba_aktywnych_graczy = 4
         self.ostatni_podbijajacy: Optional[Gracz] = None
         self.lufa_challenger: Optional[Gracz] = None
+        self.podsumowanie = {}
+    def _sprawdz_koniec_rozdania(self):
+        """Sprawdza, czy rozdanie powinno się zakończyć i jeśli tak, dokonuje rozliczenia."""
+        
+        # Sprawdzenie, czy rozdanie już się zakończyło w trakcie lewy
+        if self.rozdanie_zakonczone:
+            self.faza = FazaGry.PODSUMOWANIE_ROZDANIA
+            druzyna_wygrana, punkty, mnoznik_gry, mnoznik_lufy = self.rozlicz_rozdanie()
+            self.podsumowanie = {
+                "wygrana_druzyna": druzyna_wygrana.nazwa,
+                "przyznane_punkty": punkty,
+                "kontrakt": self.kontrakt.name,
+                "atut": self.atut.name if self.atut else "Brak",
+                "mnoznik_gry": mnoznik_gry,
+                "mnoznik_lufy": mnoznik_lufy,
+                "wynik_w_kartach": self.punkty_w_rozdaniu,
+                "powod": self.powod_zakonczenia
+            }
+            return
+
+        # Sprawdzenie, czy wszystkie karty zostały zagrane
+        if not any(gracz.reka for gracz in self.gracze):
+            self.rozdanie_zakonczone = True
+            self.faza = FazaGry.PODSUMOWANIE_ROZDANIA
+            self.powod_zakonczenia = "Rozegrano wszystkie lewy."
+            
+            druzyna_wygrana, punkty, mnoznik_gry, mnoznik_lufy = self.rozlicz_rozdanie()
+            self.podsumowanie = {
+                "wygrana_druzyna": druzyna_wygrana.nazwa,
+                "przyznane_punkty": punkty,
+                "kontrakt": self.kontrakt.name,
+                "atut": self.atut.name if self.atut else "Brak",
+                "mnoznik_gry": mnoznik_gry,
+                "mnoznik_lufy": mnoznik_lufy,
+                "wynik_w_kartach": self.punkty_w_rozdaniu,
+                "powod": self.powod_zakonczenia
+            }
         
     def _ustaw_kontrakt(self, gracz_grajacy: Gracz, kontrakt: Kontrakt, atut: Optional[Kolor]):
         self.grajacy = gracz_grajacy
@@ -457,6 +495,7 @@ class Rozdanie:
 
         self.aktualna_lewa.clear()
         self.kolej_gracza_idx = self.gracze.index(zwyciezca_lewy)
+        self._sprawdz_koniec_rozdania()
         
     def zagraj_karte(self, gracz: Gracz, karta: Karta) -> dict:
         if not self._waliduj_ruch(gracz, karta):
@@ -484,6 +523,7 @@ class Rozdanie:
             self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
             while self.gracze[self.kolej_gracza_idx] == self.nieaktywny_gracz:
                 self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
+            self._sprawdz_koniec_rozdania()
             
         return wynik
         

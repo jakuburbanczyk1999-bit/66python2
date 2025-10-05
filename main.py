@@ -22,11 +22,19 @@ app.add_middleware(
 
 gry = {}
 HUMAN_PLAYER_NAME = "Jakub"
+class NastepneRozdanieAkcja(BaseModel):
+    gracz: str # Dowolny gracz może kliknąć "dalej"
+    akcja: dict
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def read_root():
+    return FileResponse('static/start.html')
+
+@app.get("/gra.html")
+def read_game_page():
+    # Nowy endpoint do serwowania strony gry
     return FileResponse('static/index.html')
 
 def karta_ze_stringa(nazwa_karty: str) -> silnik_gry.Karta:
@@ -61,6 +69,17 @@ def pobierz_stan_gry(id_gry: str):
     kolej_gracza_idx = rozdanie.kolej_gracza_idx; gracz_w_turze = rozdanie.gracze[kolej_gracza_idx] if kolej_gracza_idx is not None else None
     if gracz_w_turze: mozliwe_akcje_oryginal = rozdanie.get_mozliwe_akcje(gracz_w_turze)
     mozliwe_akcje_json = []
+    przetworzona_historia = []
+    for log in rozdanie.szczegolowa_historia:
+        nowy_log = log.copy()
+        if log['typ'] == 'akcja_licytacyjna' and 'akcja' in log:
+            nowa_akcja_logu = log['akcja'].copy()
+            if 'atut' in nowa_akcja_logu and isinstance(nowa_akcja_logu['atut'], silnik_gry.Kolor):
+                nowa_akcja_logu['atut'] = nowa_akcja_logu['atut'].name
+            if 'kontrakt' in nowa_akcja_logu and isinstance(nowa_akcja_logu['kontrakt'], silnik_gry.Kontrakt):
+                nowa_akcja_logu['kontrakt'] = nowa_akcja_logu['kontrakt'].name
+            nowy_log['akcja'] = nowa_akcja_logu
+        przetworzona_historia.append(nowy_log)
     for akcja in mozliwe_akcje_oryginal:
         nowa_akcja = akcja.copy()
         if 'atut' in nowa_akcja and nowa_akcja['atut'] is not None: nowa_akcja['atut'] = nowa_akcja['atut'].name
@@ -80,11 +99,21 @@ def pobierz_stan_gry(id_gry: str):
             "mozliwe_akcje": mozliwe_akcje_json, "punkty_w_rozdaniu": rozdanie.punkty_w_rozdaniu,
             "karty_na_stole": [ {"gracz": gracz.nazwa, "karta": str(karta)} for gracz, karta in rozdanie.aktualna_lewa ],
             "grywalne_karty": grywalne_karty,
-            "historia_rozdania": rozdanie.szczegolowa_historia 
+            "historia_rozdania": przetworzona_historia,
+            "podsumowanie": rozdanie.podsumowanie 
+            
         }, 
         "historia_rozdan": partia["historia_rozdan"] 
     }
     return stan_gry
+
+def sprawdz_koniec_partii(partia):
+    """Sprawdza, czy któraś z drużyn osiągnęła 66 punktów."""
+    for druzyna in partia["druzyny"]:
+        if druzyna.punkty_meczu >= 66:
+            partia["status_partii"] = "ZAKONCZONA"
+            return True
+    return False
 
 # --- PRZYWRÓCONA DEFINICJA KLASY AKCJA ---
 class Akcja(BaseModel):
@@ -95,6 +124,26 @@ class Akcja(BaseModel):
 def wykonaj_akcje(id_gry: str, dane_akcji: Akcja):
     if id_gry not in gry: raise HTTPException(status_code=404, detail="Gra o podanym ID nie istnieje")
     partia = gry[id_gry]; rozdanie = partia["aktualne_rozdanie"]
+    if dane_akcji.akcja.get('typ') == 'nastepne_rozdanie':
+        if sprawdz_koniec_partii(partia):
+            return pobierz_stan_gry(id_gry)
+
+        partia["historia_rozdan"].append(rozdanie.podsumowanie)
+        nowy_rozdajacy_idx = (rozdanie.rozdajacy_idx + 1) % 4
+        
+        # Resetujemy graczy przed nowym rozdaniem
+        for gracz in partia["gracze"]:
+            gracz.reka.clear()
+            gracz.wygrane_karty.clear()
+
+        nowe_rozdanie = silnik_gry.Rozdanie(
+            gracze=partia["gracze"],
+            druzyny=partia["druzyny"],
+            rozdajacy_idx=nowy_rozdajacy_idx
+        )
+        nowe_rozdanie.rozpocznij_nowe_rozdanie()
+        partia["aktualne_rozdanie"] = nowe_rozdanie
+        return pobierz_stan_gry(id_gry)
     if partia["status_partii"] != "W_TRAKCIE": raise HTTPException(status_code=400, detail="Partia jest już zakończona")
     gracz_obj = next((g for g in rozdanie.gracze if g.nazwa == dane_akcji.gracz), None)
     if not gracz_obj: raise HTTPException(status_code=404, detail=f"Gracz o nazwie '{dane_akcji.gracz}' nie istnieje")
