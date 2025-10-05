@@ -4,6 +4,7 @@ const historiaListaEl = document.getElementById('historia-lista');
 const modalOverlayEl = document.getElementById('modal-overlay');
 const podsumowanieTrescEl = document.getElementById('podsumowanie-tresc');
 const nastepneRozdanieBtn = document.getElementById('nastepne-rozdanie-btn');
+const wynikMeczuEl = document.getElementById('wynik-meczu');
 
 let idGry = null;
 let autoCloseTimer = null;
@@ -104,6 +105,7 @@ function aktualizujHistorie(historia) {
 
 function aktualizujWidok(stanGry) {
     if (!stanGry || stanGry.error) return;
+    wynikMeczuEl.innerHTML = `My: ${stanGry.punkty_meczu.My} - ${stanGry.punkty_meczu.Oni} Oni`;
     const rozdanie = stanGry.rozdanie;
     if (!rozdanie) return;
     aktualizujHistorie(rozdanie.historia_rozdania);
@@ -146,6 +148,7 @@ function aktualizujWidok(stanGry) {
         }
         graczeKontenerEl.appendChild(graczDiv);
     });
+    
     kartyNaStoleKontenerEl.innerHTML = '';
     rozdanie.karty_na_stole.forEach(item => {
         const kartaDiv = document.createElement('div');

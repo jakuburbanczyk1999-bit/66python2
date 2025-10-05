@@ -133,28 +133,22 @@ class Rozdanie:
     def _sprawdz_koniec_rozdania(self):
         """Sprawdza, czy rozdanie powinno się zakończyć i jeśli tak, dokonuje rozliczenia."""
         
-        # Sprawdzenie, czy rozdanie już się zakończyło w trakcie lewy
-        if self.rozdanie_zakonczone:
-            self.faza = FazaGry.PODSUMOWANIE_ROZDANIA
-            druzyna_wygrana, punkty, mnoznik_gry, mnoznik_lufy = self.rozlicz_rozdanie()
-            self.podsumowanie = {
-                "wygrana_druzyna": druzyna_wygrana.nazwa,
-                "przyznane_punkty": punkty,
-                "kontrakt": self.kontrakt.name,
-                "atut": self.atut.name if self.atut else "Brak",
-                "mnoznik_gry": mnoznik_gry,
-                "mnoznik_lufy": mnoznik_lufy,
-                "wynik_w_kartach": self.punkty_w_rozdaniu,
-                "powod": self.powod_zakonczenia
-            }
-            return
-
-        # Sprawdzenie, czy wszystkie karty zostały zagrane
-        if not any(gracz.reka for gracz in self.gracze):
+        # --- OSTATECZNA POPRAWKA ---
+        # Tworzymy listę aktywnych graczy, ignorując tego, który nie bierze udziału w grze.
+        aktywni_gracze = [gracz for gracz in self.gracze if gracz != self.nieaktywny_gracz]
+        
+        # Sprawdzamy, czy wszyscy AKTYWNI gracze zagrali już swoje karty.
+        if not any(gracz.reka for gracz in aktywni_gracze):
             self.rozdanie_zakonczone = True
-            self.faza = FazaGry.PODSUMOWANIE_ROZDANIA
             self.powod_zakonczenia = "Rozegrano wszystkie lewy."
             
+            if self.kontrakt == Kontrakt.GORSZA and not any(k for g in self.grajacy.druzyna.gracze for k in g.wygrane_karty):
+                self.zwyciezca_rozdania = self.grajacy.druzyna
+                self.powod_zakonczenia = f"spełnienie kontraktu Gorsza przez gracza {self.grajacy.nazwa}"
+
+        # Reszta funkcji pozostaje bez zmian
+        if self.rozdanie_zakonczone:
+            self.faza = FazaGry.PODSUMOWANIE_ROZDANIA
             druzyna_wygrana, punkty, mnoznik_gry, mnoznik_lufy = self.rozlicz_rozdanie()
             self.podsumowanie = {
                 "wygrana_druzyna": druzyna_wygrana.nazwa,
