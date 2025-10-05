@@ -79,8 +79,11 @@ def pobierz_stan_gry(id_gry: str):
             "rece_graczy": { gracz.nazwa: [str(karta) for karta in gracz.reka] for gracz in rozdanie.gracze },
             "mozliwe_akcje": mozliwe_akcje_json, "punkty_w_rozdaniu": rozdanie.punkty_w_rozdaniu,
             "karty_na_stole": [ {"gracz": gracz.nazwa, "karta": str(karta)} for gracz, karta in rozdanie.aktualna_lewa ],
-            "grywalne_karty": grywalne_karty
-        }, "historia_rozdan": partia["historia_rozdan"] }
+            "grywalne_karty": grywalne_karty,
+            "historia_rozdania": rozdanie.szczegolowa_historia 
+        }, 
+        "historia_rozdan": partia["historia_rozdan"] 
+    }
     return stan_gry
 
 # --- PRZYWRÓCONA DEFINICJA KLASY AKCJA ---

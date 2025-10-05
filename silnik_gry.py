@@ -121,6 +121,7 @@ class Rozdanie:
         self.zwyciezca_ostatniej_lewy: Optional[Gracz] = None
         self.faza: FazaGry = FazaGry.PRZED_ROZDANIEM
         self.historia_licytacji: list[tuple[Gracz, dict]] = []
+        self.szczegolowa_historia: list[dict] = []
         self.pasujacy_gracze: list[Gracz] = []
         self.oferty_przebicia: list[tuple[Gracz, dict]] = []
         self.nieaktywny_gracz: Optional[Gracz] = None
@@ -143,6 +144,10 @@ class Rozdanie:
                 if p != self.grajacy:
                     self.nieaktywny_gracz = p
                     break
+    def _dodaj_log(self, typ: str, **kwargs):
+        """Dodaje wpis do szczegółowej historii rozdania."""
+        log = {'typ': typ, **kwargs}
+        self.szczegolowa_historia.append(log)
 
     def _zakoncz_faze_lufy(self):
         """Kończy fazę lufy, rozdaje karty i przechodzi do następnej fazy."""
@@ -218,6 +223,7 @@ class Rozdanie:
     def wykonaj_akcje(self, gracz: Gracz, akcja: dict):
         """Przetwarza JEDNĄ akcję gracza i aktualizuje stan gry."""
         self.historia_licytacji.append((gracz, akcja))
+        self._dodaj_log('akcja_licytacyjna', gracz=gracz.nazwa, akcja=akcja)
 
         if self.faza == FazaGry.DEKLARACJA_1:
             if akcja['typ'] == 'deklaracja':
@@ -339,6 +345,11 @@ class Rozdanie:
         punkty_meczu *= self.mnoznik_lufy
         
         druzyna_wygrana.punkty_meczu += punkty_meczu
+        self._dodaj_log('koniec_rozdania',
+                        wygrana_druzyna=druzyna_wygrana.nazwa,
+                        punkty_meczu=punkty_meczu,
+                        wynik_w_rozdaniu=self.punkty_w_rozdaniu,
+                        powod=self.powod_zakonczenia) # Dodajemy log
         return druzyna_wygrana, punkty_meczu, mnoznik_gry, self.mnoznik_lufy
         
     def _waliduj_ruch(self, gracz: Gracz, karta: Karta) -> bool:
@@ -411,6 +422,10 @@ class Rozdanie:
 
         zwyciezca_lewy = zwyciezca_pary[0]
         punkty_w_lewie = sum(karta.wartosc for _, karta in self.aktualna_lewa)
+        self._dodaj_log('koniec_lewy', 
+                        zwyciezca=zwyciezca_lewy.nazwa, 
+                        punkty=punkty_w_lewie,
+                        karty=[str(k[1]) for k in self.aktualna_lewa]) # Dodajemy log
         
         druzyna_zwyciezcy = zwyciezca_lewy.druzyna
         self.punkty_w_rozdaniu[druzyna_zwyciezcy.nazwa] += punkty_w_lewie
@@ -447,7 +462,7 @@ class Rozdanie:
         if not self._waliduj_ruch(gracz, karta):
             print(f"BŁĄD: Ruch gracza {gracz} kartą {karta} jest nielegalny!")
             return {}
-
+        self._dodaj_log('zagranie_karty', gracz=gracz.nazwa, karta=str(karta)) # Dodajemy log
         punkty_z_meldunku = 0
         if not self.aktualna_lewa and self.kontrakt in [Kontrakt.NORMALNA, Kontrakt.BEZ_PYTANIA]:
             if karta.ranga in [Ranga.KROL, Ranga.DAMA]:

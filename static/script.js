@@ -1,16 +1,56 @@
-const stanGryJsonEl = document.getElementById('stan-gry-json');
 const nowaGraBtn = document.getElementById('nowa-gra-btn');
 const graczeKontenerEl = document.getElementById('gracze-kontener');
 const kartyNaStoleKontenerEl = document.getElementById('karty-na-stole-kontener');
+const historiaListaEl = document.getElementById('historia-lista');
 
 let idGry = null;
 
+function formatujAkcjeLicytacyjna(log) {
+    let tekst = `<strong>${log.gracz}</strong>: ${log.akcja.typ}`;
+    if (log.akcja.kontrakt) tekst += ` - ${log.akcja.kontrakt}`;
+    if (log.akcja.atut) tekst += ` (${log.akcja.atut})`;
+    return tekst;
+}
+function aktualizujHistorie(historia) {
+    historiaListaEl.innerHTML = '';
+    if (!historia) return;
+
+    historia.forEach(log => {
+        const p = document.createElement('p');
+        let tresc = '';
+        switch (log.typ) {
+            case 'zagranie_karty':
+                tresc = `<strong>${log.gracz}</strong> zagrywa: ${log.karta}`;
+                break;
+            case 'akcja_licytacyjna':
+                tresc = formatujAkcjeLicytacyjna(log);
+                break;
+            case 'koniec_lewy':
+                tresc = `Lewę bierze <strong>${log.zwyciezca}</strong> (+${log.punkty} pkt).`;
+                break;
+            case 'meldunek':
+                tresc = `<strong>${log.gracz}</strong> melduje za ${log.punkty} pkt!`;
+                break;
+            case 'koniec_rozdania':
+                tresc = `<hr><strong>Koniec rozdania!</strong> Wygrywa: <strong>${log.wygrana_druzyna}</strong> (+${log.punkty_meczu} pkt).<br>Powód: ${log.powod}`;
+                break;
+            default:
+                tresc = JSON.stringify(log);
+        }
+        p.innerHTML = tresc;
+        historiaListaEl.appendChild(p);
+    });
+    // Automatyczne przewijanie do dołu
+    historiaListaEl.scrollTop = historiaListaEl.scrollHeight;
+}
+
 function aktualizujWidok(stanGry) {
-    stanGryJsonEl.textContent = JSON.stringify(stanGry, null, 2);
+   
     if (!stanGry || stanGry.error) return;
     
     const rozdanie = stanGry.rozdanie;
     if (!rozdanie) return;
+    aktualizujHistorie(rozdanie.historia_rozdania);
 
     const kolejGracza = rozdanie.kolej_gracza;
     graczeKontenerEl.innerHTML = '';

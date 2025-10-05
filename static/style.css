@@ -1,6 +1,5 @@
 body { font-family: sans-serif; background-color: #3d8243; color: white; padding: 20px; }
 .kontener-gry { display: grid; grid-template-areas: "info gracze" "stol stol"; grid-template-columns: 300px 1fr; gap: 20px; }
-#info-gry { grid-area: info; }
 #strefa-graczy { grid-area: gracze; }
 #stol { grid-area: stol; background-color: #2a5c30; padding: 20px; border-radius: 10px; min-height: 200px; display: flex; justify-content: center; align-items: center; gap: 20px; }
 .panel { background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; }
@@ -14,3 +13,27 @@ button { padding: 10px 15px; border: none; background-color: #007bff; color: whi
 .karta.grywalna { cursor: pointer; border: 2px solid yellow; }
 .karta.grywalna:hover { transform: translateY(-5px); }
 .karta-na-stole { text-align: center; }
+.kontener-gry { 
+    display: grid; 
+    grid-template-areas: "lewy-panel gracze" "stol stol"; /* ZMIANA */
+    grid-template-columns: 350px 1fr; /* ZMIANA */
+    gap: 20px; 
+}
+.lewy-panel { /* NOWA KLASA */
+    grid-area: lewy-panel;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#historia-lista { /* NOWA KLASA */
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: 14px;
+    padding-right: 10px;
+}
+#historia-lista p { /* NOWA KLASA */
+    margin: 4px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #444;
+}
