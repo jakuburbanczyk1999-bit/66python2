@@ -1,42 +1,206 @@
-body { font-family: sans-serif; background-color: #3d8243; color: white; padding: 20px; }
-.kontener-gry { display: grid; grid-template-areas: "info gracze" "stol stol"; grid-template-columns: 300px 1fr; gap: 20px; }
-#strefa-graczy { grid-area: gracze; }
-#stol { grid-area: stol; background-color: #2a5c30; padding: 20px; border-radius: 10px; min-height: 200px; display: flex; justify-content: center; align-items: center; gap: 20px; }
-.panel { background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; }
-h2, h3 { margin-top: 0; border-bottom: 1px solid #666; padding-bottom: 5px; }
-pre { background-color: #222; padding: 10px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
-button { padding: 10px 15px; border: none; background-color: #007bff; color: white; border-radius: 5px; cursor: pointer; }
-#akcje-lista button { background-color: #28a745; margin: 2px; }
-.gracz { margin-bottom: 15px; }
-.reka { display: flex; flex-wrap: wrap; gap: 5px; }
-.karta { width: 80px; height: 120px; border-radius: 5px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
-.karta.grywalna { cursor: pointer; border: 2px solid yellow; }
-.karta.grywalna:hover { transform: translateY(-5px); }
-.karta-na-stole { text-align: center; }
-.kontener-gry { 
-    display: grid; 
-    grid-template-areas: "lewy-panel gracze" "stol stol"; /* ZMIANA */
-    grid-template-columns: 350px 1fr; /* ZMIANA */
-    gap: 20px; 
-}
-.lewy-panel { /* NOWA KLASA */
-    grid-area: lewy-panel;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+/* === OGÓLNE USTAWIENIA === */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #3d8243;
+    color: white;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Zapobiega przewijaniu strony */
 }
 
-#historia-lista { /* NOWA KLASA */
-    max-height: 400px;
+/* === GŁÓWNY KONTENER GRY (UKŁAD STRONY) === */
+.ekran-gry {
+    display: grid;
+    grid-template-areas:
+        "info-lewy   info-srodek   info-prawy   panel-historii"
+        "obszar-gry  obszar-gry    obszar-gry   panel-historii"
+        "gracz-dol   gracz-dol     gracz-dol    panel-historii";
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 1fr 2fr 1fr 350px; /* Panel historii ma stałą szerokość */
+    height: 100vh;
+    width: 100vw;
+    box-sizing: border-box;
+    padding: 10px;
+}
+
+/* === PANELE INFORMACYJNE W ROGACH === */
+#info-lewy-rog, #info-prawy-rog, #info-srodek {
+    padding: 10px;
+    text-align: center;
+}
+#info-lewy-rog { grid-area: info-lewy; text-align: left; }
+#info-srodek { grid-area: info-srodek; }
+#info-prawy-rog { grid-area: info-prawy; text-align: right; }
+
+.info-box {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 8px 12px;
+    border-radius: 6px;
+    display: inline-block;
+}
+
+/* === GŁÓWNY OBSZAR GRY (GRACZE WOKÓŁ STOŁU) === */
+.obszar-gry {
+    grid-area: obszar-gry;
+    display: flex;
+    justify-content: space-between;
+    align-items: stretch;
+    
+    /* DODAJ TĘ LINIĘ */
+    padding: 0 300px; /* 0 na górę/dół, 100px na lewo/prawo */
+}
+.strefa-srodkowa {
+    display: flex;
+    flex-direction: column;
+    /* ZMIANA: Wracamy do 'flex-start', aby wszystko było na górze */
+    justify-content: flex-start; 
+    height: 100%;
+    width: 100%;
+    align-items: center; 
+}
+
+.info-gracza {
+    font-weight: bold;
+    margin-bottom: 5px;
+    text-align: center;
+    padding: 5px; /* Dodajemy padding */
+    border: 3px solid transparent; /* Dodajemy przezroczystą ramkę */
+    border-radius: 8px; /* Zaokrąglenie */
+    transition: all 0.3s; /* Płynne przejście */
+}
+
+/* NOWA KLASA */
+.aktywny-gracz .info-gracza {
+    border-color: yellow;
+    background-color: rgba(255, 255, 0, 0.2);
+}
+
+/* === STYLIZACJA RĄK GRACZY === */
+.reka-glowna, .reka-gorna, .reka-boczna {
+    display: flex;
+    justify-content: center;
+}
+.reka-glowna { gap: 10px; }
+.reka-gorna { gap: 5px; }
+.reka-boczna { 
+    flex-direction: column; /* DODAJ TĘ LINIĘ Z POWROTEM */
+    gap: 5px; 
+    align-items: center; 
+} 
+.gracz-boczny { /* Dodajemy ten styl, aby wycentrować graczy bocznych w pionie */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* === STYLIZACJA KART === */
+.karta {
+    width: 80px;
+    height: 120px;
+    border-radius: 6px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s, border 0.2s;
+}
+#gracz-gora .karta, #gracz-lewy .karta, #gracz-prawy .karta {
+    width: 60px;
+    height: 90px;
+}
+
+.karta.grywalna {
+    cursor: pointer;
+    border: 3px solid yellow;
+}
+.karta.grywalna:hover {
+    transform: translateY(-15px);
+}
+
+/* === STÓŁ DO GRY === */
+#stol-gry {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 15px;
+    width: 500px;
+    height: 500px;
+    margin: 0 auto;
+    
+    /* DODAJEMY margines, aby podnieść stół */
+    margin-top: 50px; 
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+.karta-na-stole { text-align: center; }
+
+/* === STREFA GŁÓWNEGO GRACZA (DÓŁ) === */
+#strefa-gracza-glownego {
+    grid-area: gracz-dol;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 10px;
+}
+
+#kontener-akcji {
+    position: absolute;
+    bottom: 170px; /* Pozycjonowanie nad ręką gracza */
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+}
+#kontener-akcji button {
+    padding: 10px 20px;
+    font-size: 1em;
+    border: none;
+    background-color: #007bff;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* === PANEL HISTORII (PRAWA STRONA) === */
+#panel-historii {
+    grid-area: panel-historii;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px 0 0 8px;
+}
+#historia-lista {
+    flex-grow: 1;
     overflow-y: auto;
     font-size: 14px;
     padding-right: 10px;
 }
-#historia-lista p { /* NOWA KLASA */
+#historia-lista p {
     margin: 4px 0;
     padding-bottom: 4px;
-    border-bottom: 1px solid #444;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+
+
 }
+
+/* === EKRAN STARTOWY I MODAL === */
+#ekran-startowy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 80vh;
+    text-align: center;
+}
+
+#ekran-startowy h1 {
+    font-size: 3em;
+}
+
+#ekran-startowy button {
+    padding: 15px 30px;
+    font-size: 1.2em;
+}
+
 .hidden {
     display: none !important;
 }
@@ -59,13 +223,6 @@ button { padding: 10px 15px; border: none; background-color: #007bff; color: whi
     background-color: #2a5c30;
     border: 2px solid #fff;
     text-align: center;
-}
-#wynik-meczu {
-    font-size: 1.2em;
-    font-weight: bold;
-    text-align: center;
-    margin: 10px 0;
-    padding: 10px;
-    background-color: rgba(0, 0, 0, 0.2);
-    border-radius: 5px;
+    padding: 15px;
+    border-radius: 8px;
 }
