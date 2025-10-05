@@ -68,7 +68,7 @@ class Gracz:
 
 @dataclass
 class Druzyna:
-    """Reprezentuje drużynę złożoną z dwóch graczy."""
+    """Reprezentuje drużynę złożoną z  dwóch graczy."""
     nazwa: str
     gracze: list[Gracz] = field(default_factory=list)
     punkty_meczu: int = 0
@@ -352,30 +352,53 @@ class Rozdanie:
         reka_gracza = gracz.reka
 
         karty_do_koloru = [k for k in reka_gracza if k.kolor == kolor_wiodacy]
+        
         if karty_do_koloru:
-            return karta.kolor == kolor_wiodacy
+            if karta.kolor != kolor_wiodacy:
+                return False  # Twarda zasada: musisz dołożyć do koloru, jeśli możesz.
 
-        if not self.atut:
-            return True
+            is_trumped = False
+            if self.atut:
+                if any(k.kolor == self.atut for _, k in self.aktualna_lewa):
+                    is_trumped = True
+            
+            # Jeśli lewa jest przebita atutem, obowiązek przebijania w kolorze znika.
+            # Wystarczy dołożyć dowolną kartę do koloru.
+            if is_trumped:
+                return True
 
-        karty_atutowe_w_rece = [k for k in reka_gracza if k.kolor == self.atut]
-        if not karty_atutowe_w_rece:
-            return True
+            # Jeśli lewa nie jest przebita, obowiązuje zasada przebijania w kolorze.
+            karty_wiodace_na_stole = [k for _, k in self.aktualna_lewa if k.kolor == kolor_wiodacy]
+            najwyzsza_karta_na_stole = max(karty_wiodace_na_stole, key=lambda c: c.ranga.value)
+            
+            wyzsze_karty_w_rece = [k for k in karty_do_koloru if k.ranga.value > najwyzsza_karta_na_stole.ranga.value]
 
-        if karta.kolor != self.atut:
-            return False
+            if wyzsze_karty_w_rece:
+                # Jeśli masz czym przebić, musisz użyć jednej z tych kart.
+                return karta in wyzsze_karty_w_rece
+            else:
+                # Jeśli nie masz czym przebić, dowolna karta do koloru jest OK.
+                return True
+        
+        # Logika dla braku kart do koloru (obowiązek atutu) pozostaje bez zmian.
+        if self.atut and any(k.kolor == self.atut for k in reka_gracza):
+            if karta.kolor != self.atut:
+                return False
 
-        atuty_na_stole = [k for g, k in self.aktualna_lewa if k.kolor == self.atut]
-        if not atuty_na_stole:
-            return True
+            atuty_na_stole = [k for _, k in self.aktualna_lewa if k.kolor == self.atut]
+            if not atuty_na_stole:
+                return True
 
-        najwyzszy_atut_na_stole = max(atuty_na_stole, key=lambda k: k.ranga.value)
-        wyzsze_atuty_w_rece = [k for k in karty_atutowe_w_rece if k.ranga.value > najwyzszy_atut_na_stole.ranga.value]
+            najwyzszy_atut_na_stole = max(atuty_na_stole, key=lambda c: c.ranga.value)
+            wyzsze_atuty_w_rece = [k for k in reka_gracza if k.kolor == self.atut and k.ranga.value > najwyzszy_atut_na_stole.ranga.value]
 
-        if wyzsze_atuty_w_rece:
-            return karta in wyzsze_atuty_w_rece
-        else:
-            return True
+            if wyzsze_atuty_w_rece:
+                return karta in wyzsze_atuty_w_rece
+            else:
+                return True
+        
+        # Jeśli nie masz kart do koloru ani atutów (lub nie ma atutów w grze), możesz zagrać cokolwiek.
+        return True
 
     def _zakoncz_lewe(self):
         if not self.aktualna_lewa: return

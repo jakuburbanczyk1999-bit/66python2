@@ -1,0 +1,16 @@
+body { font-family: sans-serif; background-color: #3d8243; color: white; padding: 20px; }
+.kontener-gry { display: grid; grid-template-areas: "info gracze" "stol stol"; grid-template-columns: 300px 1fr; gap: 20px; }
+#info-gry { grid-area: info; }
+#strefa-graczy { grid-area: gracze; }
+#stol { grid-area: stol; background-color: #2a5c30; padding: 20px; border-radius: 10px; min-height: 200px; display: flex; justify-content: center; align-items: center; gap: 20px; }
+.panel { background-color: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; }
+h2, h3 { margin-top: 0; border-bottom: 1px solid #666; padding-bottom: 5px; }
+pre { background-color: #222; padding: 10px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
+button { padding: 10px 15px; border: none; background-color: #007bff; color: white; border-radius: 5px; cursor: pointer; }
+#akcje-lista button { background-color: #28a745; margin: 2px; }
+.gracz { margin-bottom: 15px; }
+.reka { display: flex; flex-wrap: wrap; gap: 5px; }
+.karta { width: 80px; height: 120px; border-radius: 5px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
+.karta.grywalna { cursor: pointer; border: 2px solid yellow; }
+.karta.grywalna:hover { transform: translateY(-5px); }
+.karta-na-stole { text-align: center; }

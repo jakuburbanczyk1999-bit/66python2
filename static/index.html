@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Gra w 66 - Panel Testowy</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Panel Teestowy Gry w 66</h1>
+    <div class="kontener-gry">
+        <div id="info-gry" class="panel">
+            <h2>Stan Gry</h2>
+            <button id="nowa-gra-btn">Rozpocznij Nową Grę</button>
+            <pre id="stan-gry-json">Oczekiwanie na rozpoczęcie gry...</pre>
+        </div>
+        <div id="strefa-graczy" class="panel">
+            <h2>Gracze i Akcje</h2>
+            <div id="gracze-kontener"></div>
+        </div>
+        <div id="stol" class="panel">
+            <h2>Stół</h2>
+            <div id="karty-na-stole-kontener" style="display: flex; gap: 15px;"></div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
