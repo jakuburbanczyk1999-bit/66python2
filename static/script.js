@@ -23,6 +23,12 @@ let idGry = null;
 let autoCloseTimer = null;
 
 // === FUNKCJE POMOCNICZE I OBSŁUGA ZDARZEŃ ===
+const mapowanieKontenerowGraczy = {
+    'Jakub': document.getElementById('gracz-dol'),
+    'Nasz': document.getElementById('gracz-gora'),
+    'Przeciwnik1': document.getElementById('gracz-lewy'),
+    'Przeciwnik2': document.getElementById('gracz-prawy')
+};
 
 function sprawdzTureBota(stanGry) {
     const kolejGracza = stanGry.rozdanie.kolej_gracza;
@@ -37,6 +43,29 @@ function sprawdzTureBota(stanGry) {
             aktualizujWidok(nowyStanGry);
         }, 1500);
     }
+}
+function pokazDymekAkcji(gracz, tekst) {
+    const kontenerGracza = mapowanieKontenerowGraczy[gracz];
+    if (!kontenerGracza) return;
+
+    // Usuń stary dymek, jeśli jeszcze istnieje
+    const staryDymek = kontenerGracza.querySelector('.dymek-akcji');
+    if (staryDymek) {
+        staryDymek.remove();
+    }
+
+    // Stwórz nowy dymek
+    const dymek = document.createElement('div');
+    dymek.className = 'dymek-akcji';
+    dymek.textContent = tekst;
+
+    kontenerGracza.style.position = 'relative'; // Ważne dla pozycjonowania dymku
+    kontenerGracza.appendChild(dymek);
+
+    // Dymek zniknie sam dzięki animacji CSS, ale usuwamy go z DOM po 4 sekundach
+    setTimeout(() => {
+        dymek.remove();
+    }, 2000);
 }
 
 function przejdzDoNastepnegoRozdania() {
@@ -131,6 +160,23 @@ function aktualizujWidok(stanGry) {
 
     // 2. Aktualizacja historii
     aktualizujHistorie(rozdanie.historia_rozdania);
+    const ostatniLog = rozdanie.historia_rozdania[rozdanie.historia_rozdania.length - 1];
+    if (ostatniLog) {
+        let tekstDymku = '';
+        if (ostatniLog.typ === 'akcja_licytacyjna') {
+            const akcja = ostatniLog.akcja;
+            tekstDymku = akcja.kontrakt || akcja.typ; // np. "NORMALNA" albo "Lufa"
+        } 
+
+        if (tekstDymku) {
+            // Wyświetl dymek tylko jeśli poprzednia akcja nie była nasza
+            // (aby uniknąć dublowania akcji, którą właśnie wykonaliśmy)
+            const poprzedniGracz = ostatniLog.gracz;
+            if (poprzedniGracz !== 'Jakub' || rozdanie.kolej_gracza === 'Jakub') {
+                 pokazDymekAkcji(poprzedniGracz, tekstDymku);
+            }
+        }
+    }
 
     // 3. Renderowanie rąk graczy i podświetlanie aktywnego gracza
     const kolejGracza = rozdanie.kolej_gracza;

@@ -119,6 +119,7 @@ def stworz_nowa_gre():
     
     druzyna_my.przeciwnicy = druzyna_oni
     druzyna_oni.przeciwnicy = druzyna_my
+    losowy_rozdajacy_idx = random.randint(0, 3)
     
     id_gry = str(uuid.uuid4())
     gry[id_gry] = {
@@ -129,12 +130,11 @@ def stworz_nowa_gre():
         "pelna_historia": []
     }
     
-    pierwsze_rozdanie = silnik_gry.Rozdanie(gracze=gracze, druzyny=[druzyna_my, druzyna_oni], rozdajacy_idx=0)
+    pierwsze_rozdanie = silnik_gry.Rozdanie(gracze=gracze, druzyny=[druzyna_my, druzyna_oni], rozdajacy_idx=losowy_rozdajacy_idx)
     pierwsze_rozdanie.rozpocznij_nowe_rozdanie()
     gry[id_gry]["aktualne_rozdanie"] = pierwsze_rozdanie
     
-    # Uruchom pętlę AI od razu po stworzeniu gry, jeśli pierwszy ruch nie należy do człowieka
-    uruchom_petle_ai(gry[id_gry], pierwsze_rozdanie)
+
 
     print(f"Utworzono nową partię o ID: {id_gry}")
     return {"id_gry": id_gry}

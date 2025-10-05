@@ -229,3 +229,81 @@ body {
     padding: 15px;
     border-radius: 8px;
 }
+.dymek-akcji {
+    position: absolute;
+    background-color: white;
+    color: #333;
+    padding: 10px 15px;
+    border-radius: 15px;
+    font-size: 1.1em;
+    font-weight: bold;
+    box-shadow: 3px 3px 8px rgba(0,0,0,0.5);
+    z-index: 20;
+    opacity: 0;
+    animation: pojawijsie-i-zniknij 4s ease-in-out;
+    white-space: nowrap; /* Zapobiega łamaniu tekstu */
+}
+
+/* Animacja pojawiania się i znikania */
+@keyframes pojawijsie-i-zniknij {
+    0% { opacity: 0; transform: scale(0.8); }
+    15% { opacity: 1; transform: scale(1); }
+    85% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.8); }
+}
+
+/* Ogonki dymków */
+.dymek-akcji::after {
+    content: '';
+    position: absolute;
+    border-style: solid;
+}
+
+/* Pozycjonowanie dymków dla każdego gracza */
+#gracz-dol .dymek-akcji {
+    bottom: 105%; /* Nad graczem */
+    left: 50%;
+    transform: translateX(-50%);
+}
+#gracz-dol .dymek-akcji::after {
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border-width: 10px 10px 0 10px;
+    border-color: white transparent transparent transparent;
+}
+
+#gracz-gora .dymek-akcji {
+    top: 105%; /* Pod graczem */
+    left: 50%;
+    transform: translateX(-50%);
+}
+#gracz-gora .dymek-akcji::after {
+    bottom: 100%; left: 50%;
+    transform: translateX(-50%);
+    border-width: 0 10px 10px 10px;
+    border-color: transparent transparent white transparent;
+}
+
+#gracz-lewy .dymek-akcji {
+    left: 105%; /* Po prawej stronie gracza */
+    top: 50%;
+    transform: translateY(-50%);
+}
+#gracz-lewy .dymek-akcji::after {
+    right: 100%; top: 50%;
+    transform: translateY(-50%);
+    border-width: 10px 10px 10px 0;
+    border-color: transparent white transparent transparent;
+}
+
+#gracz-prawy .dymek-akcji {
+    right: 105%; /* Po lewej stronie gracza */
+    top: 50%;
+    transform: translateY(-50%);
+}
+#gracz-prawy .dymek-akcji::after {
+    left: 100%; top: 50%;
+    transform: translateY(-50%);
+    border-width: 10px 0 10px 10px;
+    border-color: transparent transparent transparent white;
+}
