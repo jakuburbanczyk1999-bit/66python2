@@ -144,10 +144,13 @@ body {
 
 #kontener-akcji {
     position: absolute;
-    bottom: 170px; /* Pozycjonowanie nad ręką gracza */
+    bottom: 200px; /* ZMIANA: Zwiększamy wartość, np. ze 170px na 200px */
     display: flex;
+    flex-wrap: wrap; /* DODAJ: Umożliwi zawijanie przycisków */
+    justify-content: center; /* DODAJ: Wycentruje przyciski */
     gap: 10px;
     z-index: 10;
+    max-width: 500px; /* DODAJ: Ograniczy szerokość kontenera */
 }
 #kontener-akcji button {
     padding: 10px 20px;

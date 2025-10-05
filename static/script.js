@@ -24,6 +24,21 @@ let autoCloseTimer = null;
 
 // === FUNKCJE POMOCNICZE I OBSŁUGA ZDARZEŃ ===
 
+function sprawdzTureBota(stanGry) {
+    const kolejGracza = stanGry.rozdanie.kolej_gracza;
+    const fazaGry = stanGry.rozdanie.faza;
+
+    // Sprawdź, czy gra jest w toku i czy kolej na bota
+    if (kolejGracza && kolejGracza !== 'Jakub' && fazaGry !== 'PODSUMOWANIE_ROZDANIA') {
+        // Poczekaj 1.5 sekundy przed ruchem bota
+        setTimeout(async () => {
+            const response = await fetch(`/gra/${idGry}/ruch_bota`, { method: 'POST' });
+            const nowyStanGry = await response.json();
+            aktualizujWidok(nowyStanGry);
+        }, 1500);
+    }
+}
+
 function przejdzDoNastepnegoRozdania() {
     if (autoCloseTimer) clearTimeout(autoCloseTimer);
     modalOverlayEl.classList.add('hidden');
@@ -119,8 +134,6 @@ function aktualizujWidok(stanGry) {
 
     // 3. Renderowanie rąk graczy i podświetlanie aktywnego gracza
     const kolejGracza = rozdanie.kolej_gracza;
-    
-    // POPRAWKA: Prawidłowe mapowanie do głównych kontenerów graczy i ich rąk
     const mapowanieGraczy = {
         'Jakub': { kontener: document.getElementById('gracz-dol'), reka: rekaGlownaEl },
         'Nasz': { kontener: document.getElementById('gracz-gora'), reka: rekaGoraEl },
@@ -133,22 +146,30 @@ function aktualizujWidok(stanGry) {
         const kontenerGracza = el.kontener;
         const kontenerReki = el.reka;
 
-        // Podświetlanie aktywnego gracza
         kontenerGracza.classList.remove('aktywny-gracz');
         if (nazwa === kolejGracza) {
             kontenerGracza.classList.add('aktywny-gracz');
         }
 
-        // Renderowanie kart
         kontenerReki.innerHTML = ''; 
         const reka = rozdanie.rece_graczy[nazwa] || [];
         reka.forEach(nazwaKarty => {
             const img = document.createElement('img');
             img.className = 'karta';
-            img.src = `/static/karty/${nazwaKarty.replace(' ', '')}.png`;
-            if (nazwa === kolejGracza && rozdanie.grywalne_karty.includes(nazwaKarty)) {
-                img.classList.add('grywalna');
-                img.onclick = () => wyslijAkcje(kolejGracza, { typ: 'zagraj_karte', karta: nazwaKarty });
+            
+            // --- POPRAWKA WIDOCZNOŚCI KART ---
+            if (nazwa === 'Jakub') {
+                // Jeśli to gracz ludzki, pokaż normalną kartę
+                img.src = `/static/karty/${nazwaKarty.replace(' ', '')}.png`;
+                
+                // Spraw, aby tylko karty gracza ludzkiego były klikalne
+                if (rozdanie.grywalne_karty.includes(nazwaKarty)) {
+                    img.classList.add('grywalna');
+                    img.onclick = () => wyslijAkcje(kolejGracza, { typ: 'zagraj_karte', karta: nazwaKarty });
+                }
+            } else {
+                // Jeśli to bot, pokaż rewers
+                img.src = '/static/karty/rewers.png';
             }
             kontenerReki.appendChild(img);
         });
@@ -156,17 +177,65 @@ function aktualizujWidok(stanGry) {
 
     // 4. Renderowanie przycisków akcji
     kontenerAkcjiEl.innerHTML = '';
-    if (kolejGracza === 'Jakub' && rozdanie.faza !== 'ROZGRYWKA' && rozdanie.faza !== 'PODSUMOWANIE_ROZDANIA') {
-        rozdanie.mozliwe_akcje.forEach(akcja => {
-            const btn = document.createElement('button');
-            let etykieta = akcja.typ;
-            if (akcja.kontrakt) etykieta += ` - ${akcja.kontrakt}`;
-            if (akcja.atut) etykieta += ` (${akcja.atut})`;
-            btn.textContent = etykieta;
-            btn.onclick = () => wyslijAkcje(kolejGracza, akcja);
-            kontenerAkcjiEl.appendChild(btn);
-        });
-    }
+if (kolejGracza === 'Jakub' && rozdanie.faza !== 'ROZGRYWKA' && rozdanie.faza !== 'PODSUMOWANIE_ROZDANIA') {
+    
+    // --- NOWA, POPRAWIONA LOGIKA GRUPOWANIA ---
+
+    const renderujPrzyciski = (typKontraktu = null) => {
+        kontenerAkcjiEl.innerHTML = ''; // Zawsze czyść kontener przed renderowaniem
+
+        if (typKontraktu) {
+            // === KROK 2: Wyświetlanie kolorów dla wybranego kontraktu ===
+            const akcjeKolorow = rozdanie.mozliwe_akcje.filter(a => a.kontrakt === typKontraktu);
+
+            akcjeKolorow.forEach(akcja => {
+                const btn = document.createElement('button');
+                btn.textContent = akcja.atut;
+                btn.onclick = () => wyslijAkcje(kolejGracza, akcja);
+                kontenerAkcjiEl.appendChild(btn);
+            });
+
+            // Dodaj przycisk "Cofnij"
+            const cofnijBtn = document.createElement('button');
+            cofnijBtn.textContent = 'Cofnij';
+            cofnijBtn.style.backgroundColor = '#6c757d';
+            cofnijBtn.onclick = () => renderujPrzyciski(null); // Wróć do menu głównego
+            kontenerAkcjiEl.appendChild(cofnijBtn);
+
+        } else {
+            // === KROK 1: Wyświetlanie głównych opcji licytacji ===
+            const akcjeGlowne = [];
+            const kontraktyDoGrupowania = new Set();
+
+            rozdanie.mozliwe_akcje.forEach(akcja => {
+                if (akcja.kontrakt === 'NORMALNA' || akcja.kontrakt === 'BEZ_PYTANIA') {
+                    kontraktyDoGrupowania.add(akcja.kontrakt);
+                } else {
+                    akcjeGlowne.push(akcja); // Dodaj inne akcje (Gorsza, Lepsza, Lufa itp.)
+                }
+            });
+
+            // Dodaj przyciski grupujące na początku
+            kontraktyDoGrupowania.forEach(nazwaKontraktu => {
+                const btn = document.createElement('button');
+                btn.textContent = nazwaKontraktu;
+                btn.onclick = () => renderujPrzyciski(nazwaKontraktu);
+                kontenerAkcjiEl.appendChild(btn);
+            });
+
+            // Dodaj pozostałe przyciski
+            akcjeGlowne.forEach(akcja => {
+                const btn = document.createElement('button');
+                btn.textContent = akcja.kontrakt || akcja.typ;
+                btn.onclick = () => wyslijAkcje(kolejGracza, akcja);
+                kontenerAkcjiEl.appendChild(btn);
+            });
+        }
+    };
+
+    // Uruchom renderowanie głównego menu licytacji
+    renderujPrzyciski(null);
+}
 
     // 5. Renderowanie kart na stole
     stolGryEl.innerHTML = '';
@@ -186,6 +255,7 @@ function aktualizujWidok(stanGry) {
         document.getElementById('podsumowanie-tytul').textContent = "Koniec Rozdania!";
         nastepneRozdanieBtn.textContent = "Dalej";
     }
+    sprawdzTureBota(stanGry);
 }
 
 // === FUNKCJE API ===
@@ -194,7 +264,8 @@ async function pobierzStanGry() {
     try {
         const response = await fetch(`/gra/${idGry}`);
         if (!response.ok) { console.error("Nie udało się pobrać stanu gry."); return; }
-        aktualizujWidok(await response.json());
+        const stanGry = await response.json();
+        aktualizujWidok(stanGry); // Wywołujemy po otrzymaniu danych
     } catch (error) { console.error("Błąd podczas pobierania stanu gry:", error); }
 }
 
