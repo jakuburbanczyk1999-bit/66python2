@@ -10,6 +10,7 @@ let socket = null;
 let mojSlotId = null;
 let ostatniaDlugoscHistorii = 0;
 let nazwyDruzyn = { My: "My", Oni: "Oni" };
+let ostatniStanGry = {}; // Do śledzenia zmian dla dźwięków i animacji
 
 const ekranLobbyEl = document.getElementById('ekran-lobby');
 const ekranGryEl = document.querySelector('.ekran-gry');
@@ -17,6 +18,7 @@ const modalOverlayEl = document.getElementById('modal-overlay');
 const czatWiadomosciEl = document.getElementById('czat-wiadomosci');
 const czatInputEl = document.getElementById('czat-input');
 const czatWyslijBtn = document.getElementById('czat-wyslij-btn');
+const animationOverlayEl = document.getElementById('animation-overlay');
 
 const mapowanieKolorow = {
     'CZERWIEN': { symbol: '♥', klasa: 'kolor-czerwien' },
@@ -26,7 +28,28 @@ const mapowanieKolorow = {
 };
 
 /* ==========================================================================
-   SEKCJA 2: GŁÓWNA LOGIKA APLIKACJI (INICJALIZACJA I WEBSOCKET)
+   SEKCJA 2: ZARZĄDZANIE DŹWIĘKAMI
+   ========================================================================== */
+
+const dzwieki = {
+    zagranieKarty: new Audio('/static/dzwieki/zagranie-karty.mp3'),
+    wygranaLewa: new Audio('/static/dzwieki/wygrana-lewa.mp3'),
+    licytacja: new Audio('/static/dzwieki/licytacja.mp3'),
+    pas: new Audio('/static/dzwieki/pas.mp3'),
+    koniecRozdania: new Audio('/static/dzwieki/koniec-rozdania.mp3'),
+    wiadomoscCzat: new Audio('/static/dzwieki/wiadomosc-czat.mp3'),
+};
+
+function odtworzDzwiek(nazwaDzwieku) {
+    const dzwiek = dzwieki[nazwaDzwieku];
+    if (dzwiek) {
+        dzwiek.currentTime = 0;
+        dzwiek.play().catch(error => console.log(`Nie można odtworzyć dźwięku "${nazwaDzwieku}": ${error}`));
+    }
+}
+
+/* ==========================================================================
+   SEKCJA 3: GŁÓWNA LOGIKA APLIKACJI (INICJALIZACJA I WEBSOCKET)
    ========================================================================== */
 
 window.onload = () => {
@@ -68,8 +91,11 @@ function inicjalizujWebSocket() {
         } else {
             ekranLobbyEl.classList.add('hidden');
             ekranGryEl.classList.remove('hidden');
+            uruchomEfektyWizualne(stan, ostatniStanGry); // Uruchamiamy animacje przed renderowaniem
             aktualizujWidokGry(stan);
         }
+        
+        ostatniStanGry = JSON.parse(JSON.stringify(stan));
     };
 
     socket.onclose = (event) => {
@@ -98,10 +124,11 @@ function wyslijAkcjeGry(akcja) {
 }
 
 /* ==========================================================================
-   SEKCJA 3: RENDEROWANIE WIDOKU LOBBY
+   SEKCJA 4: RENDEROWANIE WIDOKU LOBBY
    ========================================================================== */
 
 function renderujLobby(stan) {
+    // ... (bez zmian)
     const lobbyIdGryEl = document.getElementById('lobby-id-gry');
     const druzynaMyEl = document.getElementById('druzyna-my');
     const druzynaOniEl = document.getElementById('druzyna-oni');
@@ -156,8 +183,9 @@ function renderujLobby(stan) {
     }
 }
 
+
 /* ==========================================================================
-   SEKCJA 4: RENDEROWANIE GŁÓWNEGO WIDOKU GRY
+   SEKCJA 5: RENDEROWANIE GŁÓWNEGO WIDOKU GRY
    ========================================================================== */
 function aktualizujWidokGry(stanGry) {
     if (stanGry.status_partii === 'ZAKONCZONA') {
@@ -169,11 +197,14 @@ function aktualizujWidokGry(stanGry) {
     const rozdanie = stanGry.rozdanie;
     const slotGracza = stanGry.slots.find(s => s.nazwa === nazwaGracza);
     if (!slotGracza) return;
-
+    
+    // Ustalanie pozycji graczy
     const partner = stanGry.slots.find(s => s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza);
     const przeciwnicy = stanGry.slots.filter(s => s.druzyna !== slotGracza.druzyna);
     const pozycje = { dol: slotGracza, gora: partner, lewy: przeciwnicy[0], prawy: przeciwnicy[1] };
+    const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]));
 
+    // Aktualizacja informacji o graczach
     document.querySelectorAll('.gracz-boczny, #gracz-gora, #gracz-dol').forEach(el => el.classList.remove('aktywny-gracz'));
     for (const [pos, slot] of Object.entries(pozycje)) {
         const kontenerGraczaEl = document.getElementById(`gracz-${pos}`);
@@ -187,6 +218,8 @@ function aktualizujWidokGry(stanGry) {
         }
     }
 
+    // Aktualizacja paneli informacyjnych
+    // ... (reszta kodu bez zmian)
     const nazwaTeam1 = nazwyDruzyn.My;
     const nazwaTeam2 = nazwyDruzyn.Oni;
     const punktyMeczu1 = stanGry.punkty_meczu[nazwaTeam1] || 0;
@@ -199,11 +232,9 @@ function aktualizujWidokGry(stanGry) {
     const ichPunktyMeczu = slotGracza.druzyna === 'My' ? punktyMeczu2 : punktyMeczu1;
     const mojePunktyRozdania = slotGracza.druzyna === 'My' ? punktyRozdania1 : punktyRozdania2;
     const ichPunktyRozdania = slotGracza.druzyna === 'My' ? punktyRozdania2 : punktyRozdania1;
-    
     document.getElementById('info-lewy-rog').innerHTML = `<div class="info-box">Wynik: <strong>${mojaDruzyna} ${mojePunktyMeczu} - ${ichPunktyMeczu} ${ichDruzyna}</strong></div>`;
     document.getElementById('info-srodek').innerHTML = `<div class="info-box">Punkty: ${mojaDruzyna} ${mojePunktyRozdania} - ${ichPunktyRozdania} ${ichDruzyna}</div>`;
     document.getElementById('info-prawy-rog').innerHTML = `<div class="info-box">Kontrakt: ${formatujKontrakt(rozdanie.kontrakt)}</div>`;
-    
     const infoStawkaEl = document.getElementById('info-stawka');
     if (rozdanie.aktualna_stawka > 0) {
         infoStawkaEl.innerHTML = `Stawka: <strong>${rozdanie.aktualna_stawka} pkt</strong>`;
@@ -212,6 +243,8 @@ function aktualizujWidokGry(stanGry) {
         infoStawkaEl.classList.add('hidden');
     }
 
+
+    // Renderowanie ręki głównego gracza z logiką animacji
     const rekaGlownaEl = document.querySelector('#gracz-dol .reka-glowna');
     rekaGlownaEl.innerHTML = '';
     const rekaTwojegoGracza = rozdanie.rece_graczy[nazwaGracza] || [];
@@ -221,11 +254,16 @@ function aktualizujWidokGry(stanGry) {
         img.src = `/static/karty/${nazwaKarty.replace(' ', '')}.png`;
         if (rozdanie.grywalne_karty.includes(nazwaKarty)) {
             img.classList.add('grywalna');
-            img.onclick = () => wyslijAkcjeGry({ typ: 'zagraj_karte', karta: nazwaKarty });
+            img.onclick = (e) => {
+                const celEl = document.getElementById('slot-karty-dol');
+                animujZagranieKarty(e.target, celEl); // Uruchom animację
+                wyslijAkcjeGry({ typ: 'zagraj_karte', karta: nazwaKarty });
+            };
         }
         rekaGlownaEl.appendChild(img);
     });
 
+    // Renderowanie rąk pozostałych graczy
     for (const [pos, slot] of Object.entries(pozycje)) {
         if (pos === 'dol' || !slot) continue;
         const rekaEl = document.querySelector(`#gracz-${pos} .reka-${pos === 'gora' ? 'gorna' : 'boczna'}`);
@@ -239,22 +277,25 @@ function aktualizujWidokGry(stanGry) {
             rekaEl.appendChild(img);
         }
     }
-
-    const stolGryEl = document.getElementById('stol-gry');
-    stolGryEl.innerHTML = '';
+    
+    // ZMIANA: Renderowanie kart na stole w stałych slotach
+    document.querySelectorAll('.slot-karty').forEach(slot => slot.innerHTML = '');
     rozdanie.karty_na_stole.forEach(item => {
-        const kartaDiv = document.createElement('div');
-        kartaDiv.className = 'karta-na-stole';
-        kartaDiv.innerHTML = `<p>${item.gracz}</p><img class="karta" src="/static/karty/${item.karta.replace(' ', '')}.png">`;
-        stolGryEl.appendChild(kartaDiv);
+        const pozycjaGracza = pozycjeWgNazwy[item.gracz];
+        if (pozycjaGracza) {
+            const slotEl = document.getElementById(`slot-karty-${pozycjaGracza}`);
+            if (slotEl) {
+                slotEl.innerHTML = `<img class="karta" src="/static/karty/${item.karta.replace(' ', '')}.png">`;
+            }
+        }
     });
 
+    // Reszta funkcji bez zmian
     if (rozdanie.kolej_gracza === nazwaGracza && rozdanie.faza !== 'ROZGRYWKA' && rozdanie.mozliwe_akcje.length > 0) {
         renderujPrzyciskiLicytacji(rozdanie.mozliwe_akcje);
     } else {
         document.getElementById('kontener-akcji').innerHTML = '';
     }
-
     const historiaListaEl = document.getElementById('historia-lista');
     historiaListaEl.innerHTML = '';
     (rozdanie.historia_rozdania || []).forEach(log => {
@@ -263,24 +304,140 @@ function aktualizujWidokGry(stanGry) {
         historiaListaEl.appendChild(p);
     });
     historiaListaEl.scrollTop = historiaListaEl.scrollHeight;
-
     if (rozdanie.faza === 'PODSUMOWANIE_ROZDANIA' && rozdanie.podsumowanie) {
         pokazPodsumowanieRozdania(stanGry);
     } else if (stanGry.status_partii === "W_TRAKCIE") {
         modalOverlayEl.classList.add('hidden');
     }
-
     if (rozdanie.lewa_do_zamkniecia) {
         setTimeout(() => wyslijAkcjeGry({ typ: 'finalizuj_lewe' }), 2000);
     }
-    
     pokazDymekPoOstatniejAkcji(stanGry, pozycje);
 }
 
 /* ==========================================================================
-   SEKCJA 5: FUNKCJE POMOCNICZE I OBSŁUGA ZDARZEŃ
+   SEKCJA 6: LOGIKA EFEKTÓW (DŹWIĘKI I ANIMACJE)
+   ========================================================================== */
+
+function uruchomEfektyWizualne(nowyStan, staryStan) {
+    if (!staryStan?.rozdanie || !nowyStan?.rozdanie) return;
+
+    const noweKartyNaStole = nowyStan.rozdanie.karty_na_stole;
+    const stareKartyNaStole = staryStan.rozdanie.karty_na_stole;
+
+    // Animacja zagrania karty przez przeciwnika
+    if (noweKartyNaStole.length > stareKartyNaStole.length) {
+        const nowaKartaZagranie = noweKartyNaStole.find(nk => !stareKartyNaStole.some(sk => sk.karta === nk.karta && sk.gracz === nk.gracz));
+        if (nowaKartaZagranie && nowaKartaZagranie.gracz !== nazwaGracza) {
+            const slotGracza = nowyStan.slots.find(s => s.nazwa === nazwaGracza);
+            const partner = nowyStan.slots.find(s => s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza);
+            const przeciwnicy = nowyStan.slots.filter(s => s.druzyna !== slotGracza.druzyna);
+            const pozycje = { dol: slotGracza, gora: partner, lewy: przeciwnicy[0], prawy: przeciwnicy[1] };
+            const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]));
+
+            const pozycjaGracza = pozycjeWgNazwy[nowaKartaZagranie.gracz];
+            if (pozycjaGracza) {
+                const startEl = document.querySelector(`#gracz-${pozycjaGracza} .info-gracza`);
+                const celEl = document.getElementById(`slot-karty-${pozycjaGracza}`);
+                if (startEl && celEl) {
+                    animujZagranieKarty(startEl, celEl, nowaKartaZagranie.karta);
+                }
+            }
+        }
+    }
+
+    // Dźwięki
+    uruchomEfektyDzwiekowe(nowyStan, staryStan);
+}
+
+function animujZagranieKarty(startEl, celEl, nazwaKarty = null) {
+    const startRect = startEl.getBoundingClientRect();
+    const celRect = celEl.getBoundingClientRect();
+    
+    const animowanaKarta = document.createElement('img');
+    animowanaKarta.className = 'animowana-karta';
+    
+    // Jeśli nazwaKarty jest podana (dla przeciwników), użyj jej. W przeciwnym razie (dla gracza) użyj źródła klikniętego elementu.
+    animowanaKarta.src = nazwaKarty ? `/static/karty/${nazwaKarty.replace(' ', '')}.png` : startEl.src;
+
+    // Pozycja startowa
+    animowanaKarta.style.left = `${startRect.left}px`;
+    animowanaKarta.style.top = `${startRect.top}px`;
+    
+    animationOverlayEl.appendChild(animowanaKarta);
+    
+    // Ukryj oryginalną kartę w ręce, jeśli to animacja gracza
+    if (startEl.tagName === 'IMG') {
+        startEl.style.visibility = 'hidden';
+    }
+
+    // Wymuś reflow, aby przeglądarka zastosowała style początkowe przed animacją
+    void animowanaKarta.offsetWidth;
+
+    // Ustaw pozycję końcową, aby uruchomić transition z CSS
+    const deltaX = celRect.left - startRect.left;
+    const deltaY = celRect.top - startRect.top;
+    animowanaKarta.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+    // Usuń animowany element po zakończeniu animacji
+    setTimeout(() => {
+        animowanaKarta.remove();
+        // Jeśli karta była ukryta, przywróć jej widoczność (stan i tak ją usunie)
+        if (startEl.style.visibility === 'hidden') {
+            startEl.style.visibility = 'visible';
+        }
+    }, 400); // Czas musi być zgodny z transition w CSS
+}
+
+function uruchomEfektyDzwiekowe(nowyStan, staryStan) {
+    if (!staryStan || !staryStan.rozdanie || !nowyStan.rozdanie) {
+        return; 
+    }
+    const noweRozdanie = nowyStan.rozdanie;
+    const stareRozdanie = staryStan.rozdanie;
+
+    // 1. ZAGRANIE KARTY: Tylko gdy przybywa karta, ale lewa się jeszcze NIE kończy
+    if (noweRozdanie.karty_na_stole.length > stareRozdanie.karty_na_stole.length && !noweRozdanie.lewa_do_zamkniecia) {
+        odtworzDzwiek('zagranieKarty');
+    }
+
+    // 2. WYGRANA LEWA: Gdy flaga `lewa_do_zamkniecia` się pojawia
+    if (noweRozdanie.lewa_do_zamkniecia && !stareRozdanie.lewa_do_zamkniecia) {
+         odtworzDzwiek('wygranaLewa');
+    }
+    
+    // 3. AKCJA LICYTACYJNA
+    if (noweRozdanie.historia_rozdania.length > stareRozdanie.historia_rozdania.length) {
+        // --- POCZĄTEK ZMIAN ---
+        // Bierzemy tylko nowe logi, które pojawiły się w tej aktualizacji
+        const noweLogi = noweRozdanie.historia_rozdania.slice(stareRozdanie.historia_rozdania.length);
+        // Sprawdzamy, czy WŚRÓD nowych logów jest akcja licytacyjna
+        const logAkcji = noweLogi.find(log => log.typ === 'akcja_licytacyjna');
+        
+        if (logAkcji) {
+            const akcja = logAkcji.akcja;
+            if (akcja.typ === 'pas' || akcja.typ === 'pas_lufa') {
+                odtworzDzwiek('pas');
+            } 
+            else if (['deklaracja', 'przebicie', 'lufa', 'kontra', 'zmiana_kontraktu'].includes(akcja.typ)) {
+                odtworzDzwiek('licytacja');
+            }
+        }
+        // --- KONIEC ZMIAN ---
+    }
+
+    // 4. KONIEC ROZDANIA
+    if (noweRozdanie.faza === 'PODSUMOWANIE_ROZDANIA' && stareRozdanie.faza !== 'PODSUMOWANIE_ROZDANIA') {
+        odtworzDzwiek('koniecRozdania');
+    }
+}
+
+
+/* ==========================================================================
+   SEKCJA 7: FUNKCJE POMOCNICZE I OBSŁUGA ZDARZEŃ
    ========================================================================== */
 function formatujKontrakt(kontrakt) {
+    // ... (bez zmian)
     if (!kontrakt || !kontrakt.typ) return 'Brak';
     const info = mapowanieKolorow[kontrakt.atut];
     if (kontrakt.typ === 'NORMALNA' && info) {
@@ -292,38 +449,26 @@ function formatujKontrakt(kontrakt) {
     return `<strong>${kontrakt.typ}</strong>`;
 }
 
-/**
- * Wyświetla modal z podsumowaniem zakończonego rozdania.
- * @param {object} stanGry - Pełny obiekt stanu gry.
- */
 function pokazPodsumowanieRozdania(stanGry) {
+    // ... (bez zmian)
     const podsumowanie = stanGry.rozdanie.podsumowanie;
     const modalPanelEl = document.getElementById('podsumowanie-rozdania');
     const podsumowanieTrescEl = document.getElementById('podsumowanie-tresc');
-    
     modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove());
-
     let bonusInfo = '';
     if (podsumowanie.bonus_z_trzech_kart) {
         bonusInfo += `<p style="color: yellow; font-weight: bold;">Bonus za grę z 3 kart (x2)!</p>`;
     }
-    // --- POCZĄTEK ZMIANY ---
     if (podsumowanie.mnoznik_lufy > 1) {
         bonusInfo += `<p style="color: orange; font-weight: bold;">Bonus za lufy (x${podsumowanie.mnoznik_lufy})!</p>`;
     }
-    // --- KONIEC ZMIANY ---
-
     podsumowanieTrescEl.innerHTML = `<p>Rozdanie wygrane przez: <strong>${podsumowanie.wygrana_druzyna}</strong></p>
                                     <p>Zdobyte punkty: <strong>${podsumowanie.przyznane_punkty}</strong></p>
                                     ${bonusInfo}`;
-
     document.getElementById('podsumowanie-tytul').textContent = 'Koniec Rozdania!';
-
     const nastepneRozdanieBtn = document.createElement('button');
     modalPanelEl.appendChild(nastepneRozdanieBtn);
-
     const czyJestesGotowy = stanGry.gracze_gotowi && stanGry.gracze_gotowi.includes(nazwaGracza);
-
     if (czyJestesGotowy) {
         nastepneRozdanieBtn.textContent = 'Oczekiwanie na pozostałych...';
         nastepneRozdanieBtn.disabled = true;
@@ -340,26 +485,23 @@ function pokazPodsumowanieRozdania(stanGry) {
 }
 
 function pokazPodsumowanieMeczu(stanGry) {
+    // ... (bez zmian)
     const tytulEl = document.getElementById('podsumowanie-tytul');
     const trescEl = document.getElementById('podsumowanie-tresc');
     const modalPanelEl = document.getElementById('podsumowanie-rozdania');
     modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove());
-
     const nazwaTeam1 = nazwyDruzyn.My;
     const nazwaTeam2 = nazwyDruzyn.Oni;
     const punkty1 = stanGry.punkty_meczu[nazwaTeam1] || 0;
     const punkty2 = stanGry.punkty_meczu[nazwaTeam2] || 0;
     const zwyciezca = punkty1 >= 66 ? nazwaTeam1 : nazwaTeam2;
-
     tytulEl.textContent = 'Koniec Meczu!';
     trescEl.innerHTML = `<h2>Wygrała drużyna "${zwyciezca}"!</h2>
                          <p>Wynik końcowy: ${nazwaTeam1} ${punkty1} - ${punkty2} ${nazwaTeam2}</p>`;
-
     const wyjdzBtn = document.createElement('button');
     wyjdzBtn.textContent = 'Wyjdź do menu';
     wyjdzBtn.onclick = () => { window.location.href = '/'; };
     modalPanelEl.appendChild(wyjdzBtn);
-
     if (stanGry.tryb_gry === 'online') {
         const lobbyBtn = document.createElement('button');
         if (stanGry.host === nazwaGracza) {
@@ -375,6 +517,7 @@ function pokazPodsumowanieMeczu(stanGry) {
 }
 
 function formatujWpisHistorii(log) {
+    // ... (bez zmian)
     const gracz = `<strong>${log.gracz}</strong>`;
     switch (log.typ) {
         case 'akcja_licytacyjna': {
@@ -404,15 +547,14 @@ function formatujWpisHistorii(log) {
 }
 
 function pokazDymekPoOstatniejAkcji(stanGry, pozycje) {
+    // ... (bez zmian)
     const historia = stanGry.rozdanie.historia_rozdania || [];
     const nowaDlugosc = historia.length;
     if (nowaDlugosc === ostatniaDlugoscHistorii) {
         return;
     }
-
     const noweLogi = historia.slice(ostatniaDlugoscHistorii);
     let logDoWyswietlenia = null;
-
     for (let i = noweLogi.length - 1; i >= 0; i--) {
         const log = noweLogi[i];
         if (log.typ === 'akcja_licytacyjna' || log.typ === 'meldunek') {
@@ -420,23 +562,18 @@ function pokazDymekPoOstatniejAkcji(stanGry, pozycje) {
             break;
         }
     }
-
     if (!logDoWyswietlenia) {
         ostatniaDlugoscHistorii = nowaDlugosc;
         return;
     }
-    
     const pozycjaGracza = Object.keys(pozycje).find(p => pozycje[p] && pozycje[p].nazwa === logDoWyswietlenia.gracz);
     if (!pozycjaGracza) {
         ostatniaDlugoscHistorii = nowaDlugosc;
         return;
     }
-
     let tekstDymka = '';
-
     if (logDoWyswietlenia.typ === 'akcja_licytacyjna') {
         const akcja = logDoWyswietlenia.akcja;
-        
         switch (akcja.typ) {
             case 'deklaracja':
                 tekstDymka = formatujKontrakt({ typ: akcja.kontrakt, atut: akcja.atut });
@@ -461,16 +598,14 @@ function pokazDymekPoOstatniejAkcji(stanGry, pozycje) {
     } else if (logDoWyswietlenia.typ === 'meldunek') {
         tekstDymka = `Para (${logDoWyswietlenia.punkty} pkt)!`;
     }
-
     if (tekstDymka) {
         pokazDymekAkcji(pozycjaGracza, tekstDymka);
     }
-    
     ostatniaDlugoscHistorii = nowaDlugosc;
 }
 
-
 function pokazDymekAkcji(pozycja, tekst) {
+    // ... (bez zmian)
     const kontenerGracza = document.getElementById(`gracz-${pozycja}`);
     if (!kontenerGracza) return;
     const staryDymek = kontenerGracza.querySelector('.dymek-akcji');
@@ -483,6 +618,7 @@ function pokazDymekAkcji(pozycja, tekst) {
 }
 
 function renderujPrzyciskiLicytacji(akcje) {
+    // ... (bez zmian)
     const kontener = document.getElementById('kontener-akcji');
     kontener.innerHTML = '';
     const grupy = akcje.reduce((acc, akcja) => {
@@ -513,9 +649,10 @@ function renderujPrzyciskiLicytacji(akcje) {
 }
 
 /* ==========================================================================
-   SEKCJA 6: OBSŁUGA CZATU
+   SEKCJA 8: OBSŁUGA CZATU
    ========================================================================== */
 function wyslijWiadomoscCzat() {
+    // ... (bez zmian)
     const wiadomosc = czatInputEl.value.trim();
     if (wiadomosc && socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({
@@ -528,10 +665,14 @@ function wyslijWiadomoscCzat() {
 }
 
 function dodajWiadomoscDoCzatu(gracz, tresc) {
+    // ... (bez zmian)
     const p = document.createElement('p');
     p.innerHTML = `<strong>${gracz}:</strong> ${tresc.replace(/</g, "&lt;").replace(/>/g, "&gt;")}`;
     czatWiadomosciEl.appendChild(p);
     czatWiadomosciEl.scrollTop = czatWiadomosciEl.scrollHeight;
+    if (gracz !== nazwaGracza) {
+        odtworzDzwiek('wiadomoscCzat');
+    }
 }
 
 czatWyslijBtn.onclick = wyslijWiadomoscCzat;

@@ -7,6 +7,8 @@
     <link rel="icon" href="/static/icon.png" type="image/png">
 </head>
 <body>
+    <div id="animation-overlay"></div>
+
     <div id="ekran-lobby" class="hidden">
         <h1>Poczekalnia Gry</h1>
         <p>ID Gry (udostępnij znajomym): <strong id="lobby-id-gry"></strong></p>
@@ -37,7 +39,12 @@
                 <div class="info-gracza">Nasz</div>
                 <div class="reka-gorna"></div>
             </div>
-            <div id="stol-gry"></div>
+            <div id="stol-gry">
+                <div class="slot-karty" id="slot-karty-gora"></div>
+                <div class="slot-karty" id="slot-karty-lewy"></div>
+                <div class="slot-karty" id="slot-karty-prawy"></div>
+                <div class="slot-karty" id="slot-karty-dol"></div>
+            </div>
         </div>
 
         <div id="gracz-prawy" class="gracz-boczny">

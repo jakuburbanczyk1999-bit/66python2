@@ -536,3 +536,51 @@ body {
     85% { opacity: 1; transform: scale(1) translate(-50%, 0); }
     100% { opacity: 0; transform: scale(0.8) translate(-50%, 0); }
 }
+
+/* ==========================================================================
+   9. STYLE ANIMACJI
+   ========================================================================== */
+
+#animation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none; /* Warstwa nie przechwytuje kliknięć */
+    z-index: 2000; /* Upewnij się, że jest na samej górze */
+}
+
+.animowana-karta {
+    position: absolute;
+    transition: transform 0.4s ease-in-out; /* Definicja płynnego przejścia */
+    /* Zachowuje rozmiar karty z ręki gracza */
+    width: 80px;
+    height: 120px;
+    border-radius: 6px;
+    box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* Zaktualizowane style stołu, aby używać pozycjonowania */
+#stol-gry {
+    position: relative; /* Niezbędne do pozycjonowania slotów wewnątrz */
+    width: 400px;
+    height: 250px;
+    display: block; /* Zmieniamy z flex na block */
+}
+
+.slot-karty {
+    position: absolute;
+    width: 80px; /* Rozmiar karty */
+    height: 120px;
+}
+.slot-karty img {
+    width: 100%;
+    height: 100%;
+}
+
+/* Pozycjonowanie miejsc na karty na stole */
+#slot-karty-dol { bottom: 0; left: 50%; transform: translateX(-50%); }
+#slot-karty-gora { top: 0; left: 50%; transform: translateX(-50%); }
+#slot-karty-lewy { top: 50%; left: 0; transform: translateY(-50%); }
+#slot-karty-prawy { top: 50%; right: 0; transform: translateY(-50%); }
