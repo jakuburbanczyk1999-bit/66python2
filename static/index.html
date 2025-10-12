@@ -4,62 +4,76 @@
     <meta charset="UTF-8">
     <title>Gra w 66</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="/static/icon.png" type="image/png">
 </head>
 <body>
-    <div class="ekran-gry">
-
-        <div id="info-lewy-rog">
-            </div>
-
-        <div id="info-srodek">
-            </div>
-
-        <div id="info-prawy-rog">
-            </div>
-
-        <div class="obszar-gry">
-            <div id="gracz-lewy" class="gracz-boczny">
-                <div class="info-gracza">Przeciwnik1</div>
-                <div class="reka-boczna"></div>
-            </div>
-
-            <div class="strefa-srodkowa">
-                <div id="gracz-gora">
-                    <div class="info-gracza">Nasz</div>
-                    <div class="reka-gorna"></div>
-                </div>
-
-                <div id="stol-gry">
-                    </div>
-            </div>
-
-            <div id="gracz-prawy" class="gracz-boczny">
-                <div class="info-gracza">Przeciwnik2</div>
-                <div class="reka-boczna"></div>
-            </div>
+    <div id="ekran-lobby" class="hidden">
+        <h1>Poczekalnia Gry</h1>
+        <p>ID Gry (udostępnij znajomym): <strong id="lobby-id-gry"></strong></p>
+        <div class="lobby-druzyny">
+            <div class="druzyna-panel" id="druzyna-my"></div>
+            <div class="druzyna-panel" id="druzyna-oni"></div>
         </div>
-        
-        <div id="strefa-gracza-glownego">
-            <div id="kontener-akcji"></div>
-            
-            <div id="gracz-dol">
-                <div class="info-gracza">Jakub</div>
-                <div class="reka-glowna"></div>
-            </div>
+        <div id="lobby-akcje"></div>
+    </div>
+
+    <div class="ekran-gry hidden">
+    
+    <div id="info-lewy-rog"></div>
+    <div id="info-srodek"></div>
+    <div id="kontener-info-prawy-rog">
+        <div id="info-prawy-rog"></div>
+        <div id="info-stawka" class="info-box hidden"></div>
+    </div>
+
+    <div class="obszar-gry">
+        <div id="gracz-lewy" class="gracz-boczny">
+            <div class="info-gracza">Przeciwnik1</div>
+            <div class="reka-boczna"></div>
         </div>
 
-        <div id="panel-historii">
-            <h3>Historia</h3>
-            <div id="historia-lista"></div>
+        <div class="strefa-srodkowa">
+            <div id="gracz-gora">
+                <div class="info-gracza">Nasz</div>
+                <div class="reka-gorna"></div>
+            </div>
+            <div id="stol-gry"></div>
         </div>
 
-    </div> <div id="modal-overlay" class="hidden">
-        <div id="podsumowanie-rozdania" class="panel">
-            <h2 id="podsumowanie-tytul">Koniec Rozdania!</h2>
-            <div id="podsumowanie-tresc"></div>
-            <button id="nastepne-rozdanie-btn">Dalej</button>
+        <div id="gracz-prawy" class="gracz-boczny">
+            <div class="info-gracza">Przeciwnik2</div>
+            <div class="reka-boczna"></div>
         </div>
     </div>
+    
+    <div id="strefa-gracza-glownego">
+        <div id="kontener-akcji"></div>
+        <div id="gracz-dol">
+            <div class="info-gracza">Jakub</div>
+            <div class="reka-glowna"></div>
+        </div>
+    </div>
+
+    <div id="panel-czatu">
+        <h3>Czat</h3>
+        <div id="czat-wiadomosci"></div>
+        <div id="czat-input-kontener">
+             <input type="text" id="czat-input" placeholder="Napisz wiadomość...">
+             <button id="czat-wyslij-btn">Wyślij</button>
+        </div>
+    </div> <div id="panel-historii">
+        <h3>Historia</h3>
+        <div id="historia-lista"></div>
+    </div>
+
+</div>
+
+    <div id="modal-overlay" class="hidden">
+    <div id="podsumowanie-rozdania" class="panel">
+        <h2 id="podsumowanie-tytul">Koniec Rozdania!</h2>
+        <div id="podsumowanie-tresc"></div>
+        </div>
+</div>
     
     <script src="/static/script.js"></script>
 </body>

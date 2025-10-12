@@ -1,289 +1,246 @@
-// === DEKLARACJE STAŁYCH DLA NOWEGO UKŁADU ===
-// Kontenery informacyjne
-const infoLewyRogEl = document.getElementById('info-lewy-rog');
-const infoSrodekEl = document.getElementById('info-srodek');
-const infoPrawyRogEl = document.getElementById('info-prawy-rog');
+// ZAKTUALIZOWANY PLIK: script.js
 
-// Kontenery graczy
-const rekaGlownaEl = document.querySelector('#gracz-dol .reka-glowna');
-const rekaGoraEl = document.querySelector('#gracz-gora .reka-gorna');
-const rekaLewyEl = document.querySelector('#gracz-lewy .reka-boczna');
-const rekaPrawyEl = document.querySelector('#gracz-prawy .reka-boczna');
+/* ==========================================================================
+   SEKCJA 1: DEKLARACJE GLOBALNE I POBIERANIE ELEMENTÓW DOM
+   ========================================================================== */
 
-// Inne elementy
-const stolGryEl = document.getElementById('stol-gry');
-const kontenerAkcjiEl = document.getElementById('kontener-akcji');
-const historiaListaEl = document.getElementById('historia-lista');
-const modalOverlayEl = document.getElementById('modal-overlay');
-const podsumowanieTrescEl = document.getElementById('podsumowanie-tresc');
-const nastepneRozdanieBtn = document.getElementById('nastepne-rozdanie-btn');
-
-// Zmienne globalne
 let idGry = null;
-let autoCloseTimer = null;
+let nazwaGracza = null;
+let socket = null;
+let mojSlotId = null;
+let ostatniaDlugoscHistorii = 0;
+let nazwyDruzyn = { My: "My", Oni: "Oni" };
 
-// === FUNKCJE POMOCNICZE I OBSŁUGA ZDARZEŃ ===
-const mapowanieKontenerowGraczy = {
-    'Jakub': document.getElementById('gracz-dol'),
-    'Nasz': document.getElementById('gracz-gora'),
-    'Przeciwnik1': document.getElementById('gracz-lewy'),
-    'Przeciwnik2': document.getElementById('gracz-prawy')
+const ekranLobbyEl = document.getElementById('ekran-lobby');
+const ekranGryEl = document.querySelector('.ekran-gry');
+const modalOverlayEl = document.getElementById('modal-overlay');
+const czatWiadomosciEl = document.getElementById('czat-wiadomosci');
+const czatInputEl = document.getElementById('czat-input');
+const czatWyslijBtn = document.getElementById('czat-wyslij-btn');
+
+const mapowanieKolorow = {
+    'CZERWIEN': { symbol: '♥', klasa: 'kolor-czerwien' },
+    'DZWONEK':  { symbol: '♦', klasa: 'kolor-dzwonek' },
+    'ZOLADZ':   { symbol: '♣', klasa: 'kolor-zoladz' },
+    'WINO':     { symbol: '♠', klasa: 'kolor-wino' }
 };
 
-function sprawdzTureBota(stanGry) {
-    const kolejGracza = stanGry.rozdanie.kolej_gracza;
-    const fazaGry = stanGry.rozdanie.faza;
+/* ==========================================================================
+   SEKCJA 2: GŁÓWNA LOGIKA APLIKACJI (INICJALIZACJA I WEBSOCKET)
+   ========================================================================== */
 
-    // Sprawdź, czy gra jest w toku i czy kolej na bota
-    if (kolejGracza && kolejGracza !== 'Jakub' && fazaGry !== 'PODSUMOWANIE_ROZDANIA') {
-        // Poczekaj 1.5 sekundy przed ruchem bota
-        setTimeout(async () => {
-            const response = await fetch(`/gra/${idGry}/ruch_bota`, { method: 'POST' });
-            const nowyStanGry = await response.json();
-            aktualizujWidok(nowyStanGry);
-        }, 1500);
-    }
-}
-function pokazDymekAkcji(gracz, tekst) {
-    const kontenerGracza = mapowanieKontenerowGraczy[gracz];
-    if (!kontenerGracza) return;
+window.onload = () => {
+    const params = new URLSearchParams(window.location.search);
+    idGry = params.get('id');
+    nazwaGracza = sessionStorage.getItem('nazwaGracza') || `Gracz${Math.floor(Math.random() * 1000)}`;
+    sessionStorage.setItem('nazwaGracza', nazwaGracza);
 
-    // Usuń stary dymek, jeśli jeszcze istnieje
-    const staryDymek = kontenerGracza.querySelector('.dymek-akcji');
-    if (staryDymek) {
-        staryDymek.remove();
-    }
-
-    // Stwórz nowy dymek
-    const dymek = document.createElement('div');
-    dymek.className = 'dymek-akcji';
-    dymek.textContent = tekst;
-
-    kontenerGracza.style.position = 'relative'; // Ważne dla pozycjonowania dymku
-    kontenerGracza.appendChild(dymek);
-
-    // Dymek zniknie sam dzięki animacji CSS, ale usuwamy go z DOM po 4 sekundach
-    setTimeout(() => {
-        dymek.remove();
-    }, 2000);
-}
-
-function przejdzDoNastepnegoRozdania() {
-    if (autoCloseTimer) clearTimeout(autoCloseTimer);
-    modalOverlayEl.classList.add('hidden');
-    
-    if (nastepneRozdanieBtn.textContent === "Powrót do menu") {
-        window.location.href = "/";
+    if (idGry) {
+        inicjalizujWebSocket();
     } else {
-        wyslijAkcje("Jakub", { typ: 'nastepne_rozdanie' });
+        window.location.href = "/";
+    }
+};
+
+function inicjalizujWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws/${idGry}/${nazwaGracza}`;
+    socket = new WebSocket(wsUrl);
+
+    socket.onmessage = function(event) {
+        const stan = JSON.parse(event.data);
+        if (stan.typ_wiadomosci === 'czat') {
+            dodajWiadomoscDoCzatu(stan.gracz, stan.tresc);
+            return;
+        }
+        
+        if (stan.nazwy_druzyn) {
+            nazwyDruzyn = stan.nazwy_druzyn;
+        }
+
+        synchronizujDaneGracza(stan);
+
+        if (stan.status_partii === "LOBBY") {
+            ekranGryEl.classList.add('hidden');
+            ekranLobbyEl.classList.remove('hidden');
+            modalOverlayEl.classList.add('hidden');
+            renderujLobby(stan);
+        } else {
+            ekranLobbyEl.classList.add('hidden');
+            ekranGryEl.classList.remove('hidden');
+            aktualizujWidokGry(stan);
+        }
+    };
+
+    socket.onclose = (event) => {
+        console.log("Połączenie WebSocket zamknięte.", event.reason);
+        if (event.reason) { alert(event.reason); window.location.href = "/"; }
+    };
+    socket.onerror = (error) => console.error("Błąd WebSocket:", error);
+}
+
+function synchronizujDaneGracza(stan) {
+    if (!stan.slots) return;
+    const mojObecnySlot = stan.slots.find(s => s.nazwa === nazwaGracza);
+    if (mojObecnySlot) { mojSlotId = mojObecnySlot.slot_id; }
+}
+
+function wyslijAkcjeLobby(typAkcji, dane = {}) {
+    if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ gracz: nazwaGracza, akcja_lobby: typAkcji, ...dane }));
     }
 }
 
-function pokazPodsumowanie(podsumowanie, punktyMeczu, statusPartii) {
-    if (!podsumowanie || Object.keys(podsumowanie).length === 0) {
-        modalOverlayEl.classList.add('hidden');
+function wyslijAkcjeGry(akcja) {
+    if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ gracz: nazwaGracza, akcja: akcja }));
+    }
+}
+
+/* ==========================================================================
+   SEKCJA 3: RENDEROWANIE WIDOKU LOBBY
+   ========================================================================== */
+
+function renderujLobby(stan) {
+    const lobbyIdGryEl = document.getElementById('lobby-id-gry');
+    const druzynaMyEl = document.getElementById('druzyna-my');
+    const druzynaOniEl = document.getElementById('druzyna-oni');
+    const lobbyAkcjeEl = document.getElementById('lobby-akcje');
+
+    lobbyIdGryEl.textContent = idGry;
+    druzynaMyEl.innerHTML = `<h2>Drużyna "${nazwyDruzyn.My}"</h2>`;
+    druzynaOniEl.innerHTML = `<h2>Drużyna "${nazwyDruzyn.Oni}"</h2>`;
+    lobbyAkcjeEl.innerHTML = '';
+
+    const jestesHostem = stan.host === nazwaGracza;
+    stan.slots.forEach(slot => {
+        const slotDiv = document.createElement('div');
+        slotDiv.className = 'slot-gracza';
+        const czyHost = stan.host === slot.nazwa;
+        const ikonaHosta = czyHost ? '<span class="crown-icon">👑</span> ' : '';
+
+        if (slot.typ === "pusty") {
+            const btn = document.createElement('button');
+            btn.textContent = '🪑 Dołącz tutaj';
+            btn.onclick = () => wyslijAkcjeLobby('dolacz_do_slota', { slot_id: slot.slot_id });
+            slotDiv.appendChild(btn);
+            if (jestesHostem) {
+                const botBtn = document.createElement('button');
+                botBtn.textContent = '🤖 Dodaj Bota';
+                botBtn.onclick = (e) => { e.stopPropagation(); wyslijAkcjeLobby('zmien_slot', { slot_id: slot.slot_id, nowy_typ: 'bot' }); };
+                slotDiv.appendChild(botBtn);
+            }
+        } else if (slot.nazwa === nazwaGracza) {
+            slotDiv.innerHTML = `${ikonaHosta}<strong>👤 ${slot.nazwa} (Ty)</strong>`;
+        } else {
+            const ikonaTypu = slot.typ === 'bot' ? '🤖' : '👤';
+            slotDiv.innerHTML = `${ikonaHosta}${ikonaTypu} ${slot.nazwa}`;
+            if (jestesHostem) {
+                const btn = document.createElement('button');
+                btn.textContent = 'Wyrzuć';
+                btn.onclick = () => wyslijAkcjeLobby('zmien_slot', { slot_id: slot.slot_id, nowy_typ: 'pusty' });
+                slotDiv.appendChild(btn);
+            }
+        }
+        (slot.druzyna === 'My' ? druzynaMyEl : druzynaOniEl).appendChild(slotDiv);
+    });
+
+    if (jestesHostem) {
+        const startBtn = document.createElement('button');
+        startBtn.textContent = 'Rozpocznij Grę';
+        startBtn.onclick = () => wyslijAkcjeLobby('start_gry');
+        const moznaStartowac = stan.slots.every(s => s.typ !== 'pusty');
+        startBtn.disabled = !moznaStartowac;
+        if (!moznaStartowac) { startBtn.title = 'Wszystkie miejsca muszą być zajęte, aby rozpocząć.'; }
+        lobbyAkcjeEl.appendChild(startBtn);
+    }
+}
+
+/* ==========================================================================
+   SEKCJA 4: RENDEROWANIE GŁÓWNEGO WIDOKU GRY
+   ========================================================================== */
+function aktualizujWidokGry(stanGry) {
+    if (stanGry.status_partii === 'ZAKONCZONA') {
+        pokazPodsumowanieMeczu(stanGry);
         return;
     }
-    if (autoCloseTimer) clearTimeout(autoCloseTimer);
-    let tresc = `
-        <p>Rozdanie wygrywa drużyna: <strong>${podsumowanie.wygrana_druzyna}</strong></p>
-        <p>Zdobyte punkty: <strong>${podsumowanie.przyznane_punkty}</strong></p>
-        <hr>
-        <p>Kontrakt: ${podsumowanie.kontrakt} (${podsumowanie.atut})</p>
-        <p>Wynik w kartach: My ${podsumowanie.wynik_w_kartach.My} - ${podsumowanie.wynik_w_kartach.Oni} Oni</p>
-        <hr>
-        <h3>Wynik partii:</h3>
-        <p><strong>My: ${punktyMeczu.My}</strong></p>
-        <p><strong>Oni: ${punktyMeczu.Oni}</strong></p>`;
-    podsumowanieTrescEl.innerHTML = tresc;
-    modalOverlayEl.classList.remove('hidden');
+    if (!stanGry?.rozdanie || !stanGry?.slots) return;
 
-    if (statusPartii !== 'ZAKONCZONA') {
-        autoCloseTimer = setTimeout(przejdzDoNastepnegoRozdania, 3000);
-    }
-}
-
-function formatujAkcjeLicytacyjna(log) {
-    const gracz = `<strong>${log.gracz}</strong>`;
-    const akcja = log.akcja;
-    switch(akcja.typ) {
-        case 'deklaracja':
-            let deklaracja = `${gracz} deklaruje: ${akcja.kontrakt}`;
-            if (akcja.atut) deklaracja += ` (${akcja.atut})`;
-            return deklaracja;
-        case 'lufa': return `${gracz}: Lufa!`;
-        case 'kontra': return `${gracz}: Kontra!`;
-        case 'pas_lufa': return `${gracz}: Pas`;
-        case 'do_konca': return `${gracz}: Do końca!`;
-        default:
-            let tekst = `${gracz}: ${akcja.typ}`;
-            if (akcja.kontrakt) tekst += ` - ${akcja.kontrakt}`;
-            return tekst;
-    }
-}
-
-function aktualizujHistorie(historia) {
-    historiaListaEl.innerHTML = '';
-    if (!historia) return;
-    historia.forEach(log => {
-        const p = document.createElement('p');
-        let tresc = '';
-        switch (log.typ) {
-            case 'zagranie_karty': tresc = `<strong>${log.gracz}</strong> zagrywa: ${log.karta}`; break;
-            case 'akcja_licytacyjna': tresc = formatujAkcjeLicytacyjna(log); break;
-            case 'koniec_lewy': tresc = `Lewę bierze <strong>${log.zwyciezca}</strong> (+${log.punkty} pkt).`; break;
-            case 'meldunek': tresc = `<strong>${log.gracz}</strong> melduje za ${log.punkty} pkt!`; break;
-            case 'koniec_rozdania': tresc = `<hr><strong>Koniec rozdania!</strong> Wygrywa: <strong>${log.wygrana_druzyna}</strong> (+${log.punkty_meczu} pkt).<br>Powód: ${log.powod}`; break;
-            default: tresc = JSON.stringify(log);
-        }
-        p.innerHTML = tresc;
-        historiaListaEl.appendChild(p);
-    });
-    historiaListaEl.scrollTop = historiaListaEl.scrollHeight;
-}
-
-// === GŁÓWNA FUNKCJA RENDERUJĄCA WIDOK ===
-function aktualizujWidok(stanGry) {
-    console.log(stanGry);
-    if (!stanGry || stanGry.error) return;
     const rozdanie = stanGry.rozdanie;
-    if (!rozdanie) return;
+    const slotGracza = stanGry.slots.find(s => s.nazwa === nazwaGracza);
+    if (!slotGracza) return;
 
-    // 1. Aktualizacja paneli informacyjnych
-    infoLewyRogEl.innerHTML = `<div class="info-box">Wynik: <strong>My ${stanGry.punkty_meczu.My} - ${stanGry.punkty_meczu.Oni} Oni</strong><br>Stawka: <strong>x${rozdanie.stawka?.mnoznik_lufy || 1}</strong></div>`;
-    if (rozdanie.kontrakt.typ === 'NORMALNA' || rozdanie.kontrakt.typ === 'BEZ_PYTANIA') {
-        infoSrodekEl.innerHTML = `<div class="info-box">Punkty: My ${rozdanie.punkty_w_rozdaniu.My} - ${rozdanie.punkty_w_rozdaniu.Oni} Oni</div>`;
-    } else { infoSrodekEl.innerHTML = ''; }
-    if (rozdanie.kontrakt.typ) {
-        infoPrawyRogEl.innerHTML = `<div class="info-box">Kontrakt: <strong>${rozdanie.kontrakt.typ}</strong><br>Atut: <strong>${rozdanie.kontrakt.atut || 'Brak'}</strong></div>`;
-    } else { infoPrawyRogEl.innerHTML = ''; }
+    const partner = stanGry.slots.find(s => s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza);
+    const przeciwnicy = stanGry.slots.filter(s => s.druzyna !== slotGracza.druzyna);
+    const pozycje = { dol: slotGracza, gora: partner, lewy: przeciwnicy[0], prawy: przeciwnicy[1] };
 
-    // 2. Aktualizacja historii
-    aktualizujHistorie(rozdanie.historia_rozdania);
-    const ostatniLog = rozdanie.historia_rozdania[rozdanie.historia_rozdania.length - 1];
-    if (ostatniLog) {
-        let tekstDymku = '';
-        if (ostatniLog.typ === 'akcja_licytacyjna') {
-            const akcja = ostatniLog.akcja;
-            tekstDymku = akcja.kontrakt || akcja.typ; // np. "NORMALNA" albo "Lufa"
-        } 
-
-        if (tekstDymku) {
-            // Wyświetl dymek tylko jeśli poprzednia akcja nie była nasza
-            // (aby uniknąć dublowania akcji, którą właśnie wykonaliśmy)
-            const poprzedniGracz = ostatniLog.gracz;
-            if (poprzedniGracz !== 'Jakub' || rozdanie.kolej_gracza === 'Jakub') {
-                 pokazDymekAkcji(poprzedniGracz, tekstDymku);
+    document.querySelectorAll('.gracz-boczny, #gracz-gora, #gracz-dol').forEach(el => el.classList.remove('aktywny-gracz'));
+    for (const [pos, slot] of Object.entries(pozycje)) {
+        const kontenerGraczaEl = document.getElementById(`gracz-${pos}`);
+        if (kontenerGraczaEl && slot) {
+            const czyGrajacy = rozdanie.gracz_grajacy === slot.nazwa;
+            const ikonaGrajacego = czyGrajacy ? '<span class="crown-icon">👑</span> ' : '';
+            kontenerGraczaEl.querySelector('.info-gracza').innerHTML = `${ikonaGrajacego}${slot.nazwa}`;
+            if (rozdanie.kolej_gracza === slot.nazwa) {
+                kontenerGraczaEl.classList.add('aktywny-gracz');
             }
         }
     }
 
-    // 3. Renderowanie rąk graczy i podświetlanie aktywnego gracza
-    const kolejGracza = rozdanie.kolej_gracza;
-    const mapowanieGraczy = {
-        'Jakub': { kontener: document.getElementById('gracz-dol'), reka: rekaGlownaEl },
-        'Nasz': { kontener: document.getElementById('gracz-gora'), reka: rekaGoraEl },
-        'Przeciwnik1': { kontener: document.getElementById('gracz-lewy'), reka: rekaLewyEl },
-        'Przeciwnik2': { kontener: document.getElementById('gracz-prawy'), reka: rekaPrawyEl }
-    };
+    const nazwaTeam1 = nazwyDruzyn.My;
+    const nazwaTeam2 = nazwyDruzyn.Oni;
+    const punktyMeczu1 = stanGry.punkty_meczu[nazwaTeam1] || 0;
+    const punktyMeczu2 = stanGry.punkty_meczu[nazwaTeam2] || 0;
+    const punktyRozdania1 = rozdanie.punkty_w_rozdaniu[nazwaTeam1] || 0;
+    const punktyRozdania2 = rozdanie.punkty_w_rozdaniu[nazwaTeam2] || 0;
+    const mojaDruzyna = slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2;
+    const ichDruzyna = slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1;
+    const mojePunktyMeczu = slotGracza.druzyna === 'My' ? punktyMeczu1 : punktyMeczu2;
+    const ichPunktyMeczu = slotGracza.druzyna === 'My' ? punktyMeczu2 : punktyMeczu1;
+    const mojePunktyRozdania = slotGracza.druzyna === 'My' ? punktyRozdania1 : punktyRozdania2;
+    const ichPunktyRozdania = slotGracza.druzyna === 'My' ? punktyRozdania2 : punktyRozdania1;
+    
+    document.getElementById('info-lewy-rog').innerHTML = `<div class="info-box">Wynik: <strong>${mojaDruzyna} ${mojePunktyMeczu} - ${ichPunktyMeczu} ${ichDruzyna}</strong></div>`;
+    document.getElementById('info-srodek').innerHTML = `<div class="info-box">Punkty: ${mojaDruzyna} ${mojePunktyRozdania} - ${ichPunktyRozdania} ${ichDruzyna}</div>`;
+    document.getElementById('info-prawy-rog').innerHTML = `<div class="info-box">Kontrakt: ${formatujKontrakt(rozdanie.kontrakt)}</div>`;
+    
+    const infoStawkaEl = document.getElementById('info-stawka');
+    if (rozdanie.aktualna_stawka > 0) {
+        infoStawkaEl.innerHTML = `Stawka: <strong>${rozdanie.aktualna_stawka} pkt</strong>`;
+        infoStawkaEl.classList.remove('hidden');
+    } else {
+        infoStawkaEl.classList.add('hidden');
+    }
 
-    Object.keys(mapowanieGraczy).forEach(nazwa => {
-        const el = mapowanieGraczy[nazwa];
-        const kontenerGracza = el.kontener;
-        const kontenerReki = el.reka;
-
-        kontenerGracza.classList.remove('aktywny-gracz');
-        if (nazwa === kolejGracza) {
-            kontenerGracza.classList.add('aktywny-gracz');
+    const rekaGlownaEl = document.querySelector('#gracz-dol .reka-glowna');
+    rekaGlownaEl.innerHTML = '';
+    const rekaTwojegoGracza = rozdanie.rece_graczy[nazwaGracza] || [];
+    rekaTwojegoGracza.forEach(nazwaKarty => {
+        const img = document.createElement('img');
+        img.className = 'karta';
+        img.src = `/static/karty/${nazwaKarty.replace(' ', '')}.png`;
+        if (rozdanie.grywalne_karty.includes(nazwaKarty)) {
+            img.classList.add('grywalna');
+            img.onclick = () => wyslijAkcjeGry({ typ: 'zagraj_karte', karta: nazwaKarty });
         }
+        rekaGlownaEl.appendChild(img);
+    });
 
-        kontenerReki.innerHTML = ''; 
-        const reka = rozdanie.rece_graczy[nazwa] || [];
-        reka.forEach(nazwaKarty => {
+    for (const [pos, slot] of Object.entries(pozycje)) {
+        if (pos === 'dol' || !slot) continue;
+        const rekaEl = document.querySelector(`#gracz-${pos} .reka-${pos === 'gora' ? 'gorna' : 'boczna'}`);
+        if (!rekaEl) continue;
+        rekaEl.innerHTML = '';
+        const iloscKart = (rozdanie.rece_graczy[slot.nazwa] || []).length;
+        for (let i = 0; i < iloscKart; i++) {
             const img = document.createElement('img');
             img.className = 'karta';
-            
-            // --- POPRAWKA WIDOCZNOŚCI KART ---
-            if (nazwa === 'Jakub') {
-                // Jeśli to gracz ludzki, pokaż normalną kartę
-                img.src = `/static/karty/${nazwaKarty.replace(' ', '')}.png`;
-                
-                // Spraw, aby tylko karty gracza ludzkiego były klikalne
-                if (rozdanie.grywalne_karty.includes(nazwaKarty)) {
-                    img.classList.add('grywalna');
-                    img.onclick = () => wyslijAkcje(kolejGracza, { typ: 'zagraj_karte', karta: nazwaKarty });
-                }
-            } else {
-                // Jeśli to bot, pokaż rewers
-                img.src = '/static/karty/rewers.png';
-            }
-            kontenerReki.appendChild(img);
-        });
-    });
-
-    // 4. Renderowanie przycisków akcji
-    kontenerAkcjiEl.innerHTML = '';
-if (kolejGracza === 'Jakub' && rozdanie.faza !== 'ROZGRYWKA' && rozdanie.faza !== 'PODSUMOWANIE_ROZDANIA') {
-    
-    // --- NOWA, POPRAWIONA LOGIKA GRUPOWANIA ---
-
-    const renderujPrzyciski = (typKontraktu = null) => {
-        kontenerAkcjiEl.innerHTML = ''; // Zawsze czyść kontener przed renderowaniem
-
-        if (typKontraktu) {
-            // === KROK 2: Wyświetlanie kolorów dla wybranego kontraktu ===
-            const akcjeKolorow = rozdanie.mozliwe_akcje.filter(a => a.kontrakt === typKontraktu);
-
-            akcjeKolorow.forEach(akcja => {
-                const btn = document.createElement('button');
-                btn.textContent = akcja.atut;
-                btn.onclick = () => wyslijAkcje(kolejGracza, akcja);
-                kontenerAkcjiEl.appendChild(btn);
-            });
-
-            // Dodaj przycisk "Cofnij"
-            const cofnijBtn = document.createElement('button');
-            cofnijBtn.textContent = 'Cofnij';
-            cofnijBtn.style.backgroundColor = '#6c757d';
-            cofnijBtn.onclick = () => renderujPrzyciski(null); // Wróć do menu głównego
-            kontenerAkcjiEl.appendChild(cofnijBtn);
-
-        } else {
-            // === KROK 1: Wyświetlanie głównych opcji licytacji ===
-            const akcjeGlowne = [];
-            const kontraktyDoGrupowania = new Set();
-
-            rozdanie.mozliwe_akcje.forEach(akcja => {
-                if (akcja.kontrakt === 'NORMALNA' || akcja.kontrakt === 'BEZ_PYTANIA') {
-                    kontraktyDoGrupowania.add(akcja.kontrakt);
-                } else {
-                    akcjeGlowne.push(akcja); // Dodaj inne akcje (Gorsza, Lepsza, Lufa itp.)
-                }
-            });
-
-            // Dodaj przyciski grupujące na początku
-            kontraktyDoGrupowania.forEach(nazwaKontraktu => {
-                const btn = document.createElement('button');
-                btn.textContent = nazwaKontraktu;
-                btn.onclick = () => renderujPrzyciski(nazwaKontraktu);
-                kontenerAkcjiEl.appendChild(btn);
-            });
-
-            // Dodaj pozostałe przyciski
-            akcjeGlowne.forEach(akcja => {
-                const btn = document.createElement('button');
-                btn.textContent = akcja.kontrakt || akcja.typ;
-                btn.onclick = () => wyslijAkcje(kolejGracza, akcja);
-                kontenerAkcjiEl.appendChild(btn);
-            });
+            img.src = '/static/karty/Rewers.png';
+            rekaEl.appendChild(img);
         }
-    };
+    }
 
-    // Uruchom renderowanie głównego menu licytacji
-    renderujPrzyciski(null);
-}
-
-    // 5. Renderowanie kart na stole
+    const stolGryEl = document.getElementById('stol-gry');
     stolGryEl.innerHTML = '';
     rozdanie.karty_na_stole.forEach(item => {
         const kartaDiv = document.createElement('div');
@@ -292,55 +249,292 @@ if (kolejGracza === 'Jakub' && rozdanie.faza !== 'ROZGRYWKA' && rozdanie.faza !=
         stolGryEl.appendChild(kartaDiv);
     });
 
-    // 6. Obsługa końca rozdania i partii
-    pokazPodsumowanie(rozdanie.podsumowanie, stanGry.punkty_meczu, stanGry.status_partii);
-    if (stanGry.status_partii === 'ZAKONCZONA') {
-        document.getElementById('podsumowanie-tytul').textContent = `!!! KONIEC GRY !!! Wygrywa: ${stanGry.punkty_meczu.My >= 66 ? "My" : "Oni"}`;
-        nastepneRozdanieBtn.textContent = "Powrót do menu";
+    if (rozdanie.kolej_gracza === nazwaGracza && rozdanie.faza !== 'ROZGRYWKA' && rozdanie.mozliwe_akcje.length > 0) {
+        renderujPrzyciskiLicytacji(rozdanie.mozliwe_akcje);
     } else {
-        document.getElementById('podsumowanie-tytul').textContent = "Koniec Rozdania!";
-        nastepneRozdanieBtn.textContent = "Dalej";
+        document.getElementById('kontener-akcji').innerHTML = '';
     }
-    sprawdzTureBota(stanGry);
+
+    const historiaListaEl = document.getElementById('historia-lista');
+    historiaListaEl.innerHTML = '';
+    (rozdanie.historia_rozdania || []).forEach(log => {
+        const p = document.createElement('p');
+        p.innerHTML = formatujWpisHistorii(log);
+        historiaListaEl.appendChild(p);
+    });
+    historiaListaEl.scrollTop = historiaListaEl.scrollHeight;
+
+    if (rozdanie.faza === 'PODSUMOWANIE_ROZDANIA' && rozdanie.podsumowanie) {
+        pokazPodsumowanieRozdania(stanGry);
+    } else if (stanGry.status_partii === "W_TRAKCIE") {
+        modalOverlayEl.classList.add('hidden');
+    }
+
+    if (rozdanie.lewa_do_zamkniecia) {
+        setTimeout(() => wyslijAkcjeGry({ typ: 'finalizuj_lewe' }), 2000);
+    }
+    
+    pokazDymekPoOstatniejAkcji(stanGry, pozycje);
 }
 
-// === FUNKCJE API ===
-async function pobierzStanGry() {
-    if (!idGry) return;
-    try {
-        const response = await fetch(`/gra/${idGry}`);
-        if (!response.ok) { console.error("Nie udało się pobrać stanu gry."); return; }
-        const stanGry = await response.json();
-        aktualizujWidok(stanGry); // Wywołujemy po otrzymaniu danych
-    } catch (error) { console.error("Błąd podczas pobierania stanu gry:", error); }
+/* ==========================================================================
+   SEKCJA 5: FUNKCJE POMOCNICZE I OBSŁUGA ZDARZEŃ
+   ========================================================================== */
+function formatujKontrakt(kontrakt) {
+    if (!kontrakt || !kontrakt.typ) return 'Brak';
+    const info = mapowanieKolorow[kontrakt.atut];
+    if (kontrakt.typ === 'NORMALNA' && info) {
+        return `<span class="symbol-koloru ${info.klasa}">${info.symbol}</span>`;
+    }
+    if (kontrakt.typ === 'BEZ_PYTANIA' && info) {
+        return `<span class="symbol-koloru ${info.klasa}">${info.symbol}</span><span class="znak-zapytania-przekreslony">?</span>`;
+    }
+    return `<strong>${kontrakt.typ}</strong>`;
 }
 
-async function wyslijAkcje(gracz, akcja) {
-    if (!idGry) return;
-    try {
-        const response = await fetch(`/gra/${idGry}/akcja`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ gracz, akcja })
-        });
-        if (!response.ok) {
-            const err = await response.json();
-            console.error("Błąd akcji:", err.detail);
-            return;
+/**
+ * Wyświetla modal z podsumowaniem zakończonego rozdania.
+ * @param {object} stanGry - Pełny obiekt stanu gry.
+ */
+function pokazPodsumowanieRozdania(stanGry) {
+    const podsumowanie = stanGry.rozdanie.podsumowanie;
+    const modalPanelEl = document.getElementById('podsumowanie-rozdania');
+    const podsumowanieTrescEl = document.getElementById('podsumowanie-tresc');
+    
+    modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove());
+
+    let bonusInfo = '';
+    if (podsumowanie.bonus_z_trzech_kart) {
+        bonusInfo += `<p style="color: yellow; font-weight: bold;">Bonus za grę z 3 kart (x2)!</p>`;
+    }
+    // --- POCZĄTEK ZMIANY ---
+    if (podsumowanie.mnoznik_lufy > 1) {
+        bonusInfo += `<p style="color: orange; font-weight: bold;">Bonus za lufy (x${podsumowanie.mnoznik_lufy})!</p>`;
+    }
+    // --- KONIEC ZMIANY ---
+
+    podsumowanieTrescEl.innerHTML = `<p>Rozdanie wygrane przez: <strong>${podsumowanie.wygrana_druzyna}</strong></p>
+                                    <p>Zdobyte punkty: <strong>${podsumowanie.przyznane_punkty}</strong></p>
+                                    ${bonusInfo}`;
+
+    document.getElementById('podsumowanie-tytul').textContent = 'Koniec Rozdania!';
+
+    const nastepneRozdanieBtn = document.createElement('button');
+    modalPanelEl.appendChild(nastepneRozdanieBtn);
+
+    const czyJestesGotowy = stanGry.gracze_gotowi && stanGry.gracze_gotowi.includes(nazwaGracza);
+
+    if (czyJestesGotowy) {
+        nastepneRozdanieBtn.textContent = 'Oczekiwanie na pozostałych...';
+        nastepneRozdanieBtn.disabled = true;
+    } else {
+        nastepneRozdanieBtn.textContent = 'Dalej';
+        nastepneRozdanieBtn.disabled = false;
+        nastepneRozdanieBtn.onclick = () => {
+            wyslijAkcjeGry({ typ: 'nastepne_rozdanie' });
+            nastepneRozdanieBtn.textContent = 'Oczekiwanie na pozostałych...';
+            nastepneRozdanieBtn.disabled = true;
+        };
+    }
+    modalOverlayEl.classList.remove('hidden');
+}
+
+function pokazPodsumowanieMeczu(stanGry) {
+    const tytulEl = document.getElementById('podsumowanie-tytul');
+    const trescEl = document.getElementById('podsumowanie-tresc');
+    const modalPanelEl = document.getElementById('podsumowanie-rozdania');
+    modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove());
+
+    const nazwaTeam1 = nazwyDruzyn.My;
+    const nazwaTeam2 = nazwyDruzyn.Oni;
+    const punkty1 = stanGry.punkty_meczu[nazwaTeam1] || 0;
+    const punkty2 = stanGry.punkty_meczu[nazwaTeam2] || 0;
+    const zwyciezca = punkty1 >= 66 ? nazwaTeam1 : nazwaTeam2;
+
+    tytulEl.textContent = 'Koniec Meczu!';
+    trescEl.innerHTML = `<h2>Wygrała drużyna "${zwyciezca}"!</h2>
+                         <p>Wynik końcowy: ${nazwaTeam1} ${punkty1} - ${punkty2} ${nazwaTeam2}</p>`;
+
+    const wyjdzBtn = document.createElement('button');
+    wyjdzBtn.textContent = 'Wyjdź do menu';
+    wyjdzBtn.onclick = () => { window.location.href = '/'; };
+    modalPanelEl.appendChild(wyjdzBtn);
+
+    if (stanGry.tryb_gry === 'online') {
+        const lobbyBtn = document.createElement('button');
+        if (stanGry.host === nazwaGracza) {
+            lobbyBtn.textContent = 'Powrót do lobby';
+            lobbyBtn.onclick = () => { wyslijAkcjeGry({ typ: 'powrot_do_lobby' }); };
+        } else {
+            lobbyBtn.textContent = 'Oczekiwanie na hosta...';
+            lobbyBtn.disabled = true;
         }
-        aktualizujWidok(await response.json());
-    } catch (error) { console.error("Błąd podczas wysyłania akcji:", error); }
+        modalPanelEl.appendChild(lobbyBtn);
+    }
+    modalOverlayEl.classList.remove('hidden');
 }
 
-// === INICJALIZACJA GRY ===
-nastepneRozdanieBtn.onclick = przejdzDoNastepnegoRozdania;
-
-window.onload = () => {
-    const params = new URLSearchParams(window.location.search);
-    idGry = params.get('id');
-    if (idGry) {
-        pobierzStanGry();
-    } else {
-        window.location.href = "/";
+function formatujWpisHistorii(log) {
+    const gracz = `<strong>${log.gracz}</strong>`;
+    switch (log.typ) {
+        case 'akcja_licytacyjna': {
+            const akcja = log.akcja;
+            if (akcja.typ === 'pas' || akcja.typ === 'pas_lufa') return `${gracz} pasuje.`;
+            if (akcja.typ === 'deklaracja') {
+                const kontraktObj = { typ: akcja.kontrakt, atut: akcja.atut };
+                return `${gracz} licytuje: ${formatujKontrakt(kontraktObj)}`;
+            }
+            if (akcja.typ === 'zmiana_kontraktu') {
+                return `${gracz} zmienia kontrakt na: <strong>${akcja.kontrakt}</strong>.`;
+            }
+            return `${gracz} wykonuje akcję: ${akcja.typ}.`;
+        }
+        case 'zagranie_karty':
+            return `${gracz} zagrał ${log.karta}.`;
+        case 'koniec_lewy':
+            return `Lewę wygrywa <strong>${log.zwyciezca}</strong> (zdobywając ${log.punkty} pkt).`;
+        case 'meldunek':
+            return `${gracz} melduje parę za ${log.punkty} pkt.`;
+        case 'bonus':
+            return `Bonus za grę <strong>${gracz}</strong> z 3 kart.`;
+        default:
+            const tresc = JSON.stringify(log);
+            return `[${log.typ}] ${tresc.substring(0, 50)}`;
     }
-};
+}
+
+function pokazDymekPoOstatniejAkcji(stanGry, pozycje) {
+    const historia = stanGry.rozdanie.historia_rozdania || [];
+    const nowaDlugosc = historia.length;
+    if (nowaDlugosc === ostatniaDlugoscHistorii) {
+        return;
+    }
+
+    const noweLogi = historia.slice(ostatniaDlugoscHistorii);
+    let logDoWyswietlenia = null;
+
+    for (let i = noweLogi.length - 1; i >= 0; i--) {
+        const log = noweLogi[i];
+        if (log.typ === 'akcja_licytacyjna' || log.typ === 'meldunek') {
+            logDoWyswietlenia = log;
+            break;
+        }
+    }
+
+    if (!logDoWyswietlenia) {
+        ostatniaDlugoscHistorii = nowaDlugosc;
+        return;
+    }
+    
+    const pozycjaGracza = Object.keys(pozycje).find(p => pozycje[p] && pozycje[p].nazwa === logDoWyswietlenia.gracz);
+    if (!pozycjaGracza) {
+        ostatniaDlugoscHistorii = nowaDlugosc;
+        return;
+    }
+
+    let tekstDymka = '';
+
+    if (logDoWyswietlenia.typ === 'akcja_licytacyjna') {
+        const akcja = logDoWyswietlenia.akcja;
+        
+        switch (akcja.typ) {
+            case 'deklaracja':
+                tekstDymka = formatujKontrakt({ typ: akcja.kontrakt, atut: akcja.atut });
+                break;
+            case 'zmiana_kontraktu':
+                tekstDymka = `Zmieniam na: <strong>${akcja.kontrakt}</strong>`;
+                break;
+            case 'przebicie':
+                tekstDymka = `Przebijam: ${akcja.kontrakt}!`;
+                break;
+            case 'pas':
+            case 'pas_lufa':
+                tekstDymka = 'Pas';
+                break;
+            case 'do_konca':
+                tekstDymka = 'Do końca!';
+                break;
+            default:
+                tekstDymka = akcja.typ.charAt(0).toUpperCase() + akcja.typ.slice(1);
+                break;
+        }
+    } else if (logDoWyswietlenia.typ === 'meldunek') {
+        tekstDymka = `Para (${logDoWyswietlenia.punkty} pkt)!`;
+    }
+
+    if (tekstDymka) {
+        pokazDymekAkcji(pozycjaGracza, tekstDymka);
+    }
+    
+    ostatniaDlugoscHistorii = nowaDlugosc;
+}
+
+
+function pokazDymekAkcji(pozycja, tekst) {
+    const kontenerGracza = document.getElementById(`gracz-${pozycja}`);
+    if (!kontenerGracza) return;
+    const staryDymek = kontenerGracza.querySelector('.dymek-akcji');
+    if (staryDymek) staryDymek.remove();
+    const dymek = document.createElement('div');
+    dymek.className = 'dymek-akcji';
+    dymek.innerHTML = tekst;
+    kontenerGracza.appendChild(dymek);
+    setTimeout(() => dymek.remove(), 4000);
+}
+
+function renderujPrzyciskiLicytacji(akcje) {
+    const kontener = document.getElementById('kontener-akcji');
+    kontener.innerHTML = '';
+    const grupy = akcje.reduce((acc, akcja) => {
+        const klucz = akcja.kontrakt || akcja.typ;
+        if (!acc[klucz]) acc[klucz] = [];
+        acc[klucz].push(akcja);
+        return acc;
+    }, {});
+    for (const [nazwaGrupy, akcjeWGrupie] of Object.entries(grupy)) {
+        const btn = document.createElement('button');
+        btn.textContent = nazwaGrupy;
+        if (akcjeWGrupie.length === 1 && !akcjeWGrupie[0].atut) {
+            btn.onclick = () => wyslijAkcjeGry(akcjeWGrupie[0]);
+        } else {
+            btn.onclick = () => {
+                kontener.innerHTML = '';
+                akcjeWGrupie.forEach(akcjaKoloru => {
+                    const kolorBtn = document.createElement('button');
+                    const info = mapowanieKolorow[akcjaKoloru.atut];
+                    kolorBtn.innerHTML = `<span class="symbol-koloru ${info.klasa}">${info.symbol}</span> ${akcjaKoloru.atut}`;
+                    kolorBtn.onclick = () => wyslijAkcjeGry(akcjaKoloru);
+                    kontener.appendChild(kolorBtn);
+                });
+            };
+        }
+        kontener.appendChild(btn);
+    }
+}
+
+/* ==========================================================================
+   SEKCJA 6: OBSŁUGA CZATU
+   ========================================================================== */
+function wyslijWiadomoscCzat() {
+    const wiadomosc = czatInputEl.value.trim();
+    if (wiadomosc && socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({
+            gracz: nazwaGracza,
+            typ_wiadomosci: 'czat',
+            tresc: wiadomosc
+        }));
+        czatInputEl.value = '';
+    }
+}
+
+function dodajWiadomoscDoCzatu(gracz, tresc) {
+    const p = document.createElement('p');
+    p.innerHTML = `<strong>${gracz}:</strong> ${tresc.replace(/</g, "&lt;").replace(/>/g, "&gt;")}`;
+    czatWiadomosciEl.appendChild(p);
+    czatWiadomosciEl.scrollTop = czatWiadomosciEl.scrollHeight;
+}
+
+czatWyslijBtn.onclick = wyslijWiadomoscCzat;
+czatInputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') wyslijWiadomoscCzat();
+});

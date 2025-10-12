@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Zasady Gry w 66</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="/static/icon.png" type="image/png">
+    <style>
+        /* Dodatkowe style tylko dla tej strony */
+        body {
+            overflow-y: auto;
+        }
+        .kontener-zasad {
+            max-width: 800px;
+            margin: 40px auto;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .kontener-zasad h1 {
+            border-bottom: 2px solid yellow;
+            padding-bottom: 10px;
+        }
+        .kontener-zasad h2 {
+            color: yellow;
+            margin-top: 30px;
+        }
+        .powrot-btn {
+            display: inline-block;
+            margin-top: 30px;
+            padding: 12px 25px;
+            font-size: 1.1em;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        .powrot-btn:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="kontener-zasad">
+        <h1>Zasady Gry w 66</h1>
+        
+        <h2>Cel gry</h2>
+        <p>Celem gry jest zdobycie przez drużynę 66 punktów meczowych. Gra toczy się w rozdaniach, w których drużyny starają się wygrywać zadeklarowane kontrakty.</p>
+
+        <h2>Karty i ich wartości</h2>
+        <ul>
+            <li><strong>As</strong> - 11 punktów</li>
+            <li><strong>Dziesiątka</strong> - 10 punktów</li>
+            <li><strong>Król</strong> - 4 punkty</li>
+            <li><strong>Dama</strong> - 3 punkty</li>
+            <li><strong>Walet</strong> - 2 punkty</li>
+            <li><strong>Dziewiątka</strong> - 0 punktów</li>
+        </ul>
+        
+        <h2>Meldunki (Kontrakty Normalna i bez pytania)</h2>
+        <p>Posiadając Króla i Damę tego samego koloru, gracz może zameldować "parę", która daje jego drużynie dodatkowe punkty. Meldunek wykonuje się automatycznie jeśli zaczynamy lewę i zagrywamy jedną połówką z pary.</p>
+        <ul>
+            <li><strong>20 punktów</strong> - za parę w zwykłym kolorze.</li>
+            <li><strong>40 punktów</strong> - za parę w kolorze atutowym (tzw. "duża").</li>
+        </ul>
+
+       <h2>Przebieg Licytacji</h2>
+        <p>Licytacja decyduje o tym, która drużyna będzie rozgrywać i jaki kontrakt będzie obowiązywał. Składa się z dwóch głównych etapów.</p>
+
+        <h3>Etap 1: Deklaracja</h3>
+        <p>Gracz siedzący jako pierwszy za rozdającym musi zadeklarować kontrakt. Może wybrać grę normalną z atutem lub jedną z gier solo (Lepsza, Gorsza). Jego deklaracja staje się kontraktem wyjściowym.</p>
+        <h3>Etap 2: Faza lufy</h3>
+        <p> Po deklaracji, albo licytacji, drużyna przeciwna dostaje szanse na podwojenie stawki rozdania, jeśli drużyna da lufę, można ją odbić
+            podwajając stawkę ponownie. Można tak robić wielokrotnie, aż pokaże się możliwość "do końca" co sprawi że rozdanie zadecyduje o wyniku meczu.
+        </p>
+
+        <h3>Etap 3: Faza Pytania (Licytacja)</h3>
+        <p>Po deklaracji, jeśli nie padła lufa i grany jest kontrakt normalny, grający może zmienić kontrakt albo zapytać, kiedy to zrobi pozostali gracze Mogą:</p>
+        <ul>
+            <li><strong>Spasować:</strong> Jeśli nie chcą licytować wyżej.</li>
+            <li><strong>Przebić:</strong> Zadeklarować cenniejszy kontrakt ("Lepsza" przebija "Gorszą").</li>
+            <li><strong>Dać "Lufę":</strong> Przerywać  licytacje. Podwoić stawkę punktową aktualnego kontraktu. Przeciwnik może odpowiedzieć "Kontrą", ponownie podwajając stawkę.</li>
+        </ul>
+        <p>Licytację wygrywa gracz, który zadeklarował najwyższy kontrakt lub ostatni podbił stawkę.</p>
+      
+        <h2>Rodzaje Kontraktów</h2>
+        <p>W każdym rozdaniu gracze deklarują albo licytują kontrakt, który zobowiązują się zrealizować.</p>
+
+        <h3>Kontrakt Normalny</h3>
+        <p>To podstawowy typ gry. Drużyna grająca musi zdobyć 66 punktów w kartach lub wygrać ostatnią lewę. Za wygraną otrzymuje się:</p>
+        <ul>
+            <li><strong>1 punkt meczowy</strong> - jeśli przeciwnicy zdobyli 33 lub więcej punktów w kartach.</li>
+            <li><strong>2 punkty meczowe</strong> - jeśli przeciwnicy zdobyli mniej niż 33 punkty.</li>
+            <li><strong>3 punkty meczowe</strong> - jeśli przeciwnicy nie zdobyli żadnej lewy.</li>
+        </ul>
+
+        <h2>Kontrakty Specjalne (Gry Solo)</h2>
+        <p>Są to wysoko punktowane kontrakty (z dodatkowym bonusem przy deklaracji z 3 kart), w których jeden gracz gra samotnie przeciwko dwóm przeciwnikom, a jego partner pauzuje w rozdaniu.</p>
+
+        <h3>Lepsza (12 punktów)</h3>
+        <ul>
+            <li><strong>Rozgrywka:</strong> Gracz grający gra <strong>1 vs 2</strong>.</li>
+            <li><strong>Cel:</strong> Zdobyć <strong>wszystkie</strong> możliwe lewy.</li>
+            <li><strong>Warunek przegranej:</strong> Oddanie choćby jednej lewy przeciwnikom.</li>
+            <li><strong>Atut:</strong> W tym kontrakcie nie ma koloru atutowego i meldunków.</li>
+        </ul>
+
+        <h3>Gorsza (6 punktów)</h3>
+        <ul>
+            <li><strong>Rozgrywka:</strong> Gracz grający gra <strong>1 vs 2</strong>.</li>
+            <li><strong>Cel:</strong> Nie zdobyć <strong>żadnej</strong> lewy.</li>
+            <li><strong>Warunek przegranej:</strong> Wzięcie choćby jednej lewy.</li>
+            <li><strong>Atut:</strong> W tym kontrakcie nie ma koloru atutowego i meldunków.</li>
+        </ul>
+        
+        <h3>Bez Pytania (Gra 2 v 2*) (6 punktów)</h3>
+        <ul>
+            <li><strong>Rozgrywka:</strong> Gra toczy się normalnie w drużynach <strong>2 vs 2</strong>.</li>
+            <li><strong>Cel:</strong> Grający musi uzbierać 66 pktów.</li>
+            <li><strong>Warunek przegranej:</strong> Oddanie choćby jednej lewy przeciwnikom lub partnerowi.</li>
+            <li><strong>Atut:</strong> Istnieje kolor atutowy, wybierany przez licytującego.</li>
+        </ul>
+
+
+        <a href="/" class="powrot-btn">Powrót do menu</a>
+    </div>
+</body>
+</html>
