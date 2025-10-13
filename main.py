@@ -1,5 +1,7 @@
 # ZAKTUALIZOWANY PLIK: main.py
 
+# ZAKTUALIZOWANY PLIK: main.py
+
 import uuid
 import random
 import json
@@ -435,6 +437,7 @@ async def uruchom_petle_botow(id_gry: str):
         await asyncio.sleep(1.5)
         typ_ruchu, akcja_bota = wybierz_akcje_dla_bota(gracz_w_turze, rozdanie)
         if typ_ruchu == 'karta':
+            rozdanie.zagraj_karte(gracz_w_turze, akcja_bota)
             rozdanie.zagraj_karte(gracz_w_turze, akcja_bota)
         elif typ_ruchu == 'licytacja':
             if 'atut' in akcja_bota and akcja_bota['atut']:
