@@ -4,13 +4,39 @@
     <meta charset="UTF-8">
     <title>Gra w 66 - Start</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="/static/icon.png" type="image/png">
 </head>
 <body>
-    <div id="ekran-startowy">
-        <h1>Gra w 66</h1>
-        <p>Wybierz tryb gry, aby rozpocząć.</p>
-        <button id="start-btn">Graj Lokalnie</button>
+   <div id="ekran-startowy">
+    <h1>Gra w 66</h1>
+
+    <div id="ustaw-nazwe-kontener">
+        <label for="nazwa-gracza-input">Twoja wyswietlana nazwa:</label>
+        <input type="text" id="nazwa-gracza-input" maxlength="15" placeholder="Wpisz swoją nazwę...">
+    </div>
+    
+    <div class="tryby-gry-kontener">
+        <div class="tryb-kolumna">
+            <h3>Tryb 4-osobowy (2v2)</h3>
+            <button id="start-local-btn">Graj Lokalnie z Botami</button>
+            <button id="start-online-btn">Stwórz Lobby Online</button>
         </div>
+        <div class="tryb-kolumna">
+            <h3>Tryb 3-osobowy (1v2)</h3>
+            <button id="start-local-3p-btn">Graj Lokalnie z Botami</button>
+            <button id="start-online-3p-btn">Stwórz Lobby Online</button>
+        </div>
+    </div>
+
+    <div id="dolacz-kontener">
+        <p>Masz kod do gry? Dołącz tutaj:</p>
+        <input type="text" id="kod-gry-input" placeholder="Wpisz kod lobby...">
+        <button id="dolacz-btn">Dołącz</button>
+        <p id="blad-lobby" class="hidden"></p>
+    </div>
+    <a href="/zasady.html" id="zasady-btn">Zasady Gry</a>
+</div>
+
     <script src="/static/start.js"></script>
 </body>
 </html>
