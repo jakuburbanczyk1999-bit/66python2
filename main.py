@@ -1,7 +1,3 @@
-# ZAKTUALIZOWANY PLIK: main.py
-
-# ZAKTUALIZOWANY PLIK: main.py
-
 import uuid
 import random
 import json
@@ -77,6 +73,8 @@ def resetuj_gre_do_lobby(partia: dict):
         partia["punkty_meczu"] = {slot['nazwa']: 0 for slot in partia['slots'] if slot['typ'] != 'pusty'}
     partia["kicked_players"] = []
     partia["gracze_gotowi"] = []
+    partia["numer_rozdania"] = 1
+    partia["historia_partii"] = []
     print(f"Partia {partia.get('id_gry', 'N/A')} wraca do lobby.")
 
 def karta_ze_stringa(nazwa_karty: str) -> silnik_gry.Karta:
@@ -211,7 +209,8 @@ def stworz_nowa_gre():
             {"slot_id": 3, "nazwa": None, "typ": "pusty", "druzyna": "Oni"},
         ],
         "gracze_engine": [], "druzyny_engine": [], "aktualne_rozdanie": None,
-        "pelna_historia": [], "punkty_meczu": {nazwy_mapa["My"]: 0, nazwy_mapa["Oni"]: 0},
+        "numer_rozdania": 1, "historia_partii": [],
+        "pelna_historia": [], "punkty_meczu": {nazwy_mapa["My"]: 0, nazwy_mapa["Oni"]: 0}, 
         "kicked_players": [], "gracze_gotowi": []
     }
     return {"id_gry": id_gry}
@@ -229,12 +228,13 @@ def stworz_gre_trzyosobowa():
             {"slot_id": 2, "nazwa": None, "typ": "pusty"},
         ],
         "gracze_engine": [], "aktualne_rozdanie": None,
+        "numer_rozdania": 1, "historia_partii": [],
         "pelna_historia": [], "punkty_meczu": {},
         "kicked_players": [], "gracze_gotowi": []
     }
     return {"id_gry": id_gry}
 
-# --- ZAKTUALIZOWANY ENDPOINT ---
+
 @app.post("/gra/nowa/lokalna")
 def stworz_gre_lokalna(request: LocalGameRequest):
     id_gry = generuj_krotki_id()
@@ -256,6 +256,7 @@ def stworz_gre_lokalna(request: LocalGameRequest):
         "id_gry": id_gry, "status_partii": "W_TRAKCIE", "host": nazwa_gracza, "slots": slots,
         "tryb_gry": "lokalna", "max_graczy": 4, "nazwy_druzyn": {"My": "My", "Oni": "Oni"},
         "gracze_engine": gracze_tmp, "druzyny_engine": [d_my, d_oni],
+        "numer_rozdania": 1, "historia_partii": [],
         "aktualne_rozdanie": None, "pelna_historia": [],
         "punkty_meczu": {"My": 0, "Oni": 0}, "kicked_players": [], "gracze_gotowi": []
     }
@@ -282,9 +283,10 @@ def stworz_gre_lokalna_trzyosobowa(request: LocalGameRequest):
         gracze_tmp[slot["slot_id"]] = g
 
     gry[id_gry] = {
-        "id_gry": id_gry, "status_partii": "W_TRAKCIE", "host": nazwa_gracza, "slots": slots,
+        "id_gry": id_gry, "status_partii": "W_TRAKCIE", "host": nazwa_gracza, "slots": slots, 
         "tryb_gry": "lokalna", "max_graczy": 3,
         "gracze_engine": gracze_tmp, "aktualne_rozdanie": None,
+        "numer_rozdania": 1, "historia_partii": [],
         "pelna_historia": [], "punkty_meczu": {g.nazwa: 0 for g in gracze_tmp},
         "kicked_players": [], "gracze_gotowi": []
     }
@@ -302,34 +304,44 @@ def pobierz_stan_gry(id_gry: str):
     partia = gry.get(id_gry)
     if not partia: return {"error": "Gra nie istnieje"}
     stan_podstawowy = {
-        "status_partii": partia["status_partii"], "tryb_gry": partia.get("tryb_gry", "online"),
-        "max_graczy": partia.get("max_graczy", 4), "slots": partia["slots"], "host": partia["host"],
-        "gracze_gotowi": partia.get("gracze_gotowi", []), "nazwy_druzyn": partia.get("nazwy_druzyn", {})
+        "status_partii": partia["status_partii"],
+        "tryb_gry": partia.get("tryb_gry", "online"),
+        "max_graczy": partia.get("max_graczy", 4),
+        "slots": partia["slots"],
+        "host": partia["host"],
+        "gracze_gotowi": partia.get("gracze_gotowi", []),
+        "nazwy_druzyn": partia.get("nazwy_druzyn", {}),
+        "historia_partii": partia.get("historia_partii", []),
     }
     if partia['status_partii'] == 'LOBBY':
-        stan_podstawowy["punkty_meczu"] = partia["punkty_meczu"]
+        stan_podstawowy["punkty_meczu"] = partia.get("punkty_meczu", {})
         return stan_podstawowy
     if partia['status_partii'] == 'ZAKONCZONA':
         if partia.get("max_graczy", 4) == 4:
-            stan_podstawowy["punkty_meczu"] = {d.nazwa: d.punkty_meczu for d in partia["druzyny_engine"]} if partia.get("druzyny_engine") else partia["punkty_meczu"]
+            stan_podstawowy["punkty_meczu"] = {d.nazwa: d.punkty_meczu for d in partia.get("druzyny_engine", [])} if partia.get("druzyny_engine") else partia.get("punkty_meczu", {})
         else:
-            stan_podstawowy["punkty_meczu"] = {g.nazwa: g.punkty_meczu for g in partia["gracze_engine"]} if partia.get("gracze_engine") else partia["punkty_meczu"]
+            stan_podstawowy["punkty_meczu"] = {g.nazwa: g.punkty_meczu for g in partia.get("gracze_engine", [])} if partia.get("gracze_engine") else partia.get("punkty_meczu", {})
         return stan_podstawowy
     rozdanie = partia.get("aktualne_rozdanie")
     if not rozdanie:
-        stan_podstawowy["punkty_meczu"] = partia["punkty_meczu"]
+        stan_podstawowy["punkty_meczu"] = partia.get("punkty_meczu", {})
         return stan_podstawowy
     if partia.get("max_graczy", 4) == 4:
-        punkty_meczu = {d.nazwa: d.punkty_meczu for d in partia["druzyny_engine"]}
+        punkty_meczu = {d.nazwa: d.punkty_meczu for d in partia.get("druzyny_engine", [])}
         punkty_w_rozdaniu = rozdanie.punkty_w_rozdaniu
     else:
         punkty_meczu = {g.nazwa: g.punkty_meczu for g in rozdanie.gracze if g}
         punkty_w_rozdaniu = rozdanie.punkty_w_rozdaniu
-    gracz_w_turze_obj = rozdanie.gracze[rozdanie.kolej_gracza_idx] if rozdanie.kolej_gracza_idx is not None and rozdanie.gracze[rozdanie.kolej_gracza_idx] else None
+    gracz_w_turze_obj = None
+    if rozdanie.kolej_gracza_idx is not None and rozdanie.gracze and len(rozdanie.gracze) > rozdanie.kolej_gracza_idx:
+         gracz_w_turze_obj = rozdanie.gracze[rozdanie.kolej_gracza_idx]
+
+    # Zaktualizuj stan podstawowy o dane specyficzne dla rozdania
     stan_podstawowy.update({
         "punkty_meczu": punkty_meczu,
         "rozdanie": {
-            "faza": rozdanie.faza, "kolej_gracza": gracz_w_turze_obj.nazwa if gracz_w_turze_obj else None,
+            "faza": rozdanie.faza,
+            "kolej_gracza": gracz_w_turze_obj.nazwa if gracz_w_turze_obj else None,
             "rece_graczy": {g.nazwa: [str(k) for k in g.reka] for g in rozdanie.gracze if g},
             "karty_na_stole": [{"gracz": g.nazwa, "karta": str(k)} for g, k in rozdanie.aktualna_lewa],
             "grywalne_karty": [str(k) for k in gracz_w_turze_obj.reka if rozdanie._waliduj_ruch(gracz_w_turze_obj, k)] if gracz_w_turze_obj and rozdanie.faza == silnik_gry.FazaGry.ROZGRYWKA else [],
@@ -339,7 +351,8 @@ def pobierz_stan_gry(id_gry: str):
             "aktualna_stawka": rozdanie.oblicz_aktualna_stawke() if hasattr(rozdanie, 'oblicz_aktualna_stawke') else 0,
             "gracz_grajacy": rozdanie.grajacy.nazwa if rozdanie.grajacy else None,
             "historia_rozdania": rozdanie.szczegolowa_historia,
-            "podsumowanie": rozdanie.podsumowanie, "lewa_do_zamkniecia": rozdanie.lewa_do_zamkniecia,
+            "podsumowanie": rozdanie.podsumowanie,
+            "lewa_do_zamkniecia": rozdanie.lewa_do_zamkniecia,
         }
     })
     return stan_podstawowy
@@ -388,7 +401,6 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
         await manager.broadcast(id_gry, {"error": "Krytyczny błąd serwera. Gra została zatrzymana.", "details": str(e)})
 
 def przetworz_akcje_gracza(data: dict, partia: dict):
-    # ... (bez zmian)
     gracz_akcji_nazwa = data.get("gracz")
     if partia["status_partii"] == "LOBBY":
         akcja = data.get("akcja_lobby")
@@ -445,6 +457,31 @@ def przetworz_akcje_gracza(data: dict, partia: dict):
             liczba_ludzi = sum(1 for s in partia["slots"] if s["typ"] == "czlowiek")
             if len(partia["gracze_gotowi"]) >= liczba_ludzi:
                 partia["gracze_gotowi"] = []
+                if rozdanie.podsumowanie: # Sprawdź, czy jest podsumowanie do zapisania
+                    pod = rozdanie.podsumowanie
+                    nr = partia.get("numer_rozdania", 1)
+                    gral = rozdanie.grajacy.nazwa if rozdanie.grajacy else "Brak"
+                    kontrakt = pod.get("kontrakt", "Brak")
+                    atut = pod.get("atut", "")
+
+                    # Dodaj skrót atutu do kontraktu, jeśli istnieje
+                    if atut and atut != "Brak":
+                        kontrakt = f"{kontrakt} ({atut[0]})" 
+
+                    # Pobierz listę wygranych (dla 3 lub 4 graczy)
+                    wygrani = pod.get("wygrana_druzyna", ", ".join(pod.get("wygrani_gracze", [])))
+                    punkty = pod.get("przyznane_punkty", 0)
+
+                    # Sformatuj wpis historii
+                    wpis = (f"Rozdanie {nr} | Grał: {gral} | "
+                            f"Kontrakt: {kontrakt} | "
+                            f"Wygrani: {wygrani} | Zdobycz: {punkty} pkt")
+                    
+                    # Dodaj wpis do historii partii i zwiększ numer rozdania
+                    partia["historia_partii"].append(wpis)
+                    partia["numer_rozdania"] = nr + 1
+                    print(f"DEBUG: Dodano wpis do historii partii: {wpis}") # Możesz to zostawić do testów
+                    print(f"DEBUG: Aktualna historia partii: {partia['historia_partii']}")
                 if not sprawdz_koniec_partii(partia):
                     for gracz in partia["gracze_engine"]:
                         gracz.reka.clear(); gracz.wygrane_karty.clear()

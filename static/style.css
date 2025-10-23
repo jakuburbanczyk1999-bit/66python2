@@ -1,168 +1,235 @@
+/* ZAKTUALIZOWANY PLIK: style.css */
+
 /* ==========================================================================
-   1. USTAWIENIA OGÓLNE I PODSTAWOWE STYLE
+   1. OGÓLNE USTAWIENIA I TYPOGRAFIA
    ========================================================================== */
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #3d8243; /* Główne tło gry */
-    color: white;
     margin: 0;
-    padding: 0;
-    overflow: hidden; /* Zapobiega pojawianiu się pasków przewijania na całej stronie */
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #fff;
+    background-color: #33691e; /* Ciemniejsza zieleń tła */
+    overflow: hidden; /* Zapobiega scrollowaniu */
+    display: flex; /* Użyj flexbox dla centrowania, jeśli aplikacja nie zajmuje 100% viewportu */
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+h1, h2, h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #f0f0f0;
+}
+
+button {
+    background-color: #4CAF50; /* Zielony */
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin: 5px;
+    transition: background-color 0.2s ease;
+}
+
+button:hover:not(:disabled) {
+    background-color: #45a049;
+}
+
+button:disabled {
+    background-color: #616161;
+    cursor: not-allowed;
+}
+
+input[type="text"] {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background-color: rgba(0, 0, 0, 0.3);
+    color: white;
+    font-size: 14px;
+}
+
+input[type="text"]::placeholder {
+    color: #bbb;
 }
 
 .hidden {
-    display: none !important; /* Klasa pomocnicza do ukrywania elementów */
+    display: none !important;
 }
 
+.panel {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    z-index: 1001; /* Upewnij się, że jest nad wszystkim */
+}
 
 /* ==========================================================================
-   2. EKRAN STARTOWY I LOBBY
+   2. KONTENERY GLOBALNE
    ========================================================================== */
 
-/* --- Ekran startowy --- */
-#ekran-startowy {
+#animation-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none; /* Pozwala na klikanie pod spodem */
+    z-index: 500;
+    overflow: hidden;
+}
+
+.animowana-karta {
+    position: absolute;
+    width: 70px; /* Standardowa szerokość karty */
+    height: auto;
+    transition: transform 0.4s ease-out;
+    z-index: 501;
+}
+
+#modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.8);
     display: flex;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
-    height: 80vh;
+    z-index: 1000;
+}
+
+#podsumowanie-rozdania, #modal-ustawienia {
+    width: 400px;
+    max-width: 90%;
     text-align: center;
+    position: relative;
+    padding-bottom: 60px; /* Więcej miejsca na przyciski */
 }
 
-#ekran-startowy h1 {
-    font-size: 3em;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+#podsumowanie-rozdania button, #modal-ustawienia button {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+}
+#modal-ustawienia button {
+    bottom: 20px;
+    width: unset;
+    padding: 10px 25px;
 }
 
-#ekran-startowy button {
-    padding: 15px 30px;
-    font-size: 1.2em;
+.setting-group {
+    margin-bottom: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 15px;
 }
 
-/* --- Ekran lobby --- */
+.setting-option {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.setting-option input[type="checkbox"] {
+    margin-right: 10px;
+    width: 20px;
+    height: 20px;
+}
+
+/* ==========================================================================
+   3. EKRAN LOBBY
+   ========================================================================== */
+
 #ekran-lobby {
-    max-width: 800px;
-    margin: 40px auto;
-    background-color: rgba(0, 0, 0, 0.2);
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 800px;
+    max-width: 90%;
     text-align: center;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 #ekran-lobby h1 {
     font-size: 2.5em;
-    color: #fff;
-    text-shadow: 2px 2px 4px #000;
+    margin-bottom: 10px;
+}
+
+#ekran-lobby p {
+    font-size: 1.2em;
+    margin-bottom: 20px;
 }
 
 .lobby-druzyny {
     display: flex;
-    justify-content: space-around;
-    margin: 20px 0;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 30px;
+}
+
+.lobby-3p .lobby-druzyny {
+    justify-content: center;
 }
 
 .druzyna-panel {
-    background-color: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 20px;
-    width: 45%;
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 15px;
     border-radius: 8px;
+    flex: 1;
+    max-width: 300px;
 }
 
 .druzyna-panel h2 {
-    border-bottom: 2px solid yellow;
-    padding-bottom: 10px;
-    margin-top: 0;
+    font-size: 1.3em;
+    margin-bottom: 15px;
+    color: #e0e0e0;
 }
 
 .slot-gracza {
-    background-color: rgba(255, 255, 255, 0.05);
-    padding: 15px;
-    margin: 10px 0;
-    border-radius: 6px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    font-size: 1.1em;
-}
-
-#lobby-akcje {
-    margin-top: 30px;
-    display: flex;
     justify-content: center;
-    gap: 15px;
-}
-
-#lobby-akcje button {
-    padding: 12px 25px;
+    padding: 8px 10px;
+    margin: 8px 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 5px;
     font-size: 1.1em;
-    border: none;
-    background-color: #007bff;
-    color: white;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.2s;
+    color: #f5f5f5;
+    min-height: 40px;
 }
 
-#lobby-akcje button:hover {
-    background-color: #0056b3;
-}
-#dolacz-kontener {
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.2);
-    width: 100%;
-    max-width: 400px;
+.slot-gracza button {
+    margin-left: 10px;
+    padding: 5px 10px;
+    font-size: 0.9em;
 }
 
-#kod-gry-input {
-    padding: 10px 15px;
-    font-size: 1.1em;
-    width: 80%;
-    margin-bottom: 10px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
+.crown-icon {
+    font-size: 1.2em;
+    margin-right: 5px;
+    vertical-align: middle;
 }
-
-#blad-lobby {
-    color: #ffcdd2; /* Czerwony kolor dla błędów */
-    font-weight: bold;
-    margin-top: 10px;
-}
-#zasady-btn {
-    display: inline-block;
-    margin-top: 150px;
-    padding: 10px 20px;
-    background-color: #6c757d;
-    color: white;
-    text-decoration: none;
-    border-radius: 5px;
-    transition: background-color 0.2s;
-    width: fit-content;
-    align-self: center; /* DODAJ TĘ LINIĘ */
-}
-#zasady-btn:hover {
-    background-color: #5a6268;
-}
-
 
 /* ==========================================================================
-   3. GŁÓWNY UKŁAD EKRANU GRY (CSS GRID)
+   4. GŁÓWNY UKŁAD EKRANU GRY (CSS GRID)
    ========================================================================== */
 
 .ekran-gry {
     display: grid;
     grid-template-areas:
-        "info-lewy   info-srodek   info-prawy   panel-historii"
-        "obszar-gry  obszar-gry    obszar-gry   panel-historii"
-        "panel-czatu gracz-dol     gracz-dol    panel-historii";
-    
-    grid-template-rows: auto 1fr auto; 
-    grid-template-columns: 350px 1fr auto 350px;
+        "info-lewy    info-srodek   panel-prawy" 
+        "panel-lewy   obszar-gry    panel-prawy" 
+        "panel-lewy   gracz-dol     panel-prawy"; 
 
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 350px 1fr 350px;
     height: 100vh;
     width: 100vw;
     box-sizing: border-box;
@@ -170,21 +237,138 @@ body {
     gap: 10px;
 }
 
+/* --- Ukrywanie paneli (teraz stabilne) --- */
+/* Ukrycie lewej kolumny (info + panele) */
+.ekran-gry.czat-ukryty.partia-historia-ukryta {
+    grid-template-areas:
+        ".   info-srodek   panel-prawy"
+        ".   obszar-gry    panel-prawy"
+        ".   gracz-dol     panel-prawy";
+    grid-template-columns: 0px 1fr 350px;
+    gap: 0 10px;
+}
+.ekran-gry.czat-ukryty.partia-historia-ukryta #panel-lewy-kontener,
+.ekran-gry.czat-ukryty.partia-historia-ukryta #info-lewy-rog {
+    display: none;
+}
+
+/* Ukrycie prawej kolumny */
+.ekran-gry.historia-ukryta { 
+    grid-template-areas:
+        "info-lewy   info-srodek   ."
+        "panel-lewy  obszar-gry    ."
+        "panel-lewy  gracz-dol     .";
+    grid-template-columns: 350px 1fr 0px;
+    gap: 0 10px;
+}
+.ekran-gry.historia-ukryta #panel-prawy-kontener { 
+    display: none;
+}
+.ekran-gry.historia-ukryta #panel-historii {
+    display: none;
+}
+
+/* Ukrycie obu bocznych kolumn */
+.ekran-gry.czat-ukryty.partia-historia-ukryta.historia-ukryta {
+    grid-template-areas:
+        ".   info-srodek   ."
+        ".   obszar-gry    ."
+        ".   gracz-dol     .";
+    grid-template-columns: 0px 1fr 0px;
+    gap: 0;
+}
+.ekran-gry.czat-ukryty.partia-historia-ukryta.historia-ukryta #panel-prawy-kontener {
+     display: none;
+}
+/* Ukrywanie pojedynczych paneli w lewej kolumnie */
+.ekran-gry.czat-ukryty #panel-czatu {
+    display: none;
+}
+.ekran-gry.partia-historia-ukryta #panel-historii-partii {
+    display: none;
+}
 
 /* ==========================================================================
-   4. KOMPONENTY EKRANU GRY
+   5. KOMPONENTY EKRANU GRY
    ========================================================================== */
 
 /* --- Górne panele informacyjne --- */
-#info-lewy-rog { grid-area: info-lewy; text-align: left; }
-#info-srodek { grid-area: info-srodek; text-align: center; }
-#info-prawy-rog { grid-area: info-prawy; text-align: right; }
+#info-lewy-rog {
+    grid-area: info-lewy;
+    align-self: start; /* --- POPRAWKA --- */
+    padding: 10px; /* --- POPRAWKA --- */
+}
+
+#info-srodek {
+    grid-area: info-srodek;
+    align-self: start; /* --- POPRAWKA --- */
+    justify-self: center; /* --- POPRAWKA --- */
+    padding: 10px; /* --- POPRAWKA --- */
+}
+#panel-prawy-kontener {
+    grid-area: panel-prawy;
+    display: flex;          
+    flex-direction: row;    /* Elementy układają się poziomo */
+    gap: 10px;              /* Odstęp między info a historią */
+    min-height: 0;
+    align-items: stretch;     
+}
+
+#kontener-info-prawy-rog {
+    display: flex;
+    flex-direction: column; /* Ułóż elementy w pionie */
+    align-items: flex-end; /* Wyrównaj do prawej wewnątrz tego kontenera */
+    padding: 10px;
+    gap: 5px;
+    flex-shrink: 0;         /* Nie pozwól się kurczyć */
+    width: 50px;           /* Ustaw stałą szerokość (dostosuj wg potrzeby) */
+    align-self: flex-start; /* Trzymaj się góry kontenera flex */
+}
 
 .info-box {
     background-color: rgba(0, 0, 0, 0.3);
     padding: 8px 12px;
-    border-radius: 6px;
-    display: inline-block;
+    border-radius: 5px;
+    font-size: 1em;
+    text-align: right;
+    white-space: nowrap; /* Zapobiega zawijaniu tekstu */
+}
+
+#settings-btn {
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 5px 8px; /* Mniejsze paddingi dla ikony */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.symbol-koloru {
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-right: 3px;
+}
+
+.kolor-czerwien { color: #ff3333; }
+.kolor-dzwonek { color: #ffaa33; }
+.kolor-zoladz { color: #33cc33; }
+.kolor-wino { color: #9933cc; }
+
+.znak-zapytania-przekreslony {
+    position: relative;
+    font-size: 0.8em; /* Mniejszy rozmiar dla znaku zapytania */
+    opacity: 0.7;
+    margin-left: 2px;
+}
+.znak-zapytania-przekreslony::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -5%;
+    width: 110%;
+    height: 1px;
+    background-color: white;
+    transform: rotate(-45deg);
 }
 
 /* --- Główny obszar gry (wokół stołu) --- */
@@ -193,160 +377,251 @@ body {
     display: flex;
     justify-content: center; 
     align-items: center;     
+}
+
+.kontener-stolu {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0; 
     gap: 120px; 
     position: relative; 
-    left: 60px;             
 }
 
 .strefa-srodkowa {
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
     align-items: center;
+    justify-content: center;
+    gap: 20px;
+    position: relative;
 }
 
-/* --- Stół do gry --- */
 #stol-gry {
-    grid-area: stol-gry;
+    width: 400px;
+    height: 250px;
     background-color: rgba(0, 0, 0, 0.2);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 15px;
-    width: 500px;
-    height: 300px; /* Zmniejszona wysokość dla lepszych proporcji */
-    margin-top: 20px;
-    display: flex;
-    justify-content: center;
+    border-radius: 10px;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 5px;
+    justify-items: center;
     align-items: center;
-    gap: 15px;
+    padding: 10px;
+    position: relative; /* Ważne dla pozycjonowania slotów kart */
     flex-shrink: 0;
 }
 
-.karta-na-stole {
-    text-align: center;
+#stol-gry .slot-karty {
+    position: absolute;
+    width: 70px; /* Szerokość karty */
+    height: 100px; /* Wysokość karty */
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-/* --- Obszary poszczególnych graczy --- */
-.gracz-boczny {
+/* Pozycjonowanie slotów kart na stole */
+#slot-karty-gora { top: -5px; left: 50%; transform: translateX(-50%); }
+#slot-karty-lewy { left: 5px; top: 50%; transform: translateY(-50%); }
+#slot-karty-prawy { right: 5px; top: 50%; transform: translateY(-50%);  }
+#slot-karty-dol { bottom: 5px; left: 50%; transform: translateX(-50%); }
+
+/* --- Gracze --- */
+.gracz-boczny { /* Lewy i Prawy */
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    align-items: center; 
+    position: relative; /* Dla dymków akcji */
+    margin-top:150px;
 }
 
-#gracz-dol, #gracz-gora, #gracz-lewy, #gracz-prawy {
-    position: relative; /* Potrzebne dla pozycjonowania dymków akcji */
+#gracz-lewy .info-gracza, #gracz-prawy .info-gracza, #gracz-gora .info-gracza, #gracz-dol .info-gracza {
+    background-color: rgba(0, 0, 0, 0.4);
+    padding: 5px 10px;
+    border-radius: 5px;
+    margin-bottom: 5px; /* Odstęp od kart */
+    font-size: 0.9em;
+    white-space: nowrap; /* Zapobiega zawijaniu nicku */
 }
+
 #gracz-gora {
-    margin-bottom: 20px; /* Dodaje 20px przestrzeni pod górnym graczem */
-}
-#gracz-lewy, #gracz-prawy {
-    position: relative; /* Upewniamy się, że pozycjonowanie jest włączone */
-    top: 40px;          /* Przesuwamy graczy o 40px w dół */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    margin-bottom: 60px;
 }
 
-#strefa-gracza-glownego {
+#gracz-dol {
     grid-area: gracz-dol;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-end; /* Wypycha elementy na dół */
     padding-bottom: 10px;
-    position: relative;
-    left: -115px;
+    position: relative; /* Dla dymków akcji */
 }
 
-.info-gracza {
-    font-weight: bold;
-    margin-bottom: 5px;
-    text-align: center;
-    padding: 5px;
-    border: 3px solid transparent;
-    border-radius: 8px;
-    transition: all 0.3s;
+.gracz-boczny.aktywny-gracz .info-gracza,
+#gracz-gora.aktywny-gracz .info-gracza,
+#gracz-dol.aktywny-gracz .info-gracza {
+    border: 2px solid yellow; /* Podświetlenie aktywnego gracza */
+    box-shadow: 0 0 10px yellow;
 }
 
-.aktywny-gracz .info-gracza {
-    border-color: yellow;
-    background-color: rgba(255, 255, 0, 0.2);
-}
-
-/* --- Ręce graczy --- */
-.reka-glowna, .reka-gorna, .reka-boczna {
+.reka-boczna, .reka-gorna, .reka-glowna {
     display: flex;
     justify-content: center;
-    align-items: center;
+    position: relative;
 }
 
-.reka-glowna { gap: 10px; }
-.reka-gorna { gap: 5px; }
-.reka-boczna { 
+.reka-boczna {
     flex-direction: column;
-} 
+    gap: 0; /* Karty lekko nachodzą na siebie */
+}
 .reka-boczna .karta:not(:first-child) {
-    margin-top: -25px; /* Pociąga kartę w górę, aby nachodziła na poprzednią */
+    margin-top: -65px; /* Zwiększamy nachodzenie (dostosuj wg potrzeby) */
 }
 
-/* --- Karty --- */
+.reka-gorna {
+    flex-direction: row;
+    gap: 0;
+}
+
+.reka-glowna {
+    flex-direction: row;
+    gap: 5px;
+    margin-top: 10px;
+}
+
 .karta {
-    width: 80px;
-    height: 120px;
-    border-radius: 6px;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
-    transition: transform 0.2s, border 0.2s;
-}
-
-/* Mniejsze karty dla pozostałych graczy */
-#gracz-gora .karta, #gracz-lewy .karta, #gracz-prawy .karta {
-    width: 60px;
-    height: 90px;
+    width: 70px;
+    height: 100px;
+    border-radius: 5px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.4);
+    transition: transform 0.1s ease-out;
 }
 
 .karta.grywalna {
     cursor: pointer;
-    border: 3px solid yellow;
 }
 
 .karta.grywalna:hover {
-    transform: translateY(-15px); /* Efekt podniesienia karty */
+    transform: translateY(-10px) scale(1.1);
 }
 
-#kontener-info-prawy-rog {
-    grid-area: info-prawy;
+#strefa-gracza-glownego {
+    grid-area: gracz-dol;
     display: flex;
     flex-direction: column;
-    align-items: flex-end; /* Wyrównuje elementy do prawej */
-    gap: 8px; /* Odstęp między panelem kontraktu a stawki */
+    align-items: center; /* Centruje przyciski i rękę */
+    justify-content: flex-end; 
+    padding-bottom: 10px;
+    position: relative;
+}
+
+#strefa-gracza-glownego #kontener-akcji {
+    display: flex;
+    flex-wrap: wrap; 
+    justify-content: center; /* Centruje przyciski */
+    gap: 10px;
+    margin-bottom: 15px; /* Odstęp od ręki gracza */
+    max-width: 80%; 
+ 
+}
+
+#strefa-gracza-glownego #kontener-akcji button {
+    padding: 10px 18px; /* Lekko dopasowany padding */
+    font-size: 1em; /* Ujednolicony rozmiar czcionki */
+}
+
+/* --- Dymki akcji --- */
+.dymek-akcji {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 15px;
+    font-size: 0.9em;
+    white-space: nowrap;
+    z-index: 550;
+    pointer-events: none; /* Upewnij się, że nie blokuje kliknięć */
+    bottom: 100%; /* Domyślnie nad graczem */
+    left: 50%;
+    transform: translate(-50%, -10px);
+    opacity: 0;
+    animation: fadeInOut 4s forwards;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Specyficzne pozycje dymków dla graczy bocznych */
+#gracz-lewy .dymek-akcji {
+    bottom: unset;
+    top: 50%;
+    left: 100%; /* Po prawej stronie gracza lewego */
+    transform: translate(10px, -50%);
+}
+
+#gracz-prawy .dymek-akcji {
+    bottom: unset;
+    top: 50%;
+    right: 100%; /* Po lewej stronie gracza prawego */
+    transform: translate(-10px, -50%);
+}
+
+#gracz-gora .dymek-akcji {
+    bottom: unset;
+    top: 100%; /* Poniżej gracza górnego */
+    transform: translate(-50%, 10px);
+}
+
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, -10px); }
+    10% { opacity: 1; transform: translate(-50%, -20px); }
+    90% { opacity: 1; transform: translate(-50%, -20px); }
+    100% { opacity: 0; transform: translate(-50%, -30px); }
 }
 
 
 /* ==========================================================================
-   5. PANELE BOCZNE (HISTORIA I CZAT)
+   6. PANELE BOCZNE (HISTORIA PARTII, CZAT, HISTORIA ROZDANIA)
    ========================================================================== */
 
-/* --- Panel historii (prawa strona) --- */
-#panel-historii {
-    grid-area: panel-historii;
+/* --- Kontener lewych paneli (Historia Partii i Czat) --- */
+#panel-lewy-kontener {
+    grid-area: panel-lewy;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0; 
+    align-self: stretch; /* Rozciąga kontener na całą wysokość komórki */
+}
+
+/* --- Panel historii partii (lewy górny) --- */
+#panel-historii-partii {
     background-color: rgba(0, 0, 0, 0.3);
     padding: 15px;
     display: flex;
     flex-direction: column;
     border-radius: 8px;
-    min-height: 0; /* Zapobiega rozpychaniu */
+    min-height: 0; 
+    flex-grow: 3; 
+    flex-shrink: 1; 
+    overflow: hidden; 
 }
 
-#panel-historii h3 {
-    margin: 0 0 10px 0;
-    padding-bottom: 5px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-#historia-lista {
+#partia-historia-lista {
     flex-grow: 1;
-    overflow-y: auto; /* Pasek przewijania w razie potrzeby */
+    overflow-y: auto;
     font-size: 14px;
     padding-right: 10px;
+    min-height: 100px;
+    word-wrap: break-word;
 }
 
-#historia-lista p {
+#partia-historia-lista p {
     margin: 8px 0;
     padding: 6px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -357,230 +632,106 @@ body {
 
 /* --- Panel czatu (lewy dół) --- */
 #panel-czatu {
-    grid-area: panel-czatu;
     background-color: rgba(0, 0, 0, 0.3);
     padding: 15px;
-    border-radius: 8px;
     display: flex;
     flex-direction: column;
-    min-height: 0; /* Zapobiega rozpychaniu komórki siatki */
-}
+    border-radius: 8px;
+    min-height: 0;
+    flex-grow: 1; 
+    flex-shrink: 0; 
+    max-height: 250px; 
 
-#panel-czatu h3 {
-    margin: 0 0 10px 0;
-    padding-bottom: 5px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    flex-shrink: 0;
 }
 
 #czat-wiadomosci {
-    height: 180px;          /* Stała wysokość okna wiadomości */
-    overflow-y: auto;       /* Pasek przewijania pojawi się automatycznie */
+    flex-grow: 1;
+    overflow-y: auto;
     margin-bottom: 10px;
     font-size: 14px;
-    word-wrap: break-word;
-    /* Usunęliśmy 'flex-grow: 1' oraz 'min-height' */
-}
-#czat-wiadomosci p {
-    margin: 5px 0;
-    line-height: 1.4;
-    word-wrap: break-word; /* Złamie długie słowa, aby nie wychodziły poza kontener */
+    padding-right: 10px; /* Miejsce na scrollbar */
 }
 
-#czat-wiadomosci p strong {
-    color: yellow;
+#czat-wiadomosci p {
+    margin: 5px 0;
+    word-wrap: break-word; /* Długie słowa będą się łamać */
 }
 
 #czat-input-kontener {
     display: flex;
     gap: 5px;
-    flex-shrink: 0;
 }
 
-#czat-input {
+#czat-input-kontener input {
     flex-grow: 1;
+}
+
+#czat-input-kontener button {
     padding: 8px 12px;
-    border: 1px solid #555;
-    background-color: rgba(0,0,0,0.4);
-    color: white;
-    border-radius: 5px;
-}
-
-#czat-wyslij-btn {
-    padding: 8px 15px;
-    border: none;
-    background-color: #007bff;
-    color: white;
-    border-radius: 5px;
-    cursor: pointer;
+    font-size: 0.9em;
+    margin: 0; /* Usuń domyślne marginesy przycisku */
 }
 
 
-/* ==========================================================================
-   6. ELEMENTY INTERAKTYWNE (PRZYCISKI AKCJI, MODALE, DYMKI)
-   ========================================================================== */
-
-/* --- Przyciski licytacji --- */
-#kontener-akcji {
-    position: absolute;
-    bottom: 200px;
+/* --- Panel historii rozdania (prawa strona) --- */
+#panel-historii {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 15px;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px;
-    z-index: 10;
-    max-width: 500px;
-}
-
-#kontener-akcji button {
-    padding: 10px 20px;
-    font-size: 1em;
-    border: none;
-    background-color: #007bff;
-    color: white;
-    border-radius: 5px;
-    cursor: pointer;
-}
-
-/* Style dla przycisków wyboru koloru atutowego */
-.symbol-koloru {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    line-height: 20px;
-    text-align: center;
-    border-radius: 50%;
-    color: white;
-    font-weight: bold;
-    margin-right: 5px;
-}
-.kolor-czerwien { background-color: #d9534f; } /* Czerwony */
-.kolor-dzwonek { background-color: #e75480; } /* Różowy (np. "Hot Pink") */
-.kolor-zoladz { background-color: #808080; } /* Szary */
-.kolor-wino { background-color: #000000; }   /* Czarny */
-
-/* --- Modal podsumowania rozdania --- */
-#modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
-
-#podsumowanie-rozdania {
-    width: 450px;
-    background-color: #2a5c30;
-    border: 2px solid #fff;
-    text-align: center;
-    padding: 25px;
+    flex-direction: column;
     border-radius: 8px;
+    overflow: hidden;
+    min-height: 0;
+    flex-grow: 1; /* Pozwól temu panelowi zająć resztę szerokości */
+
 }
 
-/* --- Dymki z akcjami graczy --- */
-.dymek-akcji {
-    position: absolute;
-    background-color: white;
-    color: #333;
-    padding: 10px 15px;
-    border-radius: 15px;
-    font-size: 1.1em;
-    font-weight: bold;
-    box-shadow: 3px 3px 8px rgba(0,0,0,0.5);
-    z-index: 20;
-    opacity: 0;
-    animation: pojawijsie-i-zniknij 4s ease-in-out;
-    white-space: nowrap;
+#historia-lista {
+    flex-grow: 1;
+    overflow-y: auto;
+    font-size: 14px;
+    padding-right: 10px; /* Miejsce na scrollbar */
+    min-height: 50px;
 }
 
-.dymek-akcji::after { /* "Ogonek" dymka */
-    content: '';
-    position: absolute;
-    border-style: solid;
+#historia-lista p {
+    margin: 5px 0;
+    padding: 3px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    word-wrap: break-word;
 }
-.crown-icon {
-    color: yellow;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
-    margin-right: 4px; /* Mały odstęp od nazwy */
-}
-
-.znak-zapytania-przekreslony {
-    color: #ffcdd2; /* Jaśniejszy czerwony, pasujący do błędów */
-    text-decoration: line-through;
-    font-weight: bold;
-    margin-left: 4px; /* Mały odstęp od symbolu koloru */
+#historia-lista p:last-child {
+    border-bottom: none;
 }
 
-/* Pozycjonowanie dymków dla każdego gracza */
-#gracz-dol .dymek-akcji { bottom: 105%; left: 50%; transform: translateX(-50%); }
-#gracz-dol .dymek-akcji::after { top: 100%; left: 50%; transform: translateX(-50%); border-width: 10px 10px 0 10px; border-color: white transparent transparent transparent; }
+.panel-header {
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
 
-#gracz-gora .dymek-akcji { top: 105%; left: 50%; transform: translateX(-50%); }
-#gracz-gora .dymek-akcji::after { bottom: 100%; left: 50%; transform: translateX(-50%); border-width: 0 10px 10px 10px; border-color: transparent transparent white transparent; }
-
-#gracz-lewy .dymek-akcji { left: 105%; top: 50%; transform: translateY(-50%); }
-#gracz-lewy .dymek-akcji::after { right: 100%; top: 50%; transform: translateY(-50%); border-width: 10px 10px 10px 0; border-color: transparent white transparent transparent; }
-
-#gracz-prawy .dymek-akcji { right: 105%; top: 50%; transform: translateY(-50%); }
-#gracz-prawy .dymek-akcji::after { left: 100%; top: 50%; transform: translateY(-50%); border-width: 10px 0 10px 10px; border-color: transparent transparent transparent white; }
-
-/* Animacja pojawiania się i znikania dymka */
-@keyframes pojawijsie-i-zniknij {
-    0% { opacity: 0; transform: scale(0.8) translate(-50%, 0); } /* Poprawka dla centrowania */
-    15% { opacity: 1; transform: scale(1) translate(-50%, 0); }
-    85% { opacity: 1; transform: scale(1) translate(-50%, 0); }
-    100% { opacity: 0; transform: scale(0.8) translate(-50%, 0); }
+.panel-header h3 {
+    margin: 0;
+    font-size: 1.2em;
 }
 
 /* ==========================================================================
-   9. STYLE ANIMACJI
+   7. ZMIANY DLA TRYBU 3-OSOBOWEGO
    ========================================================================== */
-
-#animation-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    pointer-events: none; /* Warstwa nie przechwytuje kliknięć */
-    z-index: 2000; /* Upewnij się, że jest na samej górze */
+.ekran-gry.tryb-3-osoby #gracz-gora {
+    display: none; /* Ukryj górnego gracza w trybie 3-osobowym */
 }
 
-.animowana-karta {
-    position: absolute;
-    transition: transform 0.4s ease-in-out; /* Definicja płynnego przejścia */
-    /* Zachowuje rozmiar karty z ręki gracza */
-    width: 80px;
-    height: 120px;
-    border-radius: 6px;
-    box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.6);
+.ekran-gry.tryb-3-osoby #stol-gry {
+    grid-template-columns: 1fr; /* Centralna kolumna dla kart */
+    grid-template-rows: 1fr 1fr 1fr; /* Trzy rzędy */
 }
 
-/* Zaktualizowane style stołu, aby używać pozycjonowania */
-#stol-gry {
-    position: relative; /* Niezbędne do pozycjonowania slotów wewnątrz */
-    width: 400px;
-    height: 250px;
-    display: block; /* Zmieniamy z flex na block */
-}
+.ekran-gry.tryb-3-osoby #slot-karty-lewy { top: 50%; left: 0; transform: translateY(-50%) rotate(0deg); }
+.ekran-gry.tryb-3-osoby #slot-karty-prawy { top: 50%; right: 0; transform: translateY(-50%) rotate(0deg); }
+.ekran-gry.tryb-3-osoby #slot-karty-dol { bottom: 0; left: 50%; transform: translateX(-50%); }
+.ekran-gry.tryb-3-osoby #slot-karty-gora { display: none; } /* Ukryj slot górnego gracza */
 
-.slot-karty {
-    position: absolute;
-    width: 80px; /* Rozmiar karty */
-    height: 120px;
+.ekran-gry.tryb-3-osoby .kontener-stolu {
+    gap: 80px; /* Mniejszy odstęp między graczami bocznymi w trybie 3-osobowym */
 }
-.slot-karty img {
-    width: 100%;
-    height: 100%;
-}
-
-/* Pozycjonowanie miejsc na karty na stole */
-#slot-karty-dol { bottom: 0; left: 50%; transform: translateX(-50%); }
-#slot-karty-gora { top: 0; left: 50%; transform: translateX(-50%); }
-#slot-karty-lewy { top: 50%; left: 0; transform: translateY(-50%); }
-#slot-karty-prawy { top: 50%; right: 0; transform: translateY(-50%); }

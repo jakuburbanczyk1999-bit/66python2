@@ -7,81 +7,140 @@
     <link rel="icon" href="/static/icon.png" type="image/png">
 </head>
 <body>
-    <div id="animation-overlay"></div>
 
     <div id="ekran-lobby" class="hidden">
-        <h1>Poczekalnia Gry</h1>
-        <p>ID Gry (udostępnij znajomym): <strong id="lobby-id-gry"></strong></p>
+        <h1>Oczekiwanie na graczy...</h1>
+        <p>Kod gry: <strong id="lobby-id-gry">ŁADOWANIE...</strong></p>
         <div class="lobby-druzyny">
-            <div class="druzyna-panel" id="druzyna-my"></div>
-            <div class="druzyna-panel" id="druzyna-oni"></div>
+            <div id="druzyna-my" class="druzyna-panel">
+                </div>
+            <div id="druzyna-oni" class="druzyna-panel">
+                </div>
         </div>
-        <div id="lobby-akcje"></div>
+        <div id="lobby-akcje">
+            </div>
     </div>
+
+
+    <div id="animation-overlay"></div>
 
     <div class="ekran-gry hidden">
-    
-    <div id="info-lewy-rog"></div>
-    <div id="info-srodek"></div>
-    <div id="kontener-info-prawy-rog">
-        <div id="info-prawy-rog"></div>
-        <div id="info-stawka" class="info-box hidden"></div>
-    </div>
 
+    <div id="info-lewy-rog">
+        </div>
+    <div id="info-srodek">
+        </div>
+
+    <div id="panel-prawy-kontener">
+        <div id="kontener-info-prawy-rog">
+            <div id="info-prawy-rog">
+                </div>
+            <div id="info-stawka" class="info-box hidden">
+                </div>
+            <div id="settings-btn" class="info-box" title="Ustawienia Interfejsu">⚙️</div>
+        </div>
+
+        <div id="panel-historii">
+            <div class="panel-header">
+                <h3>Historia</h3>
+            </div>
+            <div id="historia-lista"></div>
+        </div>
+    </div>
     <div class="obszar-gry">
-        <div id="gracz-lewy" class="gracz-boczny">
-            <div class="info-gracza">Przeciwnik1</div>
-            <div class="reka-boczna"></div>
-        </div>
+        <div class="kontener-stolu">
 
-        <div class="strefa-srodkowa">
-            <div id="gracz-gora">
-                <div class="info-gracza">Nasz</div>
-                <div class="reka-gorna"></div>
+            <div id="gracz-lewy" class="gracz-boczny">
+                <div class="info-gracza">Gracz Lewy</div>
+                <div class="reka-boczna">
+                    </div>
             </div>
-            <div id="stol-gry">
-                <div class="slot-karty" id="slot-karty-gora"></div>
-                <div class="slot-karty" id="slot-karty-lewy"></div>
-                <div class="slot-karty" id="slot-karty-prawy"></div>
-                <div class="slot-karty" id="slot-karty-dol"></div>
-            </div>
-        </div>
 
-        <div id="gracz-prawy" class="gracz-boczny">
-            <div class="info-gracza">Przeciwnik2</div>
-            <div class="reka-boczna"></div>
+            <div class="strefa-srodkowa">
+                <div id="gracz-gora">
+                    <div class="info-gracza">Gracz Górny</div>
+                    <div class="reka-gorna">
+                        </div>
+                </div>
+
+                <div id="stol-gry">
+                    <div id="slot-karty-lewy" class="slot-karty"></div>
+                    <div id="slot-karty-gora" class="slot-karty"></div>
+                    <div id="slot-karty-prawy" class="slot-karty"></div>
+                    <div id="slot-karty-dol" class="slot-karty"></div>
+                </div>
+            </div>
+
+            <div id="gracz-prawy" class="gracz-boczny">
+                <div class="info-gracza">Gracz Prawy</div>
+                <div class="reka-boczna">
+                    </div>
+            </div>
+
         </div>
     </div>
-    
+
     <div id="strefa-gracza-glownego">
-        <div id="kontener-akcji"></div>
+        <div id="kontener-akcji">
+            </div>
         <div id="gracz-dol">
-            <div class="info-gracza">Jakub</div>
-            <div class="reka-glowna"></div>
+            <div class="reka-glowna">
+                </div>
+            <div class="info-gracza">Twój Nick</div>
         </div>
     </div>
 
-    <div id="panel-czatu">
-        <h3>Czat</h3>
-        <div id="czat-wiadomosci"></div>
-        <div id="czat-input-kontener">
-             <input type="text" id="czat-input" placeholder="Napisz wiadomość...">
-             <button id="czat-wyslij-btn">Wyślij</button>
+
+    <div id="panel-lewy-kontener">
+        <div id="panel-historii-partii">
+            <div class="panel-header">
+                <h3>Historia Partii</h3>
+            </div>
+            <div id="partia-historia-lista">
+                </div>
         </div>
-    </div> <div id="panel-historii">
-        <h3>Historia</h3>
-        <div id="historia-lista"></div>
+
+        <div id="panel-czatu">
+            <div class="panel-header">
+                <h3>Czat</h3>
+            </div>
+            <div id="czat-wiadomosci"></div>
+            <div id="czat-input-kontener">
+                 <input type="text" id="czat-input" placeholder="Napisz wiadomość...">
+                 <button id="czat-wyslij-btn">Wyślij</button>
+            </div>
+        </div>
     </div>
 
-</div>
+    </div> <div id="modal-overlay" class="hidden">
+        <div id="podsumowanie-rozdania" class="panel hidden">
+            <h2 id="podsumowanie-tytul">Koniec Rozdania!</h2>
+            <div id="podsumowanie-tresc"></div>
+            </div>
 
-    <div id="modal-overlay" class="hidden">
-    <div id="podsumowanie-rozdania" class="panel">
-        <h2 id="podsumowanie-tytul">Koniec Rozdania!</h2>
-        <div id="podsumowanie-tresc"></div>
+        <div id="modal-ustawienia" class="panel hidden">
+            <h2>Ustawienia Interfejsu</h2>
+
+            <div class="setting-group">
+                <h3>Wygląd</h3>
+                <div class="setting-option">
+                    <input type="checkbox" id="setting-ukryj-historie-partii">
+                    <label for="setting-ukryj-historie-partii">Ukryj historię partii</label>
+                </div>
+                <div class="setting-option">
+                    <input type="checkbox" id="setting-ukryj-czat">
+                    <label for="setting-ukryj-czat">Ukryj panel czatu</label>
+                </div>
+                <div class="setting-option">
+                    <input type="checkbox" id="setting-ukryj-historie">
+                    <label for="setting-ukryj-historie">Ukryj panel historii (rozdania)</label>
+                </div>
+            </div>
+
+            <button id="settings-close-btn">Zamknij</button>
         </div>
-</div>
-    
+    </div>
+
     <script src="/static/script.js"></script>
 </body>
 </html>
