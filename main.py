@@ -117,22 +117,72 @@ def sprawdz_koniec_partii(partia: dict) -> bool:
 
     return False
 
+# --- ZAKTUALIZOWANA FUNKCJA BOTA (TRYB TESTOWY) ---
 def wybierz_akcje_dla_bota(bot: silnik_gry.Gracz, rozdanie: Any) -> tuple[str, Any]:
-    # ... (bez zmian)
+    
+    # Logika rozgrywki bez zmian
     if rozdanie.faza == silnik_gry.FazaGry.ROZGRYWKA:
         grywalne_karty = [k for k in bot.reka if rozdanie._waliduj_ruch(bot, k)]
         if grywalne_karty:
             return 'karta', random.choice(grywalne_karty)
     else:
+        # Logika licytacji - wymuszone akcje do testowania
         mozliwe_akcje = rozdanie.get_mozliwe_akcje(bot)
-        if mozliwe_akcje:
-            wybrana_akcja = random.choice(mozliwe_akcje)
-            if 'atut' in wybrana_akcja and wybrana_akcja['atut']:
+        if not mozliwe_akcje:
+            return 'brak', None
+
+        # 1. Wymuś 'pas' w LICYTACJI
+        if rozdanie.faza == silnik_gry.FazaGry.LICYTACJA:
+            akcja_pas = next((a for a in mozliwe_akcje if a['typ'] == 'pas'), None)
+            if akcja_pas:
+                print(f"BOT TEST: {bot.nazwa} wymuszony 'pas'")
+                return 'licytacja', akcja_pas
+
+        # 2. Wymuś 'pas_lufa' w FAZIE LUFY
+        if rozdanie.faza == silnik_gry.FazaGry.LUFA:
+            akcja_pas_lufa = next((a for a in mozliwe_akcje if a['typ'] == 'pas_lufa'), None)
+            if akcja_pas_lufa:
+                print(f"BOT TEST: {bot.nazwa} wymuszony 'pas_lufa'")
+                return 'licytacja', akcja_pas_lufa
+        
+        # 3. Wymuś 'graj_normalnie' w FAZIE DECYZJI PO PASACH (jeśli bot jest grającym)
+        if rozdanie.faza == silnik_gry.FazaGry.FAZA_DECYZJI_PO_PASACH:
+            akcja_normalna = next((a for a in mozliwe_akcje if a['typ'] == 'graj_normalnie'), None)
+            if akcja_normalna:
+                print(f"BOT TEST: {bot.nazwa} wymuszony 'graj_normalnie'")
+                return 'licytacja', akcja_normalna
+
+        # 4. Wymuś 'pytanie' w FAZIE PYTANIA START (jeśli bot jest grającym)
+        if rozdanie.faza == silnik_gry.FazaGry.FAZA_PYTANIA_START:
+            akcja_pytanie = next((a for a in mozliwe_akcje if a['typ'] == 'pytanie'), None)
+            if akcja_pytanie:
+                print(f"BOT TEST: {bot.nazwa} wymuszony 'pytanie'")
+                return 'licytacja', akcja_pytanie
+        
+        # 5. Wymuś 'NORMALNA CZERWIEN' w DEKLARACJI_1 (jeśli bot jest grającym)
+        if rozdanie.faza == silnik_gry.FazaGry.DEKLARACJA_1:
+            akcja_normalna = next((a for a in mozliwe_akcje if a['typ'] == 'deklaracja' and a['kontrakt'] == silnik_gry.Kontrakt.NORMALNA), None)
+            if akcja_normalna:
+                print(f"BOT TEST: {bot.nazwa} wymuszony 'NORMALNA'")
+                akcja_normalna['atut'] = silnik_gry.Kolor.CZERWIEN.name # Upewnijmy się, że atut jest stringiem
+                return 'licytacja', akcja_normalna
+        
+        # Jeśli żaden warunek testowy nie pasuje, wybierz losowo (zapasowe)
+        print(f"BOT TEST: {bot.nazwa} brak reguły, wybór losowy z: {mozliwe_akcje}")
+        wybrana_akcja = random.choice(mozliwe_akcje)
+        if 'atut' in wybrana_akcja and wybrana_akcja['atut']:
+            # Sprawdzamy czy to Enum przed konwersją
+            if isinstance(wybrana_akcja['atut'], silnik_gry.Kolor):
                 wybrana_akcja['atut'] = wybrana_akcja['atut'].name
-            if 'kontrakt' in wybrana_akcja and wybrana_akcja['kontrakt']:
+        if 'kontrakt' in wybrana_akcja and wybrana_akcja['kontrakt']:
+            # Sprawdzamy czy to Enum przed konwersją
+            if isinstance(wybrana_akcja['kontrakt'], silnik_gry.Kontrakt):
                 wybrana_akcja['kontrakt'] = wybrana_akcja['kontrakt'].name
-            return 'licytacja', wybrana_akcja
+        return 'licytacja', wybrana_akcja
+
     return 'brak', None
+# --- KONIEC MODYFIKACJI TESTOWEJ ---
+
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -274,7 +324,7 @@ def pobierz_stan_gry(id_gry: str):
         punkty_w_rozdaniu = rozdanie.punkty_w_rozdaniu
     else:
         punkty_meczu = {g.nazwa: g.punkty_meczu for g in rozdanie.gracze if g}
-        punkty_w_rozdaniu = { rozdanie.grajacy.nazwa: rozdanie.punkty_w_rozdaniu[rozdanie.grajacy.nazwa], "Obrona": sum(rozdanie.punkty_w_rozdaniu[o.nazwa] for o in rozdanie.obroncy)} if rozdanie.grajacy else {}
+        punkty_w_rozdaniu = rozdanie.punkty_w_rozdaniu
     gracz_w_turze_obj = rozdanie.gracze[rozdanie.kolej_gracza_idx] if rozdanie.kolej_gracza_idx is not None and rozdanie.gracze[rozdanie.kolej_gracza_idx] else None
     stan_podstawowy.update({
         "punkty_meczu": punkty_meczu,
@@ -438,12 +488,22 @@ async def uruchom_petle_botow(id_gry: str):
         typ_ruchu, akcja_bota = wybierz_akcje_dla_bota(gracz_w_turze, rozdanie)
         if typ_ruchu == 'karta':
             rozdanie.zagraj_karte(gracz_w_turze, akcja_bota)
-            rozdanie.zagraj_karte(gracz_w_turze, akcja_bota)
         elif typ_ruchu == 'licytacja':
             if 'atut' in akcja_bota and akcja_bota['atut']:
-                akcja_bota['atut'] = silnik_gry.Kolor[akcja_bota['atut']]
+                # Sprawdzamy czy to Enum przed konwersją
+                if isinstance(akcja_bota['atut'], silnik_gry.Kolor):
+                    akcja_bota['atut'] = akcja_bota['atut'].name
+                # Jeśli już jest stringiem (z logiki testowej), przepuszczamy
+                if isinstance(akcja_bota['atut'], str):
+                    akcja_bota['atut'] = silnik_gry.Kolor[akcja_bota['atut']]
+
             if 'kontrakt' in akcja_bota and akcja_bota['kontrakt']:
-                akcja_bota['kontrakt'] = silnik_gry.Kontrakt[akcja_bota['kontrakt']]
+                 # Sprawdzamy czy to Enum przed konwersją
+                if isinstance(akcja_bota['kontrakt'], silnik_gry.Kontrakt):
+                    akcja_bota['kontrakt'] = akcja_bota['kontrakt'].name
+                # Jeśli już jest stringiem (z logiki testowej), przepuszczamy
+                if isinstance(akcja_bota['kontrakt'], str):
+                    akcja_bota['kontrakt'] = silnik_gry.Kontrakt[akcja_bota['kontrakt']]
             rozdanie.wykonaj_akcje(gracz_w_turze, akcja_bota)
         else:
             break

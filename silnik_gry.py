@@ -24,6 +24,13 @@ WARTOSCI_KART = {
     Ranga.DAMA: 3, Ranga.WALET: 2, Ranga.DZIEWIATKA: 0,
 }
 
+KOLEJNOSC_KOLOROW_SORT = {
+    Kolor.CZERWIEN: 1, # Kier
+    Kolor.ZOLADZ: 2,   # Trefl
+    Kolor.DZWONEK: 3,  # Karo
+    Kolor.WINO: 4,     # Pik
+}
+
 @dataclass(frozen=True)
 class Karta:
     ranga: Ranga
@@ -95,7 +102,9 @@ class FazaGry(Enum):
     ROZGRYWKA = auto()
     PODSUMOWANIE_ROZDANIA = auto()
     ZAKONCZONE = auto()
-    FAZA_PYTANIA = auto()
+    # --- ZMIANY TUTAJ ---
+    FAZA_PYTANIA_START = auto() # Zamiast FAZA_PYTANIA
+    FAZA_DECYZJI_PO_PASACH = auto() # Nowa faza
 
 STAWKI_KONTRAKTOW = {
     Kontrakt.NORMALNA: 1, 
@@ -133,6 +142,7 @@ class Rozdanie:
         self.lewa_do_zamkniecia = False
         self.zwyciezca_lewy_tymczasowy: Optional[Gracz] = None
         self.bonus_z_trzech_kart: bool = False
+        self.kolejka_licytacji: list[int] = [] # NOWE: Do zarządzania kolejnością licytacji
     def _sprawdz_koniec_rozdania(self):
         """Sprawdza, czy rozdanie powinno się zakończyć i jeśli tak, dokonuje rozliczenia."""
         
@@ -193,8 +203,9 @@ class Rozdanie:
         if len(self.gracze[0].reka) == 3:
             self.rozdaj_karty(3)
 
+        # --- ZMIANA TUTAJ ---
         if self.kontrakt == Kontrakt.NORMALNA and self.mnoznik_lufy == 1:
-            self.faza = FazaGry.FAZA_PYTANIA
+            self.faza = FazaGry.FAZA_PYTANIA_START # Zamiast FAZA_PYTANIA
         else:
             self.faza = FazaGry.ROZGRYWKA
 
@@ -219,21 +230,41 @@ class Rozdanie:
                 akcje.append({'typ': 'deklaracja', 'kontrakt': kontrakt, 'atut': None})
             return akcje
 
-        if self.faza == FazaGry.FAZA_PYTANIA:
+        # --- ZMIANA TUTAJ ---
+        if self.faza == FazaGry.FAZA_PYTANIA_START:
+            return [
+                {'typ': 'pytanie'},
+                {'typ': 'nie_pytam'},
+            ]
+        
+        # --- NOWA FAZA ---
+        if self.faza == FazaGry.FAZA_DECYZJI_PO_PASACH:
             return [
                 {'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.LEPSZA},
                 {'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.GORSZA},
-                {'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.BEZ_PYTANIA},
-                {'typ': 'pytanie'},
+                {'typ': 'graj_normalnie'},
             ]
         
         if self.faza == FazaGry.LICYTACJA:
-            return [
-                {'typ': 'pas'},
-                {'typ': 'przebicie', 'kontrakt': Kontrakt.LEPSZA},
-                {'typ': 'przebicie', 'kontrakt': Kontrakt.GORSZA},
-                {'typ': 'lufa'},
-            ]
+            akcje = [{'typ': 'pas'}]
+            
+            # Sprawdzamy, co już zostało zadeklarowane
+            has_lepsza = any(o[1]['kontrakt'] == Kontrakt.LEPSZA for o in self.oferty_przebicia)
+            has_gorsza = any(o[1]['kontrakt'] == Kontrakt.GORSZA for o in self.oferty_przebicia)
+
+            # Jeśli nikt nie dał 'Lepsza', można ją dać
+            if not has_lepsza:
+                akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.LEPSZA})
+                # Jeśli nikt nie dał 'Gorsza' (i 'Lepsza'), można ją dać
+                if not has_gorsza:
+                    akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.GORSZA})
+            
+            # Partner grającego nie może dać lufy
+            if self.grajacy and gracz.druzyna != self.grajacy.druzyna:
+                # Dodajemy kontekst (co licytujemy) do akcji 'lufa'
+                akcje.append({'typ': 'lufa', 'kontrakt': self.kontrakt, 'atut': self.atut})
+                
+            return akcje
         
         if self.faza == FazaGry.LUFA:
             punkty_do_konca_a = 66 - self.druzyny[0].punkty_meczu
@@ -309,10 +340,12 @@ class Rozdanie:
                     else:
                         partner_idx = (self.gracze.index(gracz) + 2) % 4
                         self.kolej_gracza_idx = partner_idx
-
-        elif self.faza == FazaGry.FAZA_PYTANIA:
-            if akcja['typ'] == 'zmiana_kontraktu':
-                self._ustaw_kontrakt(self.grajacy, akcja['kontrakt'], self.atut)
+        
+        # --- ZMIANA BLOKU ---
+        elif self.faza == FazaGry.FAZA_PYTANIA_START:
+            if akcja['typ'] == 'nie_pytam':
+                # Traktujemy to jako zmianę kontraktu na BEZ_PYTANIA
+                self._ustaw_kontrakt(self.grajacy, Kontrakt.BEZ_PYTANIA, self.atut)
                 self.pasujacy_gracze.clear()
                 self.lufa_challenger = None
                 self.faza = FazaGry.LUFA
@@ -321,15 +354,35 @@ class Rozdanie:
                     self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
             elif akcja['typ'] == 'pytanie':
                 self.faza = FazaGry.LICYTACJA
-                self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
-                while self.gracze[self.kolej_gracza_idx] == self.grajacy:
+                # --- NOWA KOLEJNOŚĆ LICYTACJI (Oponent1, Oponent2, Partner) ---
+                grajacy_idx = self.gracze.index(self.grajacy)
+                opp1_idx = (grajacy_idx + 1) % 4
+                opp2_idx = (grajacy_idx + 3) % 4
+                partner_idx = (grajacy_idx + 2) % 4
+                self.kolejka_licytacji = [opp1_idx, opp2_idx, partner_idx]
+                self.kolej_gracza_idx = self.kolejka_licytacji.pop(0)
+
+        # --- NOWY BLOK ---
+        elif self.faza == FazaGry.FAZA_DECYZJI_PO_PASACH:
+            if akcja['typ'] == 'zmiana_kontraktu':
+                self._ustaw_kontrakt(self.grajacy, akcja['kontrakt'], None) # Atut=None dla Lepsza/Gorsza
+                self.pasujacy_gracze.clear()
+                self.lufa_challenger = None
+                self.faza = FazaGry.LUFA
+                self.kolej_gracza_idx = (self.gracze.index(self.grajacy) + 1) % 4
+                if self.gracze[self.kolej_gracza_idx] == self.nieaktywny_gracz:
                     self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
+            elif akcja['typ'] == 'graj_normalnie':
+                self.faza = FazaGry.ROZGRYWKA
+                self.kolej_gracza_idx = self.gracze.index(self.grajacy)
+
 
         elif self.faza == FazaGry.LICYTACJA:
             if akcja['typ'] == 'lufa':
                 self.mnoznik_lufy *= 2
                 self.faza = FazaGry.ROZGRYWKA
                 self.kolej_gracza_idx = self.gracze.index(self.grajacy)
+                self.kolejka_licytacji.clear() # Czyścimy kolejkę
                 return
 
             if akcja['typ'] == 'pas':
@@ -337,12 +390,18 @@ class Rozdanie:
             elif akcja['typ'] == 'przebicie':
                 self.oferty_przebicia.append((gracz, akcja))
             
-            self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
-            while self.gracze[self.kolej_gracza_idx] == self.grajacy:
-                 self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
+            # --- ZMIENIONA LOGIKA KOLEJKI ---
+            if self.kolejka_licytacji:
+                # Bierzemy następnego gracza z ustalonej kolejki
+                self.kolej_gracza_idx = self.kolejka_licytacji.pop(0)
+            else:
+                # To się wydarzy po decyzji ostatniego gracza (Partnera)
+                # _rozstrzygnij_licytacje_2 zostanie wywołane poniżej
+                pass
             
             liczba_decyzji = len(self.pasujacy_gracze) + len(self.oferty_przebicia)
             if liczba_decyzji == 3:
+                self.kolejka_licytacji.clear() # Czyścimy kolejkę
                 self._rozstrzygnij_licytacje_2()
            
     def rozdaj_karty(self, ilosc: int):
@@ -352,6 +411,9 @@ class Rozdanie:
                 idx = (start_idx + i) % 4
                 karta = self.talia.rozdaj_karte()
                 if karta: self.gracze[idx].reka.append(karta)
+        for gracz in self.gracze:
+            # Sortuj po kolorze (wg słownika), a następnie po randze (malejąco)
+            gracz.reka.sort(key=lambda k: (KOLEJNOSC_KOLOROW_SORT[k.kolor], -k.ranga.value))
     
     def rozlicz_rozdanie(self) -> tuple[Druzyna, int, int, int]:
         mnoznik_gry = 1
@@ -532,6 +594,8 @@ class Rozdanie:
             return {}
         self._dodaj_log('zagranie_karty', gracz=gracz.nazwa, karta=str(karta)) # Dodajemy log
         punkty_z_meldunku = 0
+        
+        # Poprawka 1 (już istniała): Meldunki działają tylko w Normalnej i Bez Pytania
         if not self.aktualna_lewa and self.kontrakt in [Kontrakt.NORMALNA, Kontrakt.BEZ_PYTANIA]:
             if karta.ranga in [Ranga.KROL, Ranga.DAMA]:
                 szukana_ranga = Ranga.DAMA if karta.ranga == Ranga.KROL else Ranga.KROL
@@ -541,6 +605,13 @@ class Rozdanie:
                         self.punkty_w_rozdaniu[gracz.druzyna.nazwa] += punkty_z_meldunku
                         self.zadeklarowane_meldunki.append((gracz, karta.kolor))
                         self._dodaj_log('meldunek', gracz=gracz.nazwa, punkty=punkty_z_meldunku)
+
+                        # --- POPRAWKA 2: Natychmiastowe sprawdzenie >= 66 ---
+                        if self.punkty_w_rozdaniu[gracz.druzyna.nazwa] >= 66 and not self.rozdanie_zakonczone:
+                            self.rozdanie_zakonczone = True
+                            self.zwyciezca_rozdania = gracz.druzyna
+                            self.powod_zakonczenia = f"osiągnięcie {self.punkty_w_rozdaniu[gracz.druzyna.nazwa]} pkt po meldunku"
+                        # --- KONIEC POPRAWKI 2 ---
 
         gracz.reka.remove(karta)
         self.aktualna_lewa.append((gracz, karta))
@@ -555,9 +626,10 @@ class Rozdanie:
                 self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
             
         return wynik
-        
+    
+    # --- ZMIANA W TEJ FUNKCJI ---
     def _rozstrzygnij_licytacje_2(self):
-        """Wyłania zwycięzcę po zakończeniu fazy przebicia."""
+        """Wyłania zwycięzcę po zakończeniu fazy przebicia LUB przechodzi do decyzji gracza, jeśli wszyscy spasowali."""
         oferty_lepsza = [o for o in self.oferty_przebicia if o[1]['kontrakt'] == Kontrakt.LEPSZA]
         nowy_grajacy, nowa_akcja = (None, None)
         if oferty_lepsza:
@@ -568,7 +640,7 @@ class Rozdanie:
                 nowy_grajacy, nowa_akcja = oferty_gorsza[0]
 
         if nowy_grajacy:
-            
+            # --- Scenariusz 1: Ktoś przebił ---
             self._ustaw_kontrakt(nowy_grajacy, nowa_akcja['kontrakt'], None)
             
             self.pasujacy_gracze.clear()
@@ -578,9 +650,12 @@ class Rozdanie:
             if self.gracze[self.kolej_gracza_idx] == self.nieaktywny_gracz:
                  self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 4
         else:
-            
-            self.faza = FazaGry.ROZGRYWKA
-            self.kolej_gracza_idx = self.gracze.index(self.grajacy)
+            # --- Scenariusz 2: Wszyscy spasowali (brak ofert) ---
+            self.faza = FazaGry.FAZA_DECYZJI_PO_PASACH
+            self.kolej_gracza_idx = self.gracze.index(self.grajacy) # Tura wraca do pierwotnego grającego
+            self.pasujacy_gracze.clear() # Czyścimy listę pasujących
+            self.oferty_przebicia.clear() # Czyścimy listę ofert
+
     def oblicz_aktualna_stawke(self) -> int:
         """Oblicza i zwraca aktualną potencjalną wartość punktową rozdania."""
         if not self.kontrakt:
@@ -649,12 +724,14 @@ class RozdanieTrzyOsoby:
         self.podsumowanie = {}
         self.rozdanie_zakonczone: bool = False
         self.zwyciezca_rozdania_info: dict = {}
+        self.zwyciezca_ostatniej_lewy: Optional[Gracz] = None
         
         self.lewa_do_zamkniecia = False
         self.zwyciezca_lewy_tymczasowy: Optional[Gracz] = None
         
         self.pasujacy_gracze: list[Gracz] = []
         self.oferty_przebicia: list[tuple[Gracz, dict]] = []
+        self.kolejka_licytacji: list[int] = [] # --- NOWE ---
 
 
     def _dodaj_log(self, typ: str, **kwargs):
@@ -684,6 +761,9 @@ class RozdanieTrzyOsoby:
                 idx = (start_idx + i) % 3
                 karta = self.talia.rozdaj_karte()
                 if karta: self.gracze[idx].reka.append(karta)
+        for gracz in self.gracze:
+            # Sortuj po kolorze (wg słownika), a następnie po randze (malejąco)
+            gracz.reka.sort(key=lambda k: (KOLEJNOSC_KOLOROW_SORT[k.kolor], -k.ranga.value))
 
     def get_mozliwe_akcje(self, gracz: Gracz) -> list[dict]:
         if not self.gracze or self.kolej_gracza_idx is None or gracz != self.gracze[self.kolej_gracza_idx]:
@@ -706,15 +786,38 @@ class RozdanieTrzyOsoby:
             elif gracz in self.obroncy and gracz not in self.pasujacy_gracze:
                 return [{'typ': 'lufa'}, {'typ': 'pas_lufa'}]
 
-        if self.faza == FazaGry.FAZA_PYTANIA:
-            return [{'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.LEPSZA},
-                    {'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.GORSZA},
-                    {'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.BEZ_PYTANIA},
-                    {'typ': 'pytanie'}]
+        # --- ZMIANA BLOKU ---
+        if self.faza == FazaGry.FAZA_PYTANIA_START:
+            return [
+                {'typ': 'pytanie'},
+                {'typ': 'nie_pytam'},
+            ]
+        
+        # --- NOWY BLOK ---
+        if self.faza == FazaGry.FAZA_DECYZJI_PO_PASACH:
+            return [
+                {'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.LEPSZA},
+                {'typ': 'zmiana_kontraktu', 'kontrakt': Kontrakt.GORSZA},
+                {'typ': 'graj_normalnie'},
+            ]
         
         if self.faza == FazaGry.LICYTACJA:
-            return [{'typ': 'pas'}, {'typ': 'przebicie', 'kontrakt': Kontrakt.LEPSZA},
-                    {'typ': 'przebicie', 'kontrakt': Kontrakt.GORSZA}, {'typ': 'lufa'}]
+            akcje = [{'typ': 'pas'}]
+
+            # Sprawdzamy, co już zostało zadeklarowane
+            has_lepsza = any(o[1]['kontrakt'] == Kontrakt.LEPSZA for o in self.oferty_przebicia)
+            has_gorsza = any(o[1]['kontrakt'] == Kontrakt.GORSZA for o in self.oferty_przebicia)
+
+            # Jeśli nikt nie dał 'Lepsza', można ją dać
+            if not has_lepsza:
+                akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.LEPSZA})
+                # Jeśli nikt nie dał 'Gorsza' (i 'Lepsza'), można ją dać
+                if not has_gorsza:
+                    akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.GORSZA})
+            
+            # Dodajemy kontekst (co licytujemy) do akcji 'lufa'
+            akcje.append({'typ': 'lufa', 'kontrakt': self.kontrakt, 'atut': self.atut})
+            return akcje
         
         if self.faza == FazaGry.LUFA: # Finalna faza lufy
             if gracz in self.pasujacy_gracze: return []
@@ -789,49 +892,55 @@ class RozdanieTrzyOsoby:
                         self._zakoncz_lufe()
         
 
-        elif self.faza == FazaGry.FAZA_PYTANIA:
-            if akcja['typ'] == 'zmiana_kontraktu':
-                
-                self._ustaw_kontrakt(gracz, akcja['kontrakt'], self.atut)
-                self.faza = FazaGry.LUFA
+        # --- ZMIANA BLOKU ---
+        elif self.faza == FazaGry.FAZA_PYTANIA_START:
+            if akcja['typ'] == 'nie_pytam':
+                self._ustaw_kontrakt(self.grajacy, Kontrakt.BEZ_PYTANIA, self.atut)
                 self.pasujacy_gracze.clear()
-                self.lufa_challenger = None # Resetujemy pretendenta po zmianie kontraktu
+                self.lufa_challenger = None
+                self.faza = FazaGry.LUFA
                 self.kolej_gracza_idx = self.gracze.index(self.obroncy[0]) if self.obroncy else (self.rozdajacy_idx + 1) % 3
-
             elif akcja['typ'] == 'pytanie':
                 self.faza = FazaGry.LICYTACJA
-                self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 3
+                # --- NOWA KOLEJNOŚĆ LICYTACJI (Oponent1, Oponent2) ---
+                grajacy_idx = self.gracze.index(self.grajacy)
+                opp1_idx = (grajacy_idx + 1) % 3
+                opp2_idx = (grajacy_idx + 2) % 3
+                self.kolejka_licytacji = [opp1_idx, opp2_idx]
+                self.kolej_gracza_idx = self.kolejka_licytacji.pop(0)
 
+        # --- NOWY BLOK ---
+        elif self.faza == FazaGry.FAZA_DECYZJI_PO_PASACH:
+            if akcja['typ'] == 'zmiana_kontraktu':
+                self._ustaw_kontrakt(self.grajacy, akcja['kontrakt'], None) 
+                self.pasujacy_gracze.clear()
+                self.lufa_challenger = None
+                self.faza = FazaGry.LUFA
+                self.kolej_gracza_idx = self.gracze.index(self.obroncy[0]) if self.obroncy else (self.rozdajacy_idx + 1) % 3
+            elif akcja['typ'] == 'graj_normalnie':
+                self.faza = FazaGry.ROZGRYWKA
+                self.kolej_gracza_idx = self.gracze.index(self.grajacy)
+
+        # --- ZMIANA BLOKU ---
         elif self.faza == FazaGry.LICYTACJA:
             if akcja['typ'] == 'lufa':
                 self.mnoznik_lufy *= 2; self.ostatni_podbijajacy = gracz
                 self.faza = FazaGry.LUFA
                 self.kolej_gracza_idx = self.gracze.index(self.grajacy)
+                self.kolejka_licytacji.clear() # Czyścimy kolejkę
                 return
             if akcja['typ'] == 'pas': self.pasujacy_gracze.append(gracz)
             elif akcja['typ'] == 'przebicie': self.oferty_przebicia.append((gracz, akcja))
             
-            self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 3
-            if self.gracze[self.kolej_gracza_idx] == self.grajacy:
-                 self.kolej_gracza_idx = (self.kolej_gracza_idx + 1) % 3
+            # --- ZMIENIONA LOGIKA KOLEJKI ---
+            if self.kolejka_licytacji:
+                self.kolej_gracza_idx = self.kolejka_licytacji.pop(0)
+            else:
+                pass # Ostatni gracz (opp2) zadecydował
             
             if len(self.pasujacy_gracze) + len(self.oferty_przebicia) >= 2:
+                self.kolejka_licytacji.clear() # Czyścimy kolejkę
                 self._rozstrzygnij_licytacje()
-
-        elif self.faza == FazaGry.LUFA:
-            if akcja['typ'] in ['lufa', 'kontra']:
-                self.mnoznik_lufy *= 2; self.ostatni_podbijajacy = gracz
-                if gracz == self.grajacy:
-                    aktywny_obronca = next((o for o in self.obroncy if o not in self.pasujacy_gracze), self.obroncy[0])
-                    self.kolej_gracza_idx = self.gracze.index(aktywny_obronca)
-                else: self.kolej_gracza_idx = self.gracze.index(self.grajacy)
-            elif akcja['typ'] == 'pas_lufa':
-                self.pasujacy_gracze.append(gracz)
-                if gracz == self.grajacy or all(o in self.pasujacy_gracze for o in self.obroncy):
-                    self._zakoncz_finalna_lufe()
-                else:
-                    drugi_obronca = next(o for o in self.obroncy if o != gracz)
-                    self.kolej_gracza_idx = self.gracze.index(drugi_obronca)
     
     def _zakoncz_lufe(self):
         """Kończy fazę lufy i decyduje co dalej (dobieranie kart czy rozgrywka)."""
@@ -842,7 +951,7 @@ class RozdanieTrzyOsoby:
             
            # Jeśli kontrakt jest normalny i nikt nie dał lufy, idziemy do fazy pytania
             if self.kontrakt == Kontrakt.NORMALNA and not self.lufa_wstepna:
-                self.faza = FazaGry.FAZA_PYTANIA
+                self.faza = FazaGry.FAZA_PYTANIA_START # Zmieniono z FAZA_PYTANIA
                 self.kolej_gracza_idx = self.gracze.index(self.grajacy)
             else:
                 # W każdym innym przypadku (gra specjalna LUB padła lufa) przechodzimy do rozgrywki
@@ -856,6 +965,7 @@ class RozdanieTrzyOsoby:
             self.faza = FazaGry.ROZGRYWKA
             self.kolej_gracza_idx = self.gracze.index(self.grajacy)
 
+    # --- ZMIANA W TEJ FUNKCJI ---
     def _rozstrzygnij_licytacje(self):
         oferty_lepsza = [o for o in self.oferty_przebicia if o[1]['kontrakt'] == Kontrakt.LEPSZA]
         nowy_grajacy, nowa_akcja = (None, None)
@@ -863,14 +973,29 @@ class RozdanieTrzyOsoby:
         else:
             oferty_gorsza = [o for o in self.oferty_przebicia if o[1]['kontrakt'] == Kontrakt.GORSZA]
             if oferty_gorsza: nowy_grajacy, nowa_akcja = oferty_gorsza[0]
+        
         if nowy_grajacy:
+            # --- Scenariusz 1: Ktoś przebił ---
             self._ustaw_kontrakt(nowy_grajacy, nowa_akcja['kontrakt'], None)
-            if len(nowy_grajacy.reka) == 8:
-                self.bonus_z_trzech_kart = True
-                self._dodaj_log('bonus', gracz=nowy_grajacy.nazwa, opis="Z 8 kart (x2)")
-        self.faza = FazaGry.LUFA
-        self.pasujacy_gracze.clear()
-        self.kolej_gracza_idx = self.gracze.index(self.obroncy[0]) if self.obroncy else (self.rozdajacy_idx + 1) % 3
+            
+            # --- POPRAWKA: USUNIĘCIE BŁĘDNEGO PRZYZNAWANIA BONUSU ---
+            # Ten blok kodu błędnie przyznawał bonus za przebicie z 8 kartami.
+            # if len(nowy_grajacy.reka) == 8: # Bonus za 8 kart
+            #     self.bonus_z_trzech_kart = True 
+            #     self._dodaj_log('bonus', gracz=nowy_grajacy.nazwa, opis="Z 8 kart (x2)")
+            # --- KONIEC POPRAWKI ---
+            
+            self.faza = FazaGry.LUFA
+            self.pasujacy_gracze.clear()
+            self.lufa_challenger = None
+            self.kolej_gracza_idx = self.gracze.index(self.obroncy[0]) if self.obroncy else (self.rozdajacy_idx + 1) % 3
+
+        else:
+            # --- Scenariusz 2: Wszyscy (obaj) spasowali (brak ofert) ---
+            self.faza = FazaGry.FAZA_DECYZJI_PO_PASACH
+            self.kolej_gracza_idx = self.gracze.index(self.grajacy) # Tura wraca do pierwotnego grającego
+            self.pasujacy_gracze.clear()
+            self.oferty_przebicia.clear()
         
         
     def _waliduj_ruch(self, gracz: Gracz, karta: Karta) -> bool:
@@ -902,7 +1027,10 @@ class RozdanieTrzyOsoby:
     def zagraj_karte(self, gracz: Gracz, karta: Karta):
         if not self._waliduj_ruch(gracz, karta): return
         self._dodaj_log('zagranie_karty', gracz=gracz.nazwa, karta=str(karta))
-        if not self.aktualna_lewa:
+        
+        # --- POPRAWKA 1: Logika meldunku (3 os.) ---
+        # Kontrakty GORSZA/LEPSZA są wyłączone z meldunków
+        if not self.aktualna_lewa and self.kontrakt in [Kontrakt.NORMALNA, Kontrakt.BEZ_PYTANIA]:
             if karta.ranga in [Ranga.KROL, Ranga.DAMA]:
                 szukana_ranga = Ranga.DAMA if karta.ranga == Ranga.KROL else Ranga.KROL
                 if any(k.ranga == szukana_ranga and k.kolor == karta.kolor for k in gracz.reka):
@@ -911,6 +1039,17 @@ class RozdanieTrzyOsoby:
                         self.punkty_w_rozdaniu[gracz.nazwa] += punkty
                         self.zadeklarowane_meldunki.append((gracz, karta.kolor))
                         self._dodaj_log('meldunek', gracz=gracz.nazwa, punkty=punkty)
+
+                        # --- POPRAWKA 2: Natychmiastowe sprawdzenie >= 66 (3 os.) ---
+                        if self.punkty_w_rozdaniu[gracz.nazwa] >= 66 and not self.rozdanie_zakonczone:
+                            self.rozdanie_zakonczone = True
+                            if gracz == self.grajacy:
+                                self.zwyciezca_rozdania_info = {'wygrani': [self.grajacy], 'przegrani': self.obroncy, 'powod': f"osiągnięcie {self.punkty_w_rozdaniu[gracz.nazwa]} pkt po meldunku"}
+                            else: # Obrońca meldował i wygrał
+                                self.zwyciezca_rozdania_info = {'wygrani': self.obroncy, 'przegrani': [self.grajacy], 'powod': f"osiągnięcie {self.punkty_w_rozdaniu[gracz.nazwa]} pkt po meldunku obrońcy"}
+                        # --- KONIEC POPRAWKI 2 ---
+        # --- KONIEC POPRAWKI 1 ---
+                        
         gracz.reka.remove(karta)
         self.aktualna_lewa.append((gracz, karta))
         if len(self.aktualna_lewa) == 3:
@@ -947,6 +1086,8 @@ class RozdanieTrzyOsoby:
         self._dodaj_log('koniec_lewy', zwyciezca=zwyciezca.nazwa, punkty=punkty_w_lewie, karty=[str(k[1]) for k in self.aktualna_lewa])
         self.punkty_w_rozdaniu[zwyciezca.nazwa] += punkty_w_lewie
         zwyciezca.wygrane_karty.extend([karta for _, karta in self.aktualna_lewa])
+        if sum(len(g.wygrane_karty) for g in self.gracze) == 24:
+            self.zwyciezca_ostatniej_lewy = zwyciezca
         self.aktualna_lewa.clear()
         self.lewa_do_zamkniecia = False
         self.zwyciezca_lewy_tymczasowy = None
@@ -962,26 +1103,50 @@ class RozdanieTrzyOsoby:
             return
 
         if self.grajacy and not self.rozdanie_zakonczone:
+            for obronca in self.obroncy:
+                punkty_obroncy = self.punkty_w_rozdaniu.get(obronca.nazwa, 0)
+                if self.kontrakt in [Kontrakt.NORMALNA, Kontrakt.BEZ_PYTANIA] and punkty_obroncy >= 66:
+                    self.rozdanie_zakonczone = True
+                    
+                    # BŁĄD BYŁ TUTAJ:
+                    # Poprzednia logika mogła przypisywać wygraną tylko jednemu obrońcy.
+                    # Prawidłowo: Zwycięstwo należy się OBU obrońcom.
+                    self.zwyciezca_rozdania_info = {'wygrani': self.obroncy, 'przegrani': [self.grajacy], 'powod': f"osiągnięcie {punkty_obroncy} punktów przez obronę"}
+                    # --- KONIEC POPRAWKI ---
+                    
+                    break # Wystarczy, że jeden wygra
+            
+            if self.rozdanie_zakonczone: 
+                 if self.faza != FazaGry.PODSUMOWANIE_ROZDANIA:
+                    self.faza = FazaGry.PODSUMOWANIE_ROZDANIA
+                    self.rozlicz_rozdanie()
+                 return
 
             punkty_grajacego = self.punkty_w_rozdaniu.get(self.grajacy.nazwa, 0)
             if self.kontrakt in [Kontrakt.NORMALNA, Kontrakt.BEZ_PYTANIA] and punkty_grajacego >= 66:
                 self.rozdanie_zakonczone = True
                 self.zwyciezca_rozdania_info = {'wygrani': [self.grajacy], 'przegrani': self.obroncy, 'powod': f"osiągnięcie {punkty_grajacego} punktów"}
-            punkty_obrony = sum(self.punkty_w_rozdaniu.get(o.nazwa, 0) for o in self.obroncy)
-            if self.kontrakt in [Kontrakt.NORMALNA, Kontrakt.BEZ_PYTANIA] and punkty_obrony >= 66:
-                self.rozdanie_zakonczone = True
-                self.zwyciezca_rozdania_info = {'wygrani': self.obroncy, 'przegrani': [self.grajacy], 'powod': f"osiągnięcie {punkty_obrony} punktów przez obronę"}
 
         if not any(gracz.reka for gracz in self.gracze):
             self.rozdanie_zakonczone = True
             if not self.zwyciezca_rozdania_info:
-                punkty_grajacego = sum(self.punkty_w_rozdaniu[g.nazwa] for g in self.gracze if g == self.grajacy)
-                punkty_obrony = sum(self.punkty_w_rozdaniu[o.nazwa] for o in self.obroncy)
+                punkty_grajacego = self.punkty_w_rozdaniu.get(self.grajacy.nazwa, 0)
+                punkty_obrony = sum(self.punkty_w_rozdaniu.get(o.nazwa, 0) for o in self.obroncy)
+                
                 if self.kontrakt == Kontrakt.GORSZA:
                     self.zwyciezca_rozdania_info = {'wygrani': [self.grajacy], 'przegrani': self.obroncy, 'powod': "nie wzięcie żadnej lewy"}
                 elif self.kontrakt == Kontrakt.LEPSZA:
                      self.zwyciezca_rozdania_info = {'wygrani': [self.grajacy], 'przegrani': self.obroncy, 'powod': "wzięcie wszystkich lew"}
-                elif punkty_grajacego > punkty_obrony:
+                
+
+                elif self.kontrakt == Kontrakt.NORMALNA and self.zwyciezca_ostatniej_lewy:
+                    if self.zwyciezca_ostatniej_lewy == self.grajacy:
+                        self.zwyciezca_rozdania_info = {'wygrani': [self.grajacy], 'przegrani': self.obroncy, 'powod': "wzięcie ostatniej lewy"}
+                    else:
+                        # Wygrywają obaj obrońcy, jeśli jeden z nich wziął ostatnią lewę
+                        self.zwyciezca_rozdania_info = {'wygrani': self.obroncy, 'przegrani': [self.grajacy], 'powod': "wzięcie ostatniej lewy przez obronę"}
+
+                elif punkty_grajacego > punkty_obrony: # Domyślna logika dla np. BEZ_PYTANIA
                     self.zwyciezca_rozdania_info = {'wygrani': [self.grajacy], 'przegrani': self.obroncy, 'powod': "więcej punktów na koniec"}
                 else:
                     self.zwyciezca_rozdania_info = {'wygrani': self.obroncy, 'przegrani': [self.grajacy], 'powod': "mniej punktów na koniec"}

@@ -252,30 +252,62 @@ function aktualizujWidokGry(stanGry) {
         }
     }
 
-    // --- NOWA LOGIKA WYNIKÓW ---
+    // --- ZMODYFIKOWANA LOGIKA WYNIKÓW ---
+    const kontraktTyp = rozdanie.kontrakt?.typ;
+    const infoSrodekEl = document.getElementById('info-srodek');
+
     if (stanGry.max_graczy === 3) {
+        // --- Tryb 3-osobowy ---
         const wynikHtml = Object.entries(stanGry.punkty_meczu)
             .map(([nazwa, pkt]) => `<strong>${nazwa}:</strong> ${pkt}`)
             .join(' / ');
         document.getElementById('info-lewy-rog').innerHTML = `<div class="info-box">Wynik: ${wynikHtml}</div>`;
         
-        let punktyHtml = "";
-        if(rozdanie.gracz_grajacy){
+        let srodekHtml = '';
+        if (kontraktTyp === 'LEPSZA' || kontraktTyp === 'GORSZA') {
+            const iloscLew = rozdanie.rece_graczy[nazwaGracza]?.length || 0;
+            srodekHtml = `Pozostało lew: <strong>${iloscLew}</strong>`;
+        } else if (kontraktTyp === 'BEZ_PYTANIA' && rozdanie.gracz_grajacy) {
             const pktGrajacego = rozdanie.punkty_w_rozdaniu[rozdanie.gracz_grajacy] || 0;
-            const pktObrony = rozdanie.punkty_w_rozdaniu["Obrona"] || 0;
-            punktyHtml = `👑 ${rozdanie.gracz_grajacy}: ${pktGrajacego} vs Obrona: ${pktObrony}`;
+            srodekHtml = `Punkty 👑 ${rozdanie.gracz_grajacy}: <strong>${pktGrajacego}</strong>`;
+        } else { // Normalna lub licytacja
+            let punktyHtml = Object.entries(rozdanie.punkty_w_rozdaniu)
+                .map(([nazwa, pkt]) => {
+                    const ikona = (nazwa === rozdanie.gracz_grajacy) ? '👑 ' : '';
+                    // Używamy .substring(0, 8) aby skrócić nazwy jeśli są za długie
+                    return `${ikona}${nazwa.substring(0, 8)}: ${pkt}`;
+                })
+                .join(' / ');
+            srodekHtml = `Punkty: ${punktyHtml}`;
         }
-        document.getElementById('info-srodek').innerHTML = `<div class="info-box">Punkty: ${punktyHtml}</div>`;
-    } else { // 4 graczy
+        infoSrodekEl.innerHTML = `<div class="info-box">${srodekHtml}</div>`;
+
+    } else { 
+        // --- Tryb 4-osobowy ---
         const nazwaTeam1 = nazwyDruzyn.My;
         const nazwaTeam2 = nazwyDruzyn.Oni;
         const mojePunktyMeczu = stanGry.punkty_meczu[slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2] || 0;
         const ichPunktyMeczu = stanGry.punkty_meczu[slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1] || 0;
         document.getElementById('info-lewy-rog').innerHTML = `<div class="info-box">Wynik: <strong>My ${mojePunktyMeczu} - ${ichPunktyMeczu} Oni</strong></div>`;
-        const mojePunktyRozdania = rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2] || 0;
-        const ichPunktyRozdania = rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1] || 0;
-        document.getElementById('info-srodek').innerHTML = `<div class="info-box">Punkty: My ${mojePunktyRozdania} - ${ichPunktyRozdania} Oni</div>`;
+
+        let srodekHtml = '';
+        if (kontraktTyp === 'LEPSZA' || kontraktTyp === 'GORSZA') {
+            const iloscLew = rozdanie.rece_graczy[nazwaGracza]?.length || 0;
+            srodekHtml = `Pozostało lew: <strong>${iloscLew}</strong>`;
+        } else if (kontraktTyp === 'BEZ_PYTANIA' && rozdanie.gracz_grajacy) {
+            const grajacySlot = stanGry.slots.find(s => s.nazwa === rozdanie.gracz_grajacy);
+            const druzynaGrajacego = grajacySlot.druzyna; // "My" lub "Oni"
+            const nazwaDruzynyGrajacego = nazwyDruzyn[druzynaGrajacego]; // "Waleczne Asy" itp.
+            const pktGrajacego = rozdanie.punkty_w_rozdaniu[nazwaDruzynyGrajacego] || 0;
+            srodekHtml = `Punkty 👑 ${rozdanie.gracz_grajacy}: <strong>${pktGrajacego}</strong>`;
+        } else { // Normalna lub licytacja
+            const mojePunktyRozdania = rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2] || 0;
+            const ichPunktyRozdania = rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1] || 0;
+            srodekHtml = `Punkty: My ${mojePunktyRozdania} - ${ichPunktyRozdania} Oni`;
+        }
+        infoSrodekEl.innerHTML = `<div class="info-box">${srodekHtml}</div>`;
     }
+    // --- KONIEC ZMODYFIKOWANEJ LOGIKI WYNIKÓW ---
 
     document.getElementById('info-prawy-rog').innerHTML = `<div class="info-box">Kontrakt: ${formatujKontrakt(rozdanie.kontrakt)}</div>`;
    const infoStawkaEl = document.getElementById('info-stawka');
@@ -432,7 +464,7 @@ function uruchomEfektyDzwiekowe(nowyStan, staryStan) {
             const akcja = logAkcji.akcja;
             if (akcja.typ === 'pas' || akcja.typ === 'pas_lufa') {
                 odtworzDzwiek('pas');
-            } else if (['deklaracja', 'przebicie', 'lufa', 'kontra', 'zmiana_kontraktu'].includes(akcja.typ)) {
+            } else if (['deklaracja', 'przebicie', 'lufa', 'kontra', 'zmiana_kontraktu', 'pytanie', 'nie_pytam', 'graj_normalnie'].includes(akcja.typ)) {
                 odtworzDzwiek('licytacja');
             }
         }
@@ -545,12 +577,18 @@ function pokazPodsumowanieMeczu(stanGry) {
     modalOverlayEl.classList.remove('hidden');
 }
 
+// --- ZMIANA W TEJ FUNKCJI ---
 function formatujWpisHistorii(log) {
     const gracz = `<strong>${log.gracz}</strong>`;
     switch (log.typ) {
         case 'akcja_licytacyjna': {
             const akcja = log.akcja;
             if (akcja.typ === 'pas' || akcja.typ === 'pas_lufa') return `${gracz} pasuje.`;
+            // NOWE WPISY
+            if (akcja.typ === 'pytanie') return `${gracz} pyta.`;
+            if (akcja.typ === 'nie_pytam') return `${gracz} gra <strong>Bez Pytania</strong>.`;
+            if (akcja.typ === 'graj_normalnie') return `${gracz} gra normalnie.`;
+            // KONIEC NOWYCH WPISÓW
             if (akcja.typ === 'deklaracja') {
                 const kontraktObj = { typ: akcja.kontrakt, atut: akcja.atut };
                 return `${gracz} licytuje: ${formatujKontrakt(kontraktObj)}`;
@@ -620,6 +658,17 @@ function pokazDymekPoOstatniejAkcji(stanGry, pozycje) {
             case 'pas_lufa':
                 tekstDymka = 'Pas';
                 break;
+            // --- NOWE WPISY ---
+            case 'pytanie':
+                tekstDymka = 'Pytam?';
+                break;
+            case 'nie_pytam':
+                tekstDymka = 'Bez Pytania!';
+                break;
+            case 'graj_normalnie':
+                tekstDymka = 'Gramy!';
+                break;
+            // --- KONIEC NOWYCH WPISÓW ---
             case 'do_konca':
                 tekstDymka = 'Do końca!';
                 break;
@@ -654,18 +703,49 @@ function pokazDymekAkcji(pozycja, tekst) {
 function renderujPrzyciskiLicytacji(akcje) {
     const kontener = document.getElementById('kontener-akcji');
     kontener.innerHTML = '';
+    
+    // --- POPRAWKA: Zmieniona logika grupowania ---
     const grupy = akcje.reduce((acc, akcja) => {
-        const klucz = akcja.kontrakt || akcja.typ;
+        let klucz;
+        if (akcja.typ === 'przebicie') {
+            klucz = akcja.kontrakt; // 'LEPSZA' lub 'GORSZA'
+        } else if (akcja.typ === 'deklaracja') {
+            klucz = akcja.kontrakt; // 'NORMALNA', 'BEZ_PYTANIA', etc.
+        } else {
+            klucz = akcja.typ; // 'pas', 'lufa', 'pytanie', etc.
+        }
+
         if (!acc[klucz]) acc[klucz] = [];
         acc[klucz].push(akcja);
         return acc;
     }, {});
+    // --- KONIEC POPRAWKI GRUPOWANIA ---
+
     for (const [nazwaGrupy, akcjeWGrupie] of Object.entries(grupy)) {
         const btn = document.createElement('button');
-        btn.textContent = nazwaGrupy;
-        if (akcjeWGrupie.length === 1 && !akcjeWGrupie[0].atut) {
+        
+        // --- POPRAWKA: Specjalne renderowanie przycisku "Lufa" ---
+        if (nazwaGrupy === 'lufa') {
+            const kontekst = akcjeWGrupie[0];
+            // Sprawdzamy, czy silnik podał kontekst (dla fazy LICYTACJA)
+            if (kontekst.kontrakt && kontekst.atut) {
+                const kontraktStr = formatujKontrakt({ typ: kontekst.kontrakt, atut: kontekst.atut });
+                btn.innerHTML = `Lufa (na ${kontraktStr})`;
+            } else {
+                // Zachowanie domyślne dla starych faz (np. Lufa wstępna)
+                btn.textContent = "Lufa";
+            }
+            btn.onclick = () => wyslijAkcjeGry(akcjeWGrupie[0]);
+        } 
+        // --- KONIEC POPRAWKI DLA LUFY ---
+        
+        else if (akcjeWGrupie.length === 1 && !akcjeWGrupie[0].atut) {
+            // Dla 'pas', 'LEPSZA', 'GORSZA'
+            btn.textContent = nazwaGrupy;
             btn.onclick = () => wyslijAkcjeGry(akcjeWGrupie[0]);
         } else {
+            // Dla 'NORMALNA', 'BEZ_PYTANIA' (grupowanie kolorów)
+            btn.textContent = nazwaGrupy;
             btn.onclick = () => {
                 kontener.innerHTML = '';
                 akcjeWGrupie.forEach(akcjaKoloru => {
