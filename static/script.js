@@ -616,6 +616,15 @@ function aktualizujWidokGry(stanGry) {
     if (rozdanie.faza === 'PODSUMOWANIE_ROZDANIA' && rozdanie.podsumowanie) {
         pokazPodsumowanieRozdania(stanGry);
     }
+    else if (podsumowanieRozdaniaEl && !podsumowanieRozdaniaEl.classList.contains('hidden')) {
+         // Ukryj tylko modal podsumowania, niekoniecznie cały overlay (np. jeśli ustawienia są otwarte)
+         podsumowanieRozdaniaEl.classList.add('hidden');
+         // Jeśli w overlay'u nie ma już żadnych widocznych paneli, ukryj go
+         if (modalOverlayEl && !modalOverlayEl.querySelector('.panel:not(.hidden)')) {
+             modalOverlayEl.classList.add('hidden');
+         }
+         console.log("DEBUG: Ukryto modal podsumowania rozdania, bo faza gry to:", rozdanie.faza); // Log
+    }
 
     // --- Jeśli lewa ma być zamknięta, wyślij akcję finalizacji po chwili ---
     if (rozdanie.lewa_do_zamkniecia) {
@@ -624,7 +633,6 @@ function aktualizujWidokGry(stanGry) {
 
     // --- Renderowanie historii partii (lewa górna kolumna) ---
     if (partiaHistoriaListaEl) {
-        console.log("Renderowanie historii partii:", stanGry.historia_partii); // DEBUG LOG
         partiaHistoriaListaEl.innerHTML = ''; // Wyczyść starą historię partii
         (stanGry.historia_partii || []).forEach(wpis => {
             const p = document.createElement('p');
