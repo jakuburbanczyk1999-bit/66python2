@@ -14,19 +14,10 @@
         <label for="nazwa-gracza-input">Twoja wyswietlana nazwa:</label>
         <input type="text" id="nazwa-gracza-input" maxlength="15" placeholder="Wpisz swoją nazwę...">
     </div>
-    
     <div class="tryby-gry-kontener">
-        <div class="tryb-kolumna">
-            <h3>Tryb 4-osobowy (2v2)</h3>
-            <button id="start-local-btn">Graj Lokalnie z Botami</button>
-            <button id="start-online-btn">Stwórz Lobby Online</button>
-        </div>
-        <div class="tryb-kolumna">
-            <h3>Tryb 3-osobowy (FFA)</h3>
-            <button id="start-local-3p-btn">Graj Lokalnie z Botami</button>
-            <button id="start-online-3p-btn">Stwórz Lobby Online</button>
-        </div>
+    <button id="open-create-lobby-btn" class="duzy-przycisk">Stwórz Lobby</button>
     </div>
+    
 
     <div id="dolacz-kontener">
         <p>Masz kod do gry? Dołącz tutaj:</p>
@@ -35,6 +26,30 @@
         <p id="blad-lobby" class="hidden"></p>
     </div>
     <a href="/zasady.html" id="zasady-btn">Zasady Gry</a>
+</div>
+<div id="modal-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999;"></div>
+
+<div id="modal-stworz-lobby" class="panel hidden" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
+    <h2>Ustawienia Lobby</h2>
+
+    <div class="setting-group" style="text-align: left; margin-bottom: 15px;">
+        <label for="tryb-gry-select" style="display: block; margin-bottom: 5px;">Tryb Gry:</label>
+        <select id="tryb-gry-select" style="width: 100%; padding: 8px; font-size: 1em;">
+            <option value="4p">4-osobowy (2v2)</option>
+            <option value="3p">3-osobowy (FFA)</option>
+        </select>
+    </div>
+
+    <div class="setting-group" style="text-align: left; margin-bottom: 20px;">
+        <label for="tryb-lobby-select" style="display: block; margin-bottom: 5px;">Typ Lobby:</label>
+        <select id="tryb-lobby-select" style="width: 100%; padding: 8px; font-size: 1em;">
+            <option value="online">Online</option>
+            <option value="lokalna">Lokalnie z Botami</option>
+        </select>
+    </div>
+
+    <button id="create-lobby-btn" style="width: 60%;">Stwórz</button>
+    <button id="cancel-create-lobby-btn" style="width: 30%; background-color: #6c757d;">Anuluj</button>
 </div>
 
     <script src="/static/start.js"></script>

@@ -18,6 +18,11 @@ import boty  # Import modułu botów
 class LocalGameRequest(BaseModel):
     nazwa_gracza: str
 
+class CreateGameRequest(BaseModel):
+    nazwa_gracza: str
+    tryb_gry: str # '4p' lub '3p'
+    tryb_lobby: str # 'online' lub 'lokalna'
+
 # --- Aplikacja FastAPI ---
 app = FastAPI()
 mcts_bot = boty.MCTS_Bot()  # Globalna instancja bota MCTS
@@ -174,111 +179,96 @@ def read_rules_page():
 
 # --- Endpointy Tworzenia Gier ---
 
-@app.post("/gra/nowa")
-def stworz_nowa_gre():
-    """Tworzy nową grę online dla 4 graczy."""
+@app.post("/gra/stworz")
+def stworz_gre(request: CreateGameRequest):
+    """Tworzy nową grę (lokalną lub online) na podstawie opcji."""
     id_gry = generuj_krotki_id()
-    nazwy = random.sample(NAZWY_DRUZYN, 2)
-    nazwy_mapa = {"My": nazwy[0], "Oni": nazwy[1]}
-    gry[id_gry] = {
-        "id_gry": id_gry, "status_partii": "LOBBY", "host": None,
-        "tryb_gry": "online", "max_graczy": 4, "nazwy_druzyn": nazwy_mapa,
-        "slots": [
-            {"slot_id": 0, "nazwa": None, "typ": "pusty", "druzyna": "My"},
-            {"slot_id": 1, "nazwa": None, "typ": "pusty", "druzyna": "Oni"},
-            {"slot_id": 2, "nazwa": None, "typ": "pusty", "druzyna": "My"},
-            {"slot_id": 3, "nazwa": None, "typ": "pusty", "druzyna": "Oni"},
-        ],
+    nazwa_gracza = request.nazwa_gracza
+
+    partia = {
+        "id_gry": id_gry,
+        "status_partii": "LOBBY",
+        "host": nazwa_gracza,
+        "tryb_gry": request.tryb_lobby, # 'online' lub 'lokalna'
+        "max_graczy": 4 if request.tryb_gry == '4p' else 3,
         "gracze_engine": [], "druzyny_engine": [], "aktualne_rozdanie": None,
         "numer_rozdania": 1, "historia_partii": [],
-        "pelna_historia": [], "punkty_meczu": {nazwy_mapa["My"]: 0, nazwy_mapa["Oni"]: 0},
-        "kicked_players": [], "gracze_gotowi": [], 'aktualna_ocena': None
+        "pelna_historia": [], "kicked_players": [], "gracze_gotowi": [],
+        'aktualna_ocena': None,
+        # Zapisujemy nowe opcje na później
+        "opcje": {
+            "tryb_gry": request.tryb_gry, # '4p' / '3p'
+            "publiczna": True, # Domyślnie publiczna
+            "haslo": None
+        }
     }
-    return {"id_gry": id_gry}
 
-@app.post("/gra/nowa/trzyosoby")
-def stworz_gre_trzyosobowa():
-    """Tworzy nową grę online dla 3 graczy."""
-    id_gry = generuj_krotki_id()
-    gry[id_gry] = {
-        "id_gry": id_gry, "status_partii": "LOBBY", "host": None,
-        "tryb_gry": "online", "max_graczy": 3,
-        "slots": [
-            {"slot_id": 0, "nazwa": None, "typ": "pusty"},
-            {"slot_id": 1, "nazwa": None, "typ": "pusty"},
-            {"slot_id": 2, "nazwa": None, "typ": "pusty"},
-        ],
-        "gracze_engine": [], "aktualne_rozdanie": None,
-        "numer_rozdania": 1, "historia_partii": [],
-        "pelna_historia": [], "punkty_meczu": {},
-        "kicked_players": [], "gracze_gotowi": [], 'aktualna_ocena': None
-    }
-    return {"id_gry": id_gry}
+    if request.tryb_gry == '4p':
+        nazwy = random.sample(NAZWY_DRUZYN, 2)
+        nazwy_mapa = {"My": nazwy[0], "Oni": nazwy[1]}
+        partia.update({
+            "nazwy_druzyn": nazwy_mapa,
+            "punkty_meczu": {nazwy_mapa["My"]: 0, nazwy_mapa["Oni"]: 0},
+            "slots": [
+                {"slot_id": 0, "nazwa": None, "typ": "pusty", "druzyna": "My"},
+                {"slot_id": 1, "nazwa": None, "typ": "pusty", "druzyna": "Oni"},
+                {"slot_id": 2, "nazwa": None, "typ": "pusty", "druzyna": "My"},
+                {"slot_id": 3, "nazwa": None, "typ": "pusty", "druzyna": "Oni"},
+            ]
+        })
+    else: # 3p
+         partia.update({
+            "punkty_meczu": {},
+            "slots": [
+                {"slot_id": 0, "nazwa": None, "typ": "pusty"},
+                {"slot_id": 1, "nazwa": None, "typ": "pusty"},
+                {"slot_id": 2, "nazwa": None, "typ": "pusty"},
+            ]
+        })
 
-@app.post("/gra/nowa/lokalna")
-def stworz_gre_lokalna(request: LocalGameRequest):
-    """Tworzy nową grę lokalną dla 4 graczy (1 człowiek + 3 boty)."""
-    id_gry = generuj_krotki_id()
-    nazwa_gracza = request.nazwa_gracza
-    slots = [
-        {"slot_id": 0, "nazwa": nazwa_gracza, "typ": "czlowiek", "druzyna": "My"},
-        {"slot_id": 1, "nazwa": "Bot_1", "typ": "bot", "druzyna": "Oni"},
-        {"slot_id": 2, "nazwa": "Bot_2", "typ": "bot", "druzyna": "My"},
-        {"slot_id": 3, "nazwa": "Bot_3", "typ": "bot", "druzyna": "Oni"},
-    ]
-    # Inicjalizuj obiekty silnika gry
-    d_my, d_oni = silnik_gry.Druzyna("My"), silnik_gry.Druzyna("Oni")
-    d_my.przeciwnicy, d_oni.przeciwnicy = d_oni, d_my
-    gracze_tmp = [None] * 4
-    for slot in slots:
-        g = silnik_gry.Gracz(slot["nazwa"])
-        gracze_tmp[slot["slot_id"]] = g
-        (d_my if slot["druzyna"] == "My" else d_oni).dodaj_gracza(g)
+    # Jeśli lobby jest LOKALNE, od razu je wypełnij i wystartuj grę
+    if request.tryb_lobby == 'lokalna':
+        partia["status_partii"] = "W_TRAKCIE"
+        partia["slots"][0].update({"nazwa": nazwa_gracza, "typ": "czlowiek"})
 
-    gry[id_gry] = {
-        "id_gry": id_gry, "status_partii": "W_TRAKCIE", "host": nazwa_gracza, "slots": slots,
-        "tryb_gry": "lokalna", "max_graczy": 4, "nazwy_druzyn": {"My": "My", "Oni": "Oni"},
-        "gracze_engine": gracze_tmp, "druzyny_engine": [d_my, d_oni],
-        "numer_rozdania": 1, "historia_partii": [],
-        "aktualne_rozdanie": None, "pelna_historia": [],
-        "punkty_meczu": {"My": 0, "Oni": 0}, "kicked_players": [], "gracze_gotowi": [],
-        'aktualna_ocena': None
-    }
-    partia = gry[id_gry]
-    # Stwórz i rozpocznij pierwsze rozdanie
-    rozdanie = silnik_gry.Rozdanie(partia["gracze_engine"], partia["druzyny_engine"], 0)
-    rozdanie.rozpocznij_nowe_rozdanie()
-    partia["aktualne_rozdanie"] = rozdanie
-    return {"id_gry": id_gry}
+        if request.tryb_gry == '4p':
+            partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot", "druzyna": "Oni"})
+            partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot", "druzyna": "My"})
+            partia["slots"][3].update({"nazwa": "Bot_3", "typ": "bot", "druzyna": "Oni"})
 
-@app.post("/gra/nowa/lokalna/trzyosoby")
-def stworz_gre_lokalna_trzyosobowa(request: LocalGameRequest):
-    """Tworzy nową grę lokalną dla 3 graczy (1 człowiek + 2 boty)."""
-    id_gry = generuj_krotki_id()
-    nazwa_gracza = request.nazwa_gracza
-    slots = [
-        {"slot_id": 0, "nazwa": nazwa_gracza, "typ": "czlowiek"},
-        {"slot_id": 1, "nazwa": "Bot_1", "typ": "bot"},
-        {"slot_id": 2, "nazwa": "Bot_2", "typ": "bot"},
-    ]
-    gracze_tmp = [None] * 3
-    for slot in slots:
-        g = silnik_gry.Gracz(slot["nazwa"])
-        g.punkty_meczu = 0
-        gracze_tmp[slot["slot_id"]] = g
+            # Inicjalizuj silnik dla 4p
+            d_my, d_oni = silnik_gry.Druzyna(partia["nazwy_druzyn"]["My"]), silnik_gry.Druzyna(partia["nazwy_druzyn"]["Oni"])
+            d_my.przeciwnicy, d_oni.przeciwnicy = d_oni, d_my
+            gracze_tmp = [None] * 4
+            for slot in partia["slots"]:
+                g = silnik_gry.Gracz(slot["nazwa"])
+                gracze_tmp[slot["slot_id"]] = g
+                (d_my if slot["druzyna"] == "My" else d_oni).dodaj_gracza(g)
 
-    gry[id_gry] = {
-        "id_gry": id_gry, "status_partii": "W_TRAKCIE", "host": nazwa_gracza, "slots": slots,
-        "tryb_gry": "lokalna", "max_graczy": 3,
-        "gracze_engine": gracze_tmp, "aktualne_rozdanie": None,
-        "numer_rozdania": 1, "historia_partii": [],
-        "pelna_historia": [], "punkty_meczu": {g.nazwa: 0 for g in gracze_tmp},
-        "kicked_players": [], "gracze_gotowi": [], 'aktualna_ocena': None
-    }
-    partia = gry[id_gry]
-    rozdanie = silnik_gry.RozdanieTrzyOsoby(partia["gracze_engine"], 0)
-    rozdanie.rozpocznij_nowe_rozdanie()
-    partia["aktualne_rozdanie"] = rozdanie
+            partia.update({"gracze_engine": gracze_tmp, "druzyny_engine": [d_my, d_oni]})
+            rozdanie = silnik_gry.Rozdanie(partia["gracze_engine"], partia["druzyny_engine"], 0)
+
+        else: # 3p lokalna
+            partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot"})
+            partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot"})
+
+            # Inicjalizuj silnik dla 3p
+            gracze_tmp = [None] * 3
+            for slot in partia["slots"]:
+                g = silnik_gry.Gracz(slot["nazwa"])
+                g.punkty_meczu = 0
+                gracze_tmp[slot["slot_id"]] = g
+
+            partia.update({"gracze_engine": gracze_tmp, "punkty_meczu": {g.nazwa: 0 for g in gracze_tmp}})
+            rozdanie = silnik_gry.RozdanieTrzyOsoby(partia["gracze_engine"], 0)
+
+        rozdanie.rozpocznij_nowe_rozdanie()
+        partia["aktualne_rozdanie"] = rozdanie
+
+    # Jeśli lobby jest ONLINE, po prostu je stwórz (gracz dołączy przez WS)
+    # (Nie trzeba nic więcej robić, sloty są puste)
+
+    gry[id_gry] = partia
     return {"id_gry": id_gry}
 
 # --- Endpoint Sprawdzania Gry ---

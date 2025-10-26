@@ -1,4 +1,3 @@
-// ZAKTUALIZOWANY PLIK: start.js
 const nazwaGraczaInput = document.getElementById('nazwa-gracza-input');
 
 window.onload = () => {
@@ -18,53 +17,69 @@ function zapiszNazweGracza() {
 
 // --- Logika przycisków ---
 
-// 4-osobowa online
-document.getElementById('start-online-btn').onclick = async () => {
-    zapiszNazweGracza();
-    const response = await fetch('/gra/nowa', { method: 'POST' });
-    const data = await response.json();
-    if (data.id_gry) {
-        window.location.href = `/gra.html?id=${data.id_gry}`;
-    }
+const openCreateLobbyBtn = document.getElementById('open-create-lobby-btn');
+const createLobbyModal = document.getElementById('modal-stworz-lobby');
+const modalBackdrop = document.getElementById('modal-backdrop');
+const cancelCreateLobbyBtn = document.getElementById('cancel-create-lobby-btn');
+const createLobbyBtn = document.getElementById('create-lobby-btn');
+
+// Otwieranie modala
+openCreateLobbyBtn.onclick = () => {
+    createLobbyModal.classList.remove('hidden');
+    modalBackdrop.classList.remove('hidden');
 };
 
-// 4-osobowa lokalna
-document.getElementById('start-local-btn').onclick = async () => {
+// Funkcja do zamykania modala
+function ukryjModalTworzenia() {
+    createLobbyModal.classList.add('hidden');
+    modalBackdrop.classList.add('hidden');
+}
+
+// Zamykanie modala
+cancelCreateLobbyBtn.onclick = ukryjModalTworzenia;
+modalBackdrop.onclick = ukryjModalTworzenia;
+
+// Akcja tworzenia gry
+createLobbyBtn.onclick = async () => {
     zapiszNazweGracza();
     const nazwa = sessionStorage.getItem('nazwaGracza');
-    const response = await fetch('/gra/nowa/lokalna', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nazwa_gracza: nazwa })
-    });
-    const data = await response.json();
-    if (data.id_gry) {
-        window.location.href = `/gra.html?id=${data.id_gry}`;
-    }
-};
-
-// 3-osobowa online
-document.getElementById('start-online-3p-btn').onclick = async () => {
-    zapiszNazweGracza();
-    const response = await fetch('/gra/nowa/trzyosoby', { method: 'POST' });
-    const data = await response.json();
-    if (data.id_gry) {
-        window.location.href = `/gra.html?id=${data.id_gry}`;
-    }
-};
-
-// 3-osobowa lokalna
-document.getElementById('start-local-3p-btn').onclick = async () => {
-    zapiszNazweGracza();
-    const nazwa = sessionStorage.getItem('nazwaGracza');
-    const response = await fetch('/gra/nowa/lokalna/trzyosoby', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nazwa_gracza: nazwa })
-    });
-    const data = await response.json();
-    if (data.id_gry) {
-        window.location.href = `/gra.html?id=${data.id_gry}`;
+    const trybGry = document.getElementById('tryb-gry-select').value; // '4p' or '3p'
+    const trybLobby = document.getElementById('tryb-lobby-select').value; // 'online' or 'lokalna'
+    
+    // Zablokuj przycisk na czas tworzenia
+    createLobbyBtn.disabled = true;
+    createLobbyBtn.textContent = "Tworzenie...";
+    
+    try {
+        const response = await fetch('/gra/stworz', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                nazwa_gracza: nazwa,
+                tryb_gry: trybGry,
+                tryb_lobby: trybLobby
+            })
+        });
+        
+        const data = await response.json();
+        if (data.id_gry) {
+            // Przekieruj do gry
+            window.location.href = `/gra.html?id=${data.id_gry}`;
+        } else {
+            console.error("Nie udało się utworzyć gry", data);
+            bladLobbyEl.textContent = "Błąd serwera podczas tworzenia lobby.";
+            bladLobbyEl.classList.remove('hidden');
+            ukryjModalTworzenia();
+        }
+    } catch (error) {
+        console.error("Błąd sieci:", error);
+        bladLobbyEl.textContent = "Błąd sieci. Nie można połączyć się z serwerem.";
+        bladLobbyEl.classList.remove('hidden');
+        ukryjModalTworzenia();
+    } finally {
+        // Odblokuj przycisk
+        createLobbyBtn.disabled = false;
+        createLobbyBtn.textContent = "Stwórz";
     }
 };
 
