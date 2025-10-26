@@ -221,7 +221,8 @@ function inicjalizujUstawieniaUI() {
  */
 function inicjalizujWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/${idGry}/${nazwaGracza}`;
+    const haslo = sessionStorage.getItem('lobbyHaslo') || '';
+    const wsUrl = `${protocol}//${window.location.host}/ws/${idGry}/${nazwaGracza}?haslo=${encodeURIComponent(haslo)}`;
     socket = new WebSocket(wsUrl);
 
     // Główna funkcja obsługująca wiadomości od serwera
@@ -269,7 +270,17 @@ function inicjalizujWebSocket() {
     socket.onclose = (event) => {
         console.log("Połączenie WebSocket zamknięte.", event.reason);
         // Jeśli jest powód zamknięcia (np. błąd serwera), pokaż go i wróć do menu
-        if (event.reason) { alert(event.reason); window.location.href = "/"; }
+        if (event.reason) {
+            // Sprawdź, czy powodem jest błędne hasło
+            if (event.reason === "Nieprawidłowe hasło.") {
+                alert("Nieprawidłowe hasło."); // Poinformuj użytkownika
+                window.location.href = "/lobby.html"; // Wróć do listy lobby
+            } else {
+                // Dla innych błędów (np. "Gra nie istnieje", "Lobby jest pełne")
+                alert(event.reason);
+                window.location.href = "/"; // Wróć do menu głównego
+            }
+        }
     };
 
     // Obsługa błędów połączenia
@@ -958,7 +969,10 @@ function pokazPodsumowanieMeczu(stanGry) {
     // Dodaj przycisk "Wyjdź do menu"
     const wyjdzBtn = document.createElement('button');
     wyjdzBtn.textContent = 'Wyjdź do menu';
-    wyjdzBtn.onclick = () => { window.location.href = '/'; }; // Wróć do strony startowej
+    wyjdzBtn.onclick = () => { 
+    sessionStorage.removeItem('lobbyHaslo'); // Wyczyść hasło przy wyjściu
+    window.location.href = '/'; 
+    };
     modalPanelEl.appendChild(wyjdzBtn);
 
     // W grze online dodaj przycisk "Powrót do lobby" dla hosta

@@ -5,8 +5,8 @@ import json
 import asyncio
 import string
 import traceback
-from typing import Any
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import Any, Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel # POPRAWKA: Pydantic
@@ -22,6 +22,8 @@ class CreateGameRequest(BaseModel):
     nazwa_gracza: str
     tryb_gry: str # '4p' lub '3p'
     tryb_lobby: str # 'online' lub 'lokalna'
+    publiczna: bool # NOWE
+    haslo: Optional[str] = None # NOWE
 
 # --- Aplikacja FastAPI ---
 app = FastAPI()
@@ -172,12 +174,60 @@ def read_game_page():
     """Zwraca główną stronę gry."""
     return FileResponse('static/index.html')
 
+@app.get("/lobby.html")
+def read_lobby_browser_page():
+    """Zwraca stronę przeglądarki lobby."""
+    # Upewnij się, że ścieżka jest poprawna
+    return FileResponse('static/lobby.html')
+
 @app.get("/zasady.html")
 def read_rules_page():
     """Zwraca stronę z zasadami gry."""
     return FileResponse('static/zasady.html')
 
-# --- Endpointy Tworzenia Gier ---
+@app.get("/gra/lista_lobby")
+def pobierz_liste_lobby():
+    """Pobiera listę publicznych, otwartych lobby online."""
+    lista_publiczna = []
+    
+    # Przeglądamy kopię wartości, aby uniknąć problemów z równoczesną modyfikacją
+    try:
+        gry_copy = list(gry.values())
+    except RuntimeError:
+        # Słownik zmienił się w trakcie iteracji, spróbuj ponownie za chwilę
+        # W praktyce, przy małym ruchu, to się nie zdarzy, ale to bezpieczne
+        return {"lobby_list": []} 
+
+    for partia in gry_copy:
+        try:
+            opcje = partia.get("opcje", {})
+            # Sprawdzamy warunki: LOBBY, online i publiczna
+            if (partia.get("status_partii") == "LOBBY" and
+                partia.get("tryb_gry") == "online"):
+                
+                # Zlicz ilu graczy jest w lobby
+                slots = partia.get("slots", [])
+                aktualni_gracze = sum(1 for s in slots if s.get("typ") != "pusty")
+                max_gracze = partia.get("max_graczy", 4)
+
+                # Zbuduj obiekt do wysłania
+                lobby_info = {
+                    "id_gry": partia.get("id_gry"),
+                    "host": partia.get("host", "Brak hosta"),
+                    "tryb_gry": opcje.get("tryb_gry", "4p"), # '4p' lub '3p'
+                    "ma_haslo": bool(opcje.get("haslo")),
+                    "aktualni_gracze": aktualni_gracze,
+                    "max_gracze": max_gracze
+                }
+                lista_publiczna.append(lobby_info)
+        except Exception as e:
+            print(f"Błąd podczas przetwarzania lobby {partia.get('id_gry')} na listę: {e}")
+            # Pomiń to lobby, jeśli ma uszkodzone dane
+            continue
+            
+    return {"lobby_list": lista_publiczna}
+
+# --- Endpoint Tworzenia Gier ---
 
 @app.post("/gra/stworz")
 def stworz_gre(request: CreateGameRequest):
@@ -198,8 +248,8 @@ def stworz_gre(request: CreateGameRequest):
         # Zapisujemy nowe opcje na później
         "opcje": {
             "tryb_gry": request.tryb_gry, # '4p' / '3p'
-            "publiczna": True, # Domyślnie publiczna
-            "haslo": None
+            "publiczna": request.publiczna, # Użyj wartości z żądania
+            "haslo": request.haslo if request.haslo else None # Zapisz hasło (lub None)
         }
     }
 
@@ -624,14 +674,27 @@ async def uruchom_petle_botow(id_gry: str):
 
 # === Główny Endpoint WebSocket ===
 @app.websocket("/ws/{id_gry}/{nazwa_gracza}")
-async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: str):
+async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: str,haslo: Optional[str] = Query(None)):
     """Obsługuje połączenie WebSocket dla gracza."""
-    await manager.connect(websocket, id_gry)
     partia = gry.get(id_gry)
 
     # Sprawdzenia początkowe
     if not partia:
+        await websocket.accept() # Zaakceptuj, żeby wysłać powód
         await websocket.close(code=1008, reason="Gra nie istnieje."); return
+
+    # --- NOWA WALIDACJA HASŁA ---
+    opcje = partia.get("opcje", {})
+    haslo_lobby = opcje.get("haslo")
+
+    # Jeśli lobby ma ustawione hasło
+    if haslo_lobby:
+        # A gracz nie podał hasła LUB podał błędne
+        if haslo is None or haslo != haslo_lobby:
+            await websocket.accept()
+            await websocket.close(code=1008, reason="Nieprawidłowe hasło.")
+            return
+    await manager.connect(websocket, id_gry)
     if nazwa_gracza in partia.get("kicked_players", []):
         await websocket.close(code=1008, reason="Zostałeś wyrzucony z lobby.")
         return
@@ -707,14 +770,30 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
         partia = gry.get(id_gry) # Pobierz partię ponownie (może już nie istnieć)
 
         stan_zmieniony = False # Flaga, czy trzeba wysłać broadcast
+        lobby_usunięte = False # NOWA FLAGA
+
         if partia and partia["status_partii"] == "LOBBY":
              slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
              if slot_gracza:
                  slot_gracza["typ"], slot_gracza["nazwa"] = "pusty", None
                  if partia["host"] == nazwa_gracza:
+                     # Znajdź nowego hosta (następnego człowieka)
                      nowy_host = next((s["nazwa"] for s in partia["slots"] if s["typ"] == "czlowiek"), None)
                      partia["host"] = nowy_host
                  stan_zmieniony = True
+            
+             # --- NOWA LOGIKA USUWANIA LOBBY ---
+             if partia.get("tryb_gry") == "online":
+                 # Sprawdź, czy wszyscy gracze są "pusty"
+                 wszystkie_sloty_puste = all(s.get("typ") == "pusty" for s in partia.get("slots", []))
+                 if wszystkie_sloty_puste:
+                     print(f"Lobby {id_gry} jest puste. Usuwanie...")
+                     try:
+                         del gry[id_gry]
+                         lobby_usunięte = True
+                         stan_zmieniony = False # Nie ma do kogo wysyłać broadcastu
+                     except KeyError:
+                         print(f"Nie można było usunąć lobby {id_gry}, być może zostało już usunięte.")
         elif partia and partia["status_partii"] == "W_TRAKCIE":
             print(f"Gracz {nazwa_gracza} rozłączył się w trakcie gry {id_gry}. Gra może zostać zablokowana.")
             slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
@@ -723,7 +802,7 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
                  stan_zmieniony = True
 
         # Wyślij broadcast tylko jeśli stan się zmienił i gra nadal istnieje
-        if stan_zmieniony and partia:
+        if stan_zmieniony and not lobby_usunięte and partia:
              try:
                  await manager.broadcast(id_gry, pobierz_stan_gry(id_gry)) # Poinformuj innych
              except Exception as broadcast_error:

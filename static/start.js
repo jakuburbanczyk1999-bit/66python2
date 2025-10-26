@@ -1,4 +1,14 @@
+function zapiszNazweGracza() {
+    let nazwa = nazwaGraczaInput.value.trim();
+    if (!nazwa) {
+        nazwa = `Gracz${Math.floor(Math.random() * 1000)}`;
+        nazwaGraczaInput.value = nazwa; // KROK 2: Zaktualizuj pole, aby użytkownik widział nazwę
+    }
+    sessionStorage.setItem('nazwaGracza', nazwa);
+}
+
 const nazwaGraczaInput = document.getElementById('nazwa-gracza-input');
+nazwaGraczaInput.onchange = zapiszNazweGracza;
 
 window.onload = () => {
     const zapisanaNazwa = sessionStorage.getItem('nazwaGracza');
@@ -7,13 +17,6 @@ window.onload = () => {
     }
 };
 
-function zapiszNazweGracza() {
-    let nazwa = nazwaGraczaInput.value.trim();
-    if (!nazwa) {
-        nazwa = `Gracz${Math.floor(Math.random() * 1000)}`;
-    }
-    sessionStorage.setItem('nazwaGracza', nazwa);
-}
 
 // --- Logika przycisków ---
 
@@ -22,6 +25,15 @@ const createLobbyModal = document.getElementById('modal-stworz-lobby');
 const modalBackdrop = document.getElementById('modal-backdrop');
 const cancelCreateLobbyBtn = document.getElementById('cancel-create-lobby-btn');
 const createLobbyBtn = document.getElementById('create-lobby-btn');
+const trybLobbySelect = document.getElementById('tryb-lobby-select');
+    const hasloKontener = document.getElementById('haslo-kontener');
+
+    trybLobbySelect.onchange = () => {
+        const jestOnline = trybLobbySelect.value === 'online';
+        hasloKontener.classList.toggle('hidden', !jestOnline);
+    };
+    trybLobbySelect.onchange();
+
 
 // Otwieranie modala
 openCreateLobbyBtn.onclick = () => {
@@ -43,8 +55,20 @@ modalBackdrop.onclick = ukryjModalTworzenia;
 createLobbyBtn.onclick = async () => {
     zapiszNazweGracza();
     const nazwa = sessionStorage.getItem('nazwaGracza');
-    const trybGry = document.getElementById('tryb-gry-select').value; // '4p' or '3p'
-    const trybLobby = document.getElementById('tryb-lobby-select').value; // 'online' or 'lokalna'
+    const trybGry = document.getElementById('tryb-gry-select').value;
+    const trybLobby = document.getElementById('tryb-lobby-select').value;
+    let haslo = document.getElementById('haslo-lobby-input').value.trim();
+    const jestPubliczne = !haslo;
+        
+        // Wyczyść hasło, jeśli gra nie jest online
+        if (trybLobby !== 'online') {
+            haslo = null;
+        }
+
+    // Wyczyść hasło, jeśli gra nie jest online lub jest publiczna
+    if (trybLobby !== 'online') {
+        haslo = null;
+    }
     
     // Zablokuj przycisk na czas tworzenia
     createLobbyBtn.disabled = true;
@@ -55,14 +79,23 @@ createLobbyBtn.onclick = async () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                nazwa_gracza: nazwa,
-                tryb_gry: trybGry,
-                tryb_lobby: trybLobby
-            })
+            nazwa_gracza: nazwa,
+            tryb_gry: trybGry,
+            tryb_lobby: trybLobby,
+            publiczna: jestPubliczne, 
+            haslo: haslo ? haslo : null 
+        })
         });
         
         const data = await response.json();
         if (data.id_gry) {
+            
+            if (trybLobby === 'online' && haslo) {
+                sessionStorage.setItem('lobbyHaslo', haslo);
+            } else {
+                sessionStorage.removeItem('lobbyHaslo'); // Upewnij się, że jest czyste
+            }
+
             // Przekieruj do gry
             window.location.href = `/gra.html?id=${data.id_gry}`;
         } else {

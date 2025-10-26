@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Gra w 66 - Przeglądarka Lobby</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" href="/static/icon.png" type="image/png">
+    <style>
+        /* Style specyficzne dla przeglądarki lobby */
+        #ekran-przegladarki-lobby {
+            width: 900px;
+            max-width: 90%;
+            margin: 40px auto;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .naglowek-lobby {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid yellow;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .przycisk-menu {
+            font-size: 1em;
+            padding: 10px 20px;
+            background-color: #6c757d;
+        }
+        .przycisk-menu:hover {
+            background-color: #5a6268;
+        }
+        #lista-lobby-kontener {
+            min-height: 300px;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .wpis-lobby {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 100px 120px;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 1.1em;
+        }
+        .wpis-lobby:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .wpis-lobby-naglowek {
+            font-weight: bold;
+            color: yellow;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ekran-przegladarki-lobby">
+        <div class="naglowek-lobby">
+            <h1>Dostępne Lobby</h1>
+            <div>
+                <button id="odswiez-btn">Odśwież</button>
+                <a href="/" class="przycisk-menu" style="text-decoration: none;">Menu Główne</a>
+            </div>
+        </div>
+
+        <div class="wpis-lobby wpis-lobby-naglowek">
+            <div>Host</div>
+            <div>Tryb Gry</div>
+            <div>Gracze</div>
+            <div>Hasło</div>
+            <div></div> </div>
+
+        <div id="lista-lobby-kontener">
+            <p id="ladowanie-lobby-info">Ładowanie listy lobby...</p>
+        </div>
+    </div>
+
+    <div id="modal-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999;"></div>
+
+    <div id="modal-haslo" class="panel hidden" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 350px;">
+        <h2>Lobby chronione hasłem</h2>
+        <p id="haslo-info-text">Host ustawił hasło dla tego lobby.</p>
+        <input type="text" id="haslo-input" placeholder="Wpisz hasło..." style="width: 90%; margin: 15px 0;">
+        <p id="blad-hasla" class="hidden" style="color: #ff5555; margin-top: 0;"></p>
+        <button id="zatwierdz-haslo-btn" style="width: 50%;">Dołącz</button>
+        <button id="anuluj-haslo-btn" style="width: 40%; background-color: #6c757d;">Anuluj</button>
+    </div>
+
+    <script src="/static/lobby.js"></script>
+</body>
+</html>

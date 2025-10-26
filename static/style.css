@@ -68,6 +68,24 @@ input[type="text"]::placeholder {
     z-index: 1001; /* Upewnij się, że jest nad wszystkim */
 }
 
+.duzy-przycisk {
+    background-color: #4CAF50;
+    color: white;
+    padding: 15px 30px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1.2em;
+    margin: 10px;
+    transition: background-color 0.2s ease;
+    text-decoration: none; /* Usuwa podkreślenie z linku */
+    display: inline-block; /* Traktuje link jak przycisk */
+}
+
+.duzy-przycisk:hover {
+    background-color: #45a049;
+}
+
 /* ==========================================================================
    2. KONTENERY GLOBALNE
    ========================================================================== */
