@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function pobierzLobby() {
         ladowanieInfo.textContent = 'Ładowanie listy lobby...';
         ladowanieInfo.classList.remove('hidden');
-        listaLobbyKontener.innerHTML = ''; // Wyczyść stare wpisy (ale zostaw info)
+        listaLobbyKontener.innerHTML = '';
         listaLobbyKontener.appendChild(ladowanieInfo);
 
         try {
@@ -26,12 +26,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) {
                 throw new Error('Błąd serwera przy pobieraniu lobby');
             }
-            
+
             const data = await response.json();
-            
-            ladowanieInfo.classList.add('hidden'); // Ukryj "ładowanie"
-            listaLobbyKontener.innerHTML = ''; // Wyczyść wszystko
-if (data.lobby_list && data.lobby_list.length > 0) {
+
+            ladowanieInfo.classList.add('hidden');
+            listaLobbyKontener.innerHTML = '';
+
+            if (data.lobby_list && data.lobby_list.length > 0) {
                 data.lobby_list.forEach(lobby => {
                     const wpis = document.createElement('div');
                     wpis.className = 'wpis-lobby';
@@ -39,23 +40,23 @@ if (data.lobby_list && data.lobby_list.length > 0) {
                     const trybGryText = lobby.tryb_gry === '4p' ? '4-osobowy (2v2)' : '3-osobowy (FFA)';
                     const graczeText = `${lobby.aktualni_gracze} / ${lobby.max_gracze}`;
                     const hasloText = lobby.ma_haslo ? 'Tak 🔒' : 'Nie';
-                    
+
                     let statusText = '';
                     let przyciskText = 'Dołącz';
                     let czyMoznaDolaczyc = true;
 
-                    const mojGracz = sessionStorage.getItem('nazwaGracza');
+                    const mojGracz = localStorage.getItem('nazwaGracza'); // Changed
                     const jestemWGrze = lobby.gracze.includes(mojGracz);
 
                     if (lobby.status === 'W_TRAKCIE') {
                         if (jestemWGrze) {
                             statusText = '<strong style="color: #ffc107;">Rozłączono</strong>';
                             przyciskText = 'Dołącz Ponownie';
-                            czyMoznaDolaczyc = true; // Zawsze można spróbować dołączyć ponownie
+                            czyMoznaDolaczyc = true;
                         } else {
                             statusText = '<strong style="color: #ffc107;">W Trakcie</strong>';
                             przyciskText = 'Obserwuj';
-                            czyMoznaDolaczyc = false; // Na razie wyłączamy obserwowanie
+                            czyMoznaDolaczyc = false;
                         }
                     } else if (lobby.aktualni_gracze >= lobby.max_gracze) {
                         statusText = '<strong style="color: #dc3545;">Pełne</strong>';
@@ -66,11 +67,10 @@ if (data.lobby_list && data.lobby_list.length > 0) {
                         przyciskText = 'Dołącz';
                         czyMoznaDolaczyc = true;
                     }
-                    // --- KONIEC NOWEJ LOGIKI ---
-                    
+
                     const dolaczBtn = document.createElement('button');
                     dolaczBtn.textContent = przyciskText;
-                    dolaczBtn.disabled = !czyMoznaDolaczyc; // Wyłącz przycisk, jeśli nie można dołączyć
+                    dolaczBtn.disabled = !czyMoznaDolaczyc;
                     if (czyMoznaDolaczyc) {
                         dolaczBtn.onclick = () => {
                             obsluzDolaczenie(lobby.id_gry, lobby.ma_haslo);
@@ -83,8 +83,8 @@ if (data.lobby_list && data.lobby_list.length > 0) {
                         <div>${graczeText}</div>
                         <div>${hasloText}</div>
                         <div>${statusText}</div> `;
-                    wpis.appendChild(dolaczBtn); // Dodaj przycisk jako element DOM
-                    
+                    wpis.appendChild(dolaczBtn);
+
                     listaLobbyKontener.appendChild(wpis);
                 });
             } else {
@@ -100,28 +100,23 @@ if (data.lobby_list && data.lobby_list.length > 0) {
 
     // Obsługa kliknięcia "Dołącz"
     function obsluzDolaczenie(idGry, maHaslo) {
-        // Zanim dołączymy, musimy zapisać nazwę gracza
-        // Używamy tej samej logiki co w start.js, ale nie mamy tamtego inputu
-        // Zakładamy, że nazwa jest już w sessionStorage z ekranu startowego
-        const nazwaGracza = sessionStorage.getItem('nazwaGracza');
+        const nazwaGracza = localStorage.getItem('nazwaGracza'); // Changed
         if (!nazwaGracza) {
-            // Jeśli ktoś wszedł tu bezpośrednio, odeślij go do menu
             alert("Nie ustawiono nazwy gracza. Wróć do menu głównego.");
             window.location.href = '/';
             return;
         }
-        
+
         if (maHaslo) {
-        lobbyDoDolaczeniaId = idGry;
-        hasloInput.value = '';
-        bladHaslaEl.classList.add('hidden');
-        modalHaslo.classList.remove('hidden');
-        modalBackdrop.classList.remove('hidden');
-    } else {
-        // Dołącz bezpośrednio (publiczne)
-        sessionStorage.removeItem('lobbyHaslo'); // Wyczyść hasło na wszelki wypadek
-        przejdzDoGry(idGry);
-    }
+            lobbyDoDolaczeniaId = idGry;
+            hasloInput.value = '';
+            bladHaslaEl.classList.add('hidden');
+            modalHaslo.classList.remove('hidden');
+            modalBackdrop.classList.remove('hidden');
+        } else {
+            localStorage.removeItem('lobbyHaslo'); // Changed
+            przejdzDoGry(idGry);
+        }
     }
 
     // Funkcja przekierowująca do gry
@@ -137,18 +132,24 @@ if (data.lobby_list && data.lobby_list.length > 0) {
     }
 
     anulujHasloBtn.onclick = ukryjModalHasla;
-    modalBackdrop.onclick = ukryjModalHasla;
+    if (modalBackdrop) { // Added check
+        modalBackdrop.onclick = (e) => {
+             // Close only password modal if clicked on backdrop
+            if (e.target === modalBackdrop && !modalHaslo.classList.contains('hidden')) {
+                ukryjModalHasla();
+            }
+        };
+    }
 
     zatwierdzHasloBtn.onclick = async () => {
-    const idGry = lobbyDoDolaczeniaId;
-    const haslo = hasloInput.value;
-    if (!idGry) return;
+        const idGry = lobbyDoDolaczeniaId;
+        const haslo = hasloInput.value;
+        if (!idGry) return;
 
-    // Zapisz hasło w sesji. Serwer je zweryfikuje przy połączeniu WS.
-    sessionStorage.setItem('lobbyHaslo', haslo);
-    przejdzDoGry(idGry);
-    ukryjModalHasla();
-};
+        localStorage.setItem('lobbyHaslo', haslo); // Changed
+        przejdzDoGry(idGry);
+        ukryjModalHasla();
+    };
 
     // Nasłuchiwacz przycisku odświeżania
     odswiezBtn.onclick = pobierzLobby;

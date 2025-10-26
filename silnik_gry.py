@@ -438,7 +438,6 @@ class Rozdanie:
             for i in range(len(self.gracze)):
                 idx = (start_idx + i) % len(self.gracze)
                 gracz = self.gracze[idx]
-                if gracz == self.nieaktywny_gracz: continue
                 karta = self.talia.rozdaj_karte()
                 if karta and gracz: gracz.reka.append(karta)
         for gracz in self.gracze:

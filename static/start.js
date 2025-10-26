@@ -28,29 +28,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Funkcje (Auth) ---
     async function sprawdzStanZalogowania() { // ZMIENIONO na async
-        const nazwaGracza = sessionStorage.getItem('nazwaGracza');
+        const nazwaGracza = localStorage.getItem('nazwaGracza'); // Changed
         let rejoinGameId = null; // Zresetuj przed sprawdzeniem
 
         if (nazwaGracza) {
-            // Użytkownik JEST zalogowany w sessionStorage - zapytaj serwer o aktywną grę
+            // Użytkownik JEST zalogowany w localStorage - zapytaj serwer o aktywną grę
             try {
                 const response = await fetch(`/check_active_game/${encodeURIComponent(nazwaGracza)}`);
                 if (response.ok) {
                     const data = await response.json();
                     rejoinGameId = data.active_game_id; // Pobierz ID z serwera
-                    // Zaktualizuj sessionStorage
+                    // Zaktualizuj localStorage
                     if (rejoinGameId) {
-                        sessionStorage.setItem('rejoinGameId', rejoinGameId);
+                        localStorage.setItem('rejoinGameId', rejoinGameId); // Changed
                     } else {
-                        sessionStorage.removeItem('rejoinGameId');
+                        localStorage.removeItem('rejoinGameId'); // Changed
                     }
                 } else {
-                    console.error("Błąd podczas sprawdzania aktywnej gry:", response.status);
-                    sessionStorage.removeItem('rejoinGameId'); // Wyczyść na wszelki wypadek
+                     console.error("Błąd podczas sprawdzania aktywnej gry:", response.status);
+                     localStorage.removeItem('rejoinGameId'); // Changed
                 }
             } catch (error) {
                 console.error("Błąd sieci podczas sprawdzania aktywnej gry:", error);
-                sessionStorage.removeItem('rejoinGameId'); // Wyczyść na wszelki wypadek
+                localStorage.removeItem('rejoinGameId'); // Changed
             }
 
             // Aktualizuj UI na podstawie nazwy I wyniku sprawdzenia gry
@@ -81,20 +81,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // ZMIENIONO: Przyjmuje cały obiekt tokenData
     function zapiszZalogowanie(tokenData) {
-        sessionStorage.setItem('nazwaGracza', tokenData.username);
+        localStorage.setItem('nazwaGracza', tokenData.username);
 
-        // Zapisz ID gry do powrotu LUB usuń stare ID
         if (tokenData.active_game_id) {
-            sessionStorage.setItem('rejoinGameId', tokenData.active_game_id);
+            localStorage.setItem('rejoinGameId', tokenData.active_game_id);
         } else {
-            sessionStorage.removeItem('rejoinGameId');
+            localStorage.removeItem('rejoinGameId');
         }
 
-        sprawdzStanZalogowania(); // Zaktualizuj UI
-    }
+        if (tokenData.settings && typeof tokenData.settings === 'object') {
+            // Zapisz każde ustawienie osobno w localStorage
+            for (const [key, value] of Object.entries(tokenData.settings)) {
+                localStorage.setItem(key, value); // Klucze powinny pasować do tych w UserSettings
+            }
+            console.log("Wczytano ustawienia z serwera:", tokenData.settings);
+        } else {
+            console.log("Brak ustawień na serwerze, używane będą lokalne (jeśli istnieją).");
+        }
 
+        sprawdzStanZalogowania();
+    }
     function pokazWyborNazwyGoscia() {
         initialGuestOptions.classList.add('hidden');
         guestNameSelection.classList.remove('hidden');
@@ -167,15 +174,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (loginBtn) loginBtn.onclick = () => obsluzAuthAPI('/login');
     if (registerBtn) registerBtn.onclick = () => obsluzAuthAPI('/register');
     if (logoutBtn) logoutBtn.onclick = () => {
-        sessionStorage.removeItem('nazwaGracza');
-        sessionStorage.removeItem('lobbyHaslo');
-        sessionStorage.removeItem('rejoinGameId'); // Usuń też ID gry do powrotu
+        localStorage.removeItem('nazwaGracza'); // Changed
+        localStorage.removeItem('lobbyHaslo'); // Changed
+        localStorage.removeItem('rejoinGameId'); // Changed
         sprawdzStanZalogowania();
     };
 
     // --- Funkcja pomocnicza (Auth) ---
     function pobierzNazweGracza() {
-        const nazwa = sessionStorage.getItem('nazwaGracza');
+        const nazwa = localStorage.getItem('nazwaGracza'); // Changed
         if (!nazwa) {
             alert("Musisz się zalogować lub wybrać grę jako gość, aby kontynuować.");
             return null;
@@ -219,7 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (cancelCreateLobbyBtn) cancelCreateLobbyBtn.onclick = ukryjModalTworzenia;
     if (modalBackdrop) {
-         // Zamykaj tylko modal tworzenia, nie inne (np. modal hasła z lobby.js)
          modalBackdrop.addEventListener('click', (e) => {
             if (e.target === modalBackdrop && !createLobbyModal.classList.contains('hidden')) {
                 ukryjModalTworzenia();
@@ -251,12 +257,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 const data = await response.json();
                 if (data.id_gry) {
-                    if (trybLobby === 'online' && haslo) sessionStorage.setItem('lobbyHaslo', haslo);
-                    else sessionStorage.removeItem('lobbyHaslo');
+                    if (trybLobby === 'online' && haslo) localStorage.setItem('lobbyHaslo', haslo); // Changed
+                    else localStorage.removeItem('lobbyHaslo'); // Changed
                     window.location.href = `/gra.html?id=${data.id_gry}`;
                 } else {
                     console.error("Nie udało się utworzyć gry", data);
-                    const bladEl = document.getElementById('blad-lobby'); // Zmieniono na blad-lobby
+                    const bladEl = document.getElementById('blad-lobby');
                     if (bladEl) {
                         bladEl.textContent = data.detail || "Błąd serwera.";
                         bladEl.classList.remove('hidden');
@@ -265,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (error) {
                 console.error("Błąd sieci:", error);
-                const bladEl = document.getElementById('blad-lobby'); // Zmieniono na blad-lobby
+                const bladEl = document.getElementById('blad-lobby');
                 if (bladEl) {
                     bladEl.textContent = "Błąd sieci.";
                     bladEl.classList.remove('hidden');
@@ -300,7 +306,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.exists) {
-                // TODO: Sprawdzić hasło przed przekierowaniem
                 window.location.href = `/gra.html?id=${kodGry}`;
             } else {
                 bladLobbyEl.textContent = "Lobby nie istnieje. Sprawdź kod.";
@@ -326,10 +331,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // === LOGIKA POWROTU DO GRY ===
     if (rejoinBtn) {
         rejoinBtn.onclick = () => {
-            const gameId = sessionStorage.getItem('rejoinGameId');
+            const gameId = localStorage.getItem('rejoinGameId'); // Changed
             if (gameId) {
-                // Usuń ID, żeby przycisk zniknął po powrocie
-                // sessionStorage.removeItem('rejoinGameId'); // Można usunąć tutaj lub po udanym połączeniu WS
                 window.location.href = `/gra.html?id=${gameId}`;
             } else {
                 alert("Nie znaleziono ID gry do powrotu.");

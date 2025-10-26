@@ -33,6 +33,7 @@ class Token(BaseModel):
     token_type: str
     username: str
     active_game_id: Optional[str] = None
+    settings: Optional[dict] = None
 
 class CreateGameRequest(BaseModel):
     nazwa_gracza: str
@@ -40,6 +41,12 @@ class CreateGameRequest(BaseModel):
     tryb_lobby: str # 'online' lub 'lokalna'
     publiczna: bool # NOWE
     haslo: Optional[str] = None # NOWE
+
+class UserSettings(BaseModel):
+    czatUkryty: bool
+    historiaUkryta: bool
+    partiaHistoriaUkryta: bool
+    pasekEwaluacjiUkryty: bool
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -278,7 +285,6 @@ async def login_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
             detail="Nieprawidłowa nazwa użytkownika lub hasło."
         )
 
-    # --- NOWE: Sprawdź aktywne gry ---
     active_game_id_found = None
     try:
         gry_copy = list(gry.values()) # Bezpieczna kopia do iteracji
@@ -293,14 +299,23 @@ async def login_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
                     break # Znaleziono grę, przerwij pętlę
     except RuntimeError:
          print("Ostrzeżenie: Słownik gier zmienił się podczas sprawdzania statusu logowania.")
-    # --- KONIEC NOWEGO SPRAWDZANIA ---
+    
+    user_settings = None
+    if user.settings:
+        try:
+            user_settings = json.loads(user.settings)
+        except json.JSONDecodeError:
+            print(f"Błąd dekodowania JSON ustawień dla użytkownika {user.username}")
+            user_settings = None # Użyj domyślnych
+
 
     # 3. Zwróć sukces (i "token" oraz ID gry, jeśli znaleziono)
     return Token(
         access_token=user.username, 
         token_type="bearer", 
         username=user.username,
-        active_game_id=active_game_id_found # <-- DODANE ID GRY
+        active_game_id=active_game_id_found, # <-- DODANE ID GRY
+        settings=user_settings
     )
 
 @app.get("/check_active_game/{username}")
@@ -378,6 +393,37 @@ def pobierz_liste_lobby():
             continue
             
     return {"lobby_list": lista_publiczna}
+
+@app.post("/save_settings/{username}")
+async def save_user_settings(username: str, settings_data: UserSettings, db: AsyncSession = Depends(get_db)):
+    """Zapisuje ustawienia interfejsu użytkownika."""
+
+    # Znajdź użytkownika
+    query = select(User).where(User.username == username)
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Użytkownik nie znaleziony."
+        )
+
+    # Zapisz ustawienia jako JSON string
+    try:
+        settings_json = json.dumps(settings_data.dict())
+        user.settings = settings_json
+        await db.commit()
+        return {"message": "Ustawienia zapisane pomyślnie."}
+    except Exception as e:
+            await db.rollback() # Wycofaj zmiany w razie błędu
+            print(f"!!! KRYTYCZNY BŁĄD podczas zapisywania ustawień dla {username} !!!")
+            import traceback # Upewnij się, że traceback jest zaimportowany na górze pliku
+            traceback.print_exc() # Wydrukuj pełny ślad błędu
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Nie udało się zapisać ustawień z powodu błędu serwera: {type(e).__name__}" # Dodaj typ błędu do komunikatu
+            )
 
 # --- Endpoint Tworzenia Gier ---
 

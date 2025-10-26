@@ -306,7 +306,9 @@ input[type="text"]::placeholder {
 .ekran-gry.partia-historia-ukryta #panel-historii-partii {
     display: none;
 }
-
+.ekran-gry.pasek-ewaluacji-ukryty #pasek-ewaluacji-kontener {
+    display: none;
+}
 /* ==========================================================================
    5. KOMPONENTY EKRANU GRY
    ========================================================================== */
@@ -322,9 +324,16 @@ input[type="text"]::placeholder {
 
 #info-srodek {
     grid-area: info-srodek;
-    align-self: start; /* --- POPRAWKA --- */
-    justify-self: center; /* --- POPRAWKA --- */
-    padding: 10px; /* --- POPRAWKA --- */
+    justify-self: center;
+    padding: 10px;
+    text-align: center;
+}
+
+#info-srodek-tresc {
+    grid-area: info-srodek;
+    justify-self: center;
+    padding: 10px;
+    text-align: center;
 }
 #panel-prawy-kontener {
     grid-area: panel-prawy;
@@ -588,7 +597,8 @@ input[type="text"]::placeholder {
 #gracz-prawy .dymek-akcji {
     bottom: unset;
     top: 50%;
-    right: 100%; /* Po lewej stronie gracza prawego */
+    right: 110%; /* Po lewej stronie gracza prawego */
+    left: auto;
     transform: translate(-10px, -50%);
 }
 
@@ -760,36 +770,66 @@ input[type="text"]::placeholder {
     gap: 120px; /* Mniejszy odstęp między graczami bocznymi w trybie 3-osobowym */
 }
 
-/* --- Pasek Ewaluacji --- */
+/* --- Dodatki do Paska Ewaluacji --- */
+
 #pasek-ewaluacji-kontener {
-    grid-area: info-srodek; /* Umieśćmy go na razie w tym samym obszarze co info */
-    justify-self: center;   /* Wycentruj */
-    align-self: end;        /* Przyklej do dołu obszaru info-srodek */
-    margin-bottom: -5px;     /* Lekkie przesunięcie w dół */
-    width: 300px;           /* Szerokość paska */
-    height: 18px;           /* Wysokość paska */
-    background-color: #555; /* Ciemne tło */
-    border: 1px solid #888;
-    border-radius: 4px;
-    overflow: hidden;       /* Ukryj zawartość wychodzącą poza */
-    position: relative;     /* Dla pozycjonowania wartości */
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); /* Wewnętrzny cień */
+    position: relative; /* Keep this */
+    margin-top: 25px;
+    margin-bottom: 5px;
+    height: 22px;
+    background-color: rgba(85, 85, 85, 0.7);
+    border-radius: 11px;
+    /* overflow: hidden; Temporarily REMOVE or comment out this line */
+    width: 350px;
+    max-width: 550px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 #pasek-ewaluacji-wartosc {
     height: 100%;
-    width: 50%; /* Domyślnie 50% (neutralna ocena) */
-    background-color: #bdbdbd; /* Kolor "wygranej" (jasnoszary) */
-    transition: width 0.3s ease-out; /* Płynne przejście */
-    position: absolute;
-    left: 0;
-    top: 0;
+    background: linear-gradient(to right, #b4b4b4, #e0e0e0);
+    transition: width 0.3s ease-in-out;
+    border-radius: 11px 0 0 11px;
 }
 
-/* Ukryj pasek, jeśli nie ma oceny */
+.pasek-legenda {
+    position: absolute;
+    /* ZMIANA: Pozycjonuj względem góry, nieco nad */
+    top: -15px; /* Adjust this value (negative means above) */
+    /* bottom: 100%; <-- Usuń tę linię */
+    /* margin-bottom: 3px; <-- Usuń tę linię */
+    font-size: 0.8em;
+    color: #ccc; /* Ensure color is visible */
+    white-space: nowrap;
+}
+
+.pasek-legenda-lewa { left: 0; }
+.pasek-legenda-prawa { right: 0; }
+
+.pasek-etykieta {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.8em;
+    color: white; /* Ensure color is visible */
+    text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.6); /* Ensure shadow is appropriate */
+    padding: 0 4px;
+    pointer-events: none;
+    z-index: 2; /* Make sure it's above the value bar (z-index: 1 is often default) */
+}
+
+.pasek-etykieta[style*="left: 50%"] {
+    transform: translate(-50%, -50%);
+}
+/* Rule to hide the bar when no evaluation */
 .ekran-gry.brak-oceny #pasek-ewaluacji-kontener {
     display: none;
 }
+.ekran-gry.pasek-ewaluacji-ukryty #pasek-ewaluacji-kontener {
+    display: none;
+}
+
 /* ==========================================================================
    SEKCJA X: ULEPSZENIA STRONY STARTOWEJ (start.html)
    ========================================================================== */

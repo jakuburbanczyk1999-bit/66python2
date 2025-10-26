@@ -29,11 +29,17 @@
     <div id="info-lewy-rog">
         </div>
     <div id="info-srodek">
-        </div>
-    <div id="info-srodek">
-        </div>
-
-    <div id="pasek-ewaluacji-kontener">       <div id="pasek-ewaluacji-wartosc"></div> </div>
+        <div id="info-srodek-tresc">
+                </div>
+            <div id="pasek-ewaluacji-kontener">
+                <div id="pasek-ewaluacji-wartosc"></div>
+                <div class="pasek-legenda pasek-legenda-lewa">Grający Przegrywa</div>
+                <div class="pasek-legenda pasek-legenda-prawa">Grający Wygrywa</div>
+                <div class="pasek-etykieta" style="left: 0;">-1.0</div>
+                <div class="pasek-etykieta" style="left: 50%; transform: translateX(-50%);">0.0</div>
+                <div class="pasek-etykieta" style="right: 0;">1.0</div>
+            </div>
+            </div>
     <div id="panel-prawy-kontener">
         <div id="kontener-info-prawy-rog">
             <div id="info-prawy-rog">
@@ -137,6 +143,10 @@
                 <div class="setting-option">
                     <input type="checkbox" id="setting-ukryj-historie">
                     <label for="setting-ukryj-historie">Ukryj panel historii (rozdania)</label>
+                </div>
+                <div class="setting-option">
+                    <input type="checkbox" id="setting-ukryj-pasek-ewaluacji">
+                    <label for="setting-ukryj-pasek-ewaluacji">Ukryj pasek ewaluacji</label>
                 </div>
             </div>
 

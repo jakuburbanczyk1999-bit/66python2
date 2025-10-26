@@ -8,9 +8,9 @@ let nazwaGracza = null;
 let socket = null;
 let mojSlotId = null;
 let nazwyDruzyn = { My: "My", Oni: "Oni" };
-let ostatniStanGry = {}; // Przechowuje poprzedni stan gry do porównań (np. dla efektów)
+let ostatniStanGry = {};
 
-// --- Elementy DOM (przypisywane w inicjalizujElementyDOM) ---
+// --- Elementy DOM ---
 let ekranLobbyEl;
 let ekranGryEl;
 let modalOverlayEl;
@@ -26,9 +26,10 @@ let settingUkryjCzat;
 let settingUkryjHistorie;
 let settingUkryjHistoriePartii;
 let partiaHistoriaListaEl;
+let infoSrodekTrescEl;
 
 // --- Konfiguracja ---
-const mapowanieKolorow = { // Mapowanie nazw kolorów na symbole i klasy CSS
+const mapowanieKolorow = {
     'CZERWIEN': { symbol: '♥', klasa: 'kolor-czerwien' },
     'DZWONEK':  { symbol: '♦', klasa: 'kolor-dzwonek' },
     'ZOLADZ':   { symbol: '♣', klasa: 'kolor-zoladz' },
@@ -38,7 +39,7 @@ const mapowanieKolorow = { // Mapowanie nazw kolorów na symbole i klasy CSS
 /* ==========================================================================
    SEKCJA 2: ZARZĄDZANIE DŹWIĘKAMI
    ========================================================================== */
-const dzwieki = { // Obiekty Audio dla różnych zdarzeń w grze
+const dzwieki = {
     zagranieKarty: new Audio('/static/dzwieki/zagranie-karty.mp3'),
     wygranaLewa: new Audio('/static/dzwieki/wygrana-lewa.mp3'),
     licytacja: new Audio('/static/dzwieki/licytacja.mp3'),
@@ -50,7 +51,7 @@ const dzwieki = { // Obiekty Audio dla różnych zdarzeń w grze
 function odtworzDzwiek(nazwaDzwieku) {
     const dzwiek = dzwieki[nazwaDzwieku];
     if (dzwiek) {
-        dzwiek.currentTime = 0; // Resetuj dźwięk, aby można go było odtworzyć ponownie szybko
+        dzwiek.currentTime = 0;
         dzwiek.play().catch(error => console.log(`Nie można odtworzyć dźwięku "${nazwaDzwieku}": ${error}`));
     }
 }
@@ -59,31 +60,24 @@ function odtworzDzwiek(nazwaDzwieku) {
    SEKCJA 3: GŁÓWNA LOGIKA APLIKACJI (INICJALIZACJA I WEBSOCKET)
    ========================================================================== */
 
-// Uruchamia inicjalizację po załadowaniu struktury HTML
 document.addEventListener('DOMContentLoaded', () => {
-    inicjalizujElementyDOM(); // Pobierz referencje do elementów HTML i ustaw nasłuchiwacze
+    inicjalizujElementyDOM();
     const params = new URLSearchParams(window.location.search);
     idGry = params.get('id');
-    nazwaGracza = sessionStorage.getItem('nazwaGracza') || `Gracz${Math.floor(Math.random() * 1000)}`;
-    sessionStorage.setItem('nazwaGracza', nazwaGracza); // Zapisz nazwę (lub wygenerowaną)
-    inicjalizujUstawieniaUI(); // Wczytaj zapisane ustawienia interfejsu (np. ukryte panele)
+    nazwaGracza = localStorage.getItem('nazwaGracza') || `Gosc${Math.floor(Math.random() * 1000)}`; // Changed
+    localStorage.setItem('nazwaGracza', nazwaGracza); // Changed
+    inicjalizujUstawieniaUI();
 
     if (idGry) {
-        inicjalizujWebSocket(); // Jeśli mamy ID gry, połącz się z serwerem
+        inicjalizujWebSocket();
     } else {
-        // Jeśli jesteśmy na gra.html bez ID, wróć do strony startowej
         if (window.location.pathname.includes('gra.html')) {
              window.location.href = "/";
         }
     }
 });
 
-/**
- * Pobiera referencje do wszystkich potrzebnych elementów DOM
- * i ustawia globalne nasłuchiwacze zdarzeń (np. dla przycisków ustawień, czatu).
- */
 function inicjalizujElementyDOM() {
-    // Przypisanie elementów
     ekranLobbyEl = document.getElementById('ekran-lobby');
     ekranGryEl = document.querySelector('.ekran-gry');
     modalOverlayEl = document.getElementById('modal-overlay');
@@ -99,220 +93,185 @@ function inicjalizujElementyDOM() {
     settingUkryjHistorie = document.getElementById('setting-ukryj-historie');
     settingUkryjHistoriePartii = document.getElementById('setting-ukryj-historie-partii');
     partiaHistoriaListaEl = document.getElementById('partia-historia-lista');
+    settingUkryjPasekEwaluacji = document.getElementById('setting-ukryj-pasek-ewaluacji');
+    infoSrodekTrescEl = document.getElementById('info-srodek-tresc');
 
-    // Przypisanie event listenerów
-    // Sprawdzamy, czy elementy istnieją, zanim dodamy listenery
-    if (czatWyslijBtn) {
-        czatWyslijBtn.onclick = wyslijWiadomoscCzat;
-    }
-    if (czatInputEl) {
-        czatInputEl.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') wyslijWiadomoscCzat();
-        });
-    }
-
-    if (settingsBtn) {
-        settingsBtn.addEventListener('click', () => {
-            pokazModal(settingsModalEl);
-        });
-    }
-
-    if (settingsCloseBtn) {
-        settingsCloseBtn.addEventListener('click', () => {
-            ukryjModal();
-        });
-    }
-
-    if (modalOverlayEl) {
-        modalOverlayEl.addEventListener('click', (e) => {
-            // Zamykanie modala ustawień po kliknięciu w tło
-            if (e.target === modalOverlayEl) {
-                if (settingsModalEl && !settingsModalEl.classList.contains('hidden')) {
-                    ukryjModal();
-                }
-            }
-        });
-    }
-
-    // Listenery dla checkboxów w ustawieniach
-    if (settingUkryjCzat) {
-        settingUkryjCzat.addEventListener('change', (e) => {
-            const jestZaznaczone = e.target.checked;
-            if (ekranGryEl) {
-                ekranGryEl.classList.toggle('czat-ukryty', jestZaznaczone);
-                aktualizujUkrycieLewejKolumny(); // Sprawdź, czy ukryć całą lewą kolumnę
-            }
-            localStorage.setItem('czatUkryty', jestZaznaczone); // Zapisz wybór
-        });
-    }
-
-    if (settingUkryjHistorie) {
-        settingUkryjHistorie.addEventListener('change', (e) => {
-            const jestZaznaczone = e.target.checked;
-            if (ekranGryEl) ekranGryEl.classList.toggle('historia-ukryta', jestZaznaczone);
-            localStorage.setItem('historiaUkryta', jestZaznaczone); // Zapisz wybór
-        });
-    }
-    if (settingUkryjHistoriePartii) {
-        settingUkryjHistoriePartii.addEventListener('change', (e) => {
-            const jestZaznaczone = e.target.checked;
-            if (ekranGryEl) {
-                ekranGryEl.classList.toggle('partia-historia-ukryta', jestZaznaczone);
-                aktualizujUkrycieLewejKolumny(); // Sprawdź, czy ukryć całą lewą kolumnę
-            }
-            localStorage.setItem('partiaHistoriaUkryta', jestZaznaczone); // Zapisz wybór
-        });
-    }
+    if (czatWyslijBtn) czatWyslijBtn.onclick = wyslijWiadomoscCzat;
+    if (czatInputEl) czatInputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') wyslijWiadomoscCzat(); });
+    if (settingsBtn) settingsBtn.addEventListener('click', () => pokazModal(settingsModalEl));
+    if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', () => ukryjModal());
+    if (modalOverlayEl) modalOverlayEl.addEventListener('click', (e) => { if (e.target === modalOverlayEl && settingsModalEl && !settingsModalEl.classList.contains('hidden')) ukryjModal(); });
+    if (settingUkryjCzat) settingUkryjCzat.addEventListener('change', (e) => {
+    const jestZaznaczone = e.target.checked;
+    if (ekranGryEl) ekranGryEl.classList.toggle('czat-ukryty', jestZaznaczone);
+        aktualizujUkrycieLewejKolumny();
+        localStorage.setItem('czatUkryty', jestZaznaczone);
+        zapiszUstawieniaNaSerwerze(); // <-- DODAJ WYWOŁANIE
+    });
+    if (settingUkryjHistorie) settingUkryjHistorie.addEventListener('change', (e) => {
+        const jestZaznaczone = e.target.checked;
+        if (ekranGryEl) ekranGryEl.classList.toggle('historia-ukryta', jestZaznaczone);
+        localStorage.setItem('historiaUkryta', jestZaznaczone);
+        zapiszUstawieniaNaSerwerze(); // <-- DODAJ WYWOŁANIE
+    });
+    if (settingUkryjHistoriePartii) settingUkryjHistoriePartii.addEventListener('change', (e) => {
+        const jestZaznaczone = e.target.checked;
+        if (ekranGryEl) ekranGryEl.classList.toggle('partia-historia-ukryta', jestZaznaczone);
+        aktualizujUkrycieLewejKolumny();
+        localStorage.setItem('partiaHistoriaUkryta', jestZaznaczone);
+        zapiszUstawieniaNaSerwerze(); // <-- DODAJ WYWOŁANIE
+    });
+    if (settingUkryjPasekEwaluacji) settingUkryjPasekEwaluacji.addEventListener('change', (e) => {
+        const jestZaznaczone = e.target.checked;
+        if (ekranGryEl) ekranGryEl.classList.toggle('pasek-ewaluacji-ukryty', jestZaznaczone);
+        localStorage.setItem('pasekEwaluacjiUkryty', jestZaznaczone);
+        zapiszUstawieniaNaSerwerze(); // <-- DODAJ WYWOŁANIE
+    });
 }
 
-/**
- * Sprawdza, czy oba lewe panele (historia partii i czat) są ukryte
- * i dodaje/usuwa klasę 'lewa-kolumna-ukryta' do głównego kontenera gry,
- * co pozwala CSS ukryć całą lewą kolumnę siatki.
- */
 function aktualizujUkrycieLewejKolumny() {
     if (!ekranGryEl) return;
     const czatUkryty = ekranGryEl.classList.contains('czat-ukryty');
     const partiaHistoriaUkryta = ekranGryEl.classList.contains('partia-historia-ukryta');
-
-    // Klasa 'lewa-kolumna-ukryta' jest zdefiniowana w CSS
     ekranGryEl.classList.toggle('lewa-kolumna-ukryta', czatUkryty && partiaHistoriaUkryta);
 }
 
-/**
- * Wczytuje zapisane w localStorage ustawienia interfejsu użytkownika
- * (np. które panele były ukryte) i stosuje je do widoku.
- */
 function inicjalizujUstawieniaUI() {
-    // Wczytaj stan ukrycia czatu
     if (ekranGryEl && settingUkryjCzat) {
-        const czatUkryty = localStorage.getItem('czatUkryty') === 'true';
-        if (czatUkryty) {
-            ekranGryEl.classList.add('czat-ukryty');
-        }
+        const czatUkryty = localStorage.getItem('czatUkryty') === 'true'; // Changed
+        if (czatUkryty) ekranGryEl.classList.add('czat-ukryty');
         settingUkryjCzat.checked = czatUkryty;
     }
-
-    // Wczytaj stan ukrycia historii rozdania (prawa kolumna)
     if (ekranGryEl && settingUkryjHistorie) {
-        const historiaUkryta = localStorage.getItem('historiaUkryta') === 'true';
-        if (historiaUkryta) {
-            ekranGryEl.classList.add('historia-ukryta');
-        }
+        const historiaUkryta = localStorage.getItem('historiaUkryta') === 'true'; // Changed
+        if (historiaUkryta) ekranGryEl.classList.add('historia-ukryta');
         settingUkryjHistorie.checked = historiaUkryta;
     }
-
-    // Wczytaj stan ukrycia historii partii (lewa górna)
     if (ekranGryEl && settingUkryjHistoriePartii) {
-        const partiaHistoriaUkryta = localStorage.getItem('partiaHistoriaUkryta') === 'true';
-        if (partiaHistoriaUkryta) {
-            ekranGryEl.classList.add('partia-historia-ukryta');
-        }
+        const partiaHistoriaUkryta = localStorage.getItem('partiaHistoriaUkryta') === 'true'; // Changed
+        if (partiaHistoriaUkryta) ekranGryEl.classList.add('partia-historia-ukryta');
         settingUkryjHistoriePartii.checked = partiaHistoriaUkryta;
     }
-    // Zaktualizuj stan ukrycia całej lewej kolumny przy ładowaniu
+    if (ekranGryEl && settingUkryjPasekEwaluacji) {
+        const pasekUkryty = localStorage.getItem('pasekEwaluacjiUkryty') === 'true';
+        if (pasekUkryty) ekranGryEl.classList.add('pasek-ewaluacji-ukryty');
+        settingUkryjPasekEwaluacji.checked = pasekUkryty;
+    }
     aktualizujUkrycieLewejKolumny();
 }
 
-
-/**
- * Nawiązuje połączenie WebSocket z serwerem gry
- * i ustawia obsługę przychodzących wiadomości.
- */
 function inicjalizujWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const haslo = sessionStorage.getItem('lobbyHaslo') || '';
+    const haslo = localStorage.getItem('lobbyHaslo') || ''; // Changed
     const wsUrl = `${protocol}//${window.location.host}/ws/${idGry}/${nazwaGracza}?haslo=${encodeURIComponent(haslo)}`;
     socket = new WebSocket(wsUrl);
 
-    // Główna funkcja obsługująca wiadomości od serwera
     socket.onmessage = function(event) {
-        const stan = JSON.parse(event.data); // Parsuj JSON otrzymany od serwera
+        try { // Added try-catch for safety
+            const stan = JSON.parse(event.data);
 
-        // Obsługa wiadomości czatu
-        if (stan.typ_wiadomosci === 'czat') {
-            dodajWiadomoscDoCzatu(stan.gracz, stan.tresc);
-            return; // Zakończ obsługę tej wiadomości
+            if (stan.typ_wiadomosci === 'czat') {
+                dodajWiadomoscDoCzatu(stan.gracz, stan.tresc);
+                return;
+            }
+            if (stan.nazwy_druzyn) nazwyDruzyn = stan.nazwy_druzyn;
+
+            synchronizujDaneGracza(stan);
+
+            if (stan.status_partii !== "LOBBY") {
+                uruchomEfektyWizualne(stan, ostatniStanGry);
+            }
+
+            if (stan.status_partii === "LOBBY") {
+                if (ekranGryEl) ekranGryEl.classList.add('hidden');
+                if (ekranLobbyEl) ekranLobbyEl.classList.remove('hidden');
+                if (modalOverlayEl) modalOverlayEl.classList.add('hidden');
+                renderujLobby(stan);
+            } else {
+                if (ekranLobbyEl) ekranLobbyEl.classList.add('hidden');
+                if (ekranGryEl) ekranGryEl.classList.remove('hidden');
+                aktualizujWidokGry(stan);
+            }
+            ostatniStanGry = JSON.parse(JSON.stringify(stan));
+        } catch (error) {
+            console.error("Błąd przetwarzania wiadomości WebSocket:", error, event.data);
         }
-
-        // Aktualizacja nazw drużyn, jeśli serwer je przysłał
-        if (stan.nazwy_druzyn) {
-            nazwyDruzyn = stan.nazwy_druzyn;
-        }
-
-        // Zsynchronizuj ID slotu gracza
-        synchronizujDaneGracza(stan);
-
-        // Uruchom efekty wizualne i dźwiękowe porównując NOWY stan ze STARYM
-        if (stan.status_partii !== "LOBBY") {
-            // Przekazujemy kopie obiektów stanu, aby uniknąć problemów z referencjami
-            uruchomEfektyWizualne(stan, ostatniStanGry);
-        }
-
-        // Przełącz widok między lobby a grą i zaktualizuj odpowiedni widok
-        if (stan.status_partii === "LOBBY") {
-            if (ekranGryEl) ekranGryEl.classList.add('hidden');
-            if (ekranLobbyEl) ekranLobbyEl.classList.remove('hidden');
-            if (modalOverlayEl) modalOverlayEl.classList.add('hidden'); // Ukryj modale
-            renderujLobby(stan);
-        } else { // Status W_TRAKCIE lub ZAKONCZONA
-            if (ekranLobbyEl) ekranLobbyEl.classList.add('hidden');
-            if (ekranGryEl) ekranGryEl.classList.remove('hidden');
-            aktualizujWidokGry(stan); // Ta funkcja pokaże też podsumowanie meczu i dymki
-        }
-
-        // Zapisz obecny stan jako "ostatni" na potrzeby następnej aktualizacji
-        // Ważne: Tworzymy głęboką kopię, aby uniknąć modyfikacji poprzedniego stanu przez referencję
-        ostatniStanGry = JSON.parse(JSON.stringify(stan));
     };
 
-    // Obsługa zamknięcia połączenia
     socket.onclose = (event) => {
         console.log("Połączenie WebSocket zamknięte.", event.reason);
-        // Jeśli jest powód zamknięcia (np. błąd serwera), pokaż go i wróć do menu
         if (event.reason) {
-            // Sprawdź, czy powodem jest błędne hasło
             if (event.reason === "Nieprawidłowe hasło.") {
-                alert("Nieprawidłowe hasło."); // Poinformuj użytkownika
-                window.location.href = "/lobby.html"; // Wróć do listy lobby
+                alert("Nieprawidłowe hasło.");
+                window.location.href = "/lobby.html";
             } else {
-                // Dla innych błędów (np. "Gra nie istnieje", "Lobby jest pełne")
                 alert(event.reason);
-                window.location.href = "/"; // Wróć do menu głównego
+                window.location.href = "/";
             }
         }
+        // Optionally add a reconnect mechanism here if needed
     };
 
-    // Obsługa błędów połączenia
     socket.onerror = (error) => console.error("Błąd WebSocket:", error);
 }
 
-/**
- * Aktualizuje globalną zmienną `mojSlotId` na podstawie danych ze stanu gry.
- */
 function synchronizujDaneGracza(stan) {
     if (!stan.slots) return;
     const mojObecnySlot = stan.slots.find(s => s.nazwa === nazwaGracza);
-    if (mojObecnySlot) { mojSlotId = mojObecnySlot.slot_id; }
+    if (mojObecnySlot) mojSlotId = mojObecnySlot.slot_id;
+    else mojSlotId = null; // Handle case where player might be kicked
 }
 
-/**
- * Wysyła akcję gracza dotyczącą lobby (np. dołączenie do slotu, start gry).
- */
 function wyslijAkcjeLobby(typAkcji, dane = {}) {
     if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ gracz: nazwaGracza, akcja_lobby: typAkcji, ...dane }));
-    }
+    } else console.error("WebSocket nie jest otwarty do wysłania akcji lobby.");
 }
 
-/**
- * Wysyła akcję gracza podczas gry (np. zagranie karty, licytacja, przejście do następnego rozdania).
- */
 function wyslijAkcjeGry(akcja) {
     if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ gracz: nazwaGracza, akcja: akcja }));
+    } else console.error("WebSocket nie jest otwarty do wysłania akcji gry.");
+}
+
+async function zapiszUstawieniaNaSerwerze() {
+    const aktualnyGracz = localStorage.getItem('nazwaGracza');
+    // Nie zapisuj ustawień dla gości
+    if (!aktualnyGracz || aktualnyGracz.toLowerCase().startsWith('gosc')) {
+         console.log("Ustawienia nie są zapisywane dla gości.");
+         return;
+    }
+
+    // Zbierz aktualne wartości z localStorage
+    const settingsToSend = {
+        czatUkryty: localStorage.getItem('czatUkryty') === 'true',
+        historiaUkryta: localStorage.getItem('historiaUkryta') === 'true',
+        partiaHistoriaUkryta: localStorage.getItem('partiaHistoriaUkryta') === 'true',
+        pasekEwaluacjiUkryty: localStorage.getItem('pasekEwaluacjiUkryty') === 'true'
+    };
+
+    console.log("Wysyłanie ustawień na serwer:", settingsToSend);
+
+    try {
+        const response = await fetch(`/save_settings/${encodeURIComponent(aktualnyGracz)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settingsToSend)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Błąd zapisywania ustawień na serwerze:", errorData.detail);
+        } else {
+            console.log("Ustawienia zapisane na serwerze.");
+        }
+    } catch (error) {
+        console.error("Błąd sieci podczas zapisywania ustawień:", error);
     }
 }
+
+
+
 
 /* ==========================================================================
    SEKCJA 4: RENDEROWANIE WIDOKU LOBBY
@@ -397,8 +356,9 @@ function stworzSlotLobby(slot, stan) {
     } else if (slot.nazwa === nazwaGracza) { // Slot aktualnego gracza
         slotDiv.innerHTML = `${ikonaHosta}<strong>👤 ${slot.nazwa} (Ty)</strong>`;
     } else { // Slot innego gracza lub bota
-        const ikonaTypu = slot.typ === 'bot' ? '🤖' : '👤';
-        slotDiv.innerHTML = `${ikonaHosta}${ikonaTypu} ${slot.nazwa}`;
+        const ikonaTypu = slot.typ === 'bot' ? '🤖' : (slot.typ === 'rozlaczony' ? '🔌' : '👤'); // Added icon for disconnected
+        const statusText = slot.typ === 'rozlaczony' ? ' (Rozłączony)' : ''; // Added status text
+        slotDiv.innerHTML = `${ikonaHosta}${ikonaTypu} ${slot.nazwa}${statusText}`; // Display status
         // Host może wyrzucić gracza/bota
         if (jestesHostem) {
             const btn = document.createElement('button');
@@ -441,36 +401,34 @@ function aktualizujWidokGry(stanGry) {
     const czyLewaDoZamkniecia = stanGry.rozdanie?.lewa_do_zamkniecia;
 
     if (pasekKontenerEl && pasekWartoscEl) {
-        // UPROSZCZONY WARUNEK: Pokaż pasek ZAWSZE, gdy ocenaSilnika ma wartość.
+        const czyFazaRozgrywki = (rozdanie.faza === 'ROZGRYWKA');
         const czyPokazacPasek = (ocenaSilnika !== null && ocenaSilnika !== undefined);
-
-        if (ekranGryEl) {
-             ekranGryEl.classList.toggle('brak-oceny', !czyPokazacPasek);
-        }
-
+        console.log("DEBUG Paska:", { faza: rozdanie.faza, ocena: ocenaSilnika, czyPokazac: czyPokazacPasek }); // Dodaj logowanie
+        if (ekranGryEl) ekranGryEl.classList.toggle('brak-oceny', !czyPokazacPasek);
         if (czyPokazacPasek) {
-            // Przekształć ocenę [-1.0, 1.0] na procent [0, 100]
-            const procentWygranej = Math.max(0, Math.min(100, (ocenaSilnika + 1.0) / 2.0 * 100.0)); // Dodano Math.max/min dla pewności
+            let procentWygranej = (ocenaSilnika + 1.0) / 2.0 * 100.0;
+            procentWygranej = Math.max(0, Math.min(100, procentWygranej));
+
+            console.log("DEBUG Paska - Aktualizacja:", { ocena: ocenaSilnika, procent: procentWygranej }); // Dodaj logowanie obliczeń
+
+            // Ustaw szerokość
             pasekWartoscEl.style.width = `${procentWygranej}%`;
         } else {
-            // Jeśli nie ma oceny LUB jest 0 (co może się zdarzyć), ustaw na 50%
              pasekWartoscEl.style.width = '50%';
         }
     }
 
     // --- Ustal pozycje graczy na ekranie (dol, gora, lewy, prawy) ---
-    let pozycje = {}; // Obiekt mapujący pozycję na slot gracza
+    let pozycje = {};
     if (stanGry.max_graczy === 3) {
-        const inniGracze = stanGry.slots.filter(s => s.nazwa !== nazwaGracza);
-        // W trybie 3-osobowym nie ma gracza "gora"
+        const inniGracze = stanGry.slots.filter(s => s && s.nazwa !== nazwaGracza); // Added check for s
         pozycje = { dol: slotGracza, lewy: inniGracze[0], prawy: inniGracze[1] };
-    } else { // 4 graczy
-        const partner = stanGry.slots.find(s => s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza);
-        const przeciwnicy = stanGry.slots.filter(s => s.druzyna !== slotGracza.druzyna);
+    } else {
+        const partner = stanGry.slots.find(s => s && s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza); // Added check for s
+        const przeciwnicy = stanGry.slots.filter(s => s && s.druzyna !== slotGracza.druzyna); // Added check for s
         pozycje = { dol: slotGracza, gora: partner, lewy: przeciwnicy[0], prawy: przeciwnicy[1] };
     }
-    // Odwrócona mapa: nazwa gracza -> pozycja na ekranie (przydatne do umieszczania kart na stole)
-    const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]));
+    const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]).filter(([nazwa, _]) => nazwa)); // Filter out undefined names
 
     // --- Aktualizacja informacji o graczach (nazwy, podświetlenie tury) ---
     document.querySelectorAll('.gracz-boczny, #gracz-gora, #gracz-dol').forEach(el => {
@@ -479,11 +437,11 @@ function aktualizujWidokGry(stanGry) {
     for (const [pos, slot] of Object.entries(pozycje)) {
         const kontenerGraczaEl = document.getElementById(`gracz-${pos}`);
         if (kontenerGraczaEl && slot) {
-            const czyGrajacy = rozdanie.gracz_grajacy === slot.nazwa; // Czy ten gracz jest rozgrywającym w tym rozdaniu?
+            const czyGrajacy = rozdanie.gracz_grajacy === slot.nazwa;
             const ikonaGrajacego = czyGrajacy ? '<span class="crown-icon">👑</span> ' : '';
+            const statusText = slot.typ === 'rozlaczony' ? ' <span style="color:red;">(🔌)</span>' : ''; // Indicate disconnected in-game
             const infoGraczaEl = kontenerGraczaEl.querySelector('.info-gracza');
-            if (infoGraczaEl) infoGraczaEl.innerHTML = `${ikonaGrajacego}${slot.nazwa}`;
-            // Podświetl gracza, którego jest aktualnie tura
+            if (infoGraczaEl) infoGraczaEl.innerHTML = `${ikonaGrajacego}${slot.nazwa}${statusText}`; // Show status
             if (rozdanie.kolej_gracza === slot.nazwa) {
                 kontenerGraczaEl.classList.add('aktywny-gracz');
             }
@@ -491,73 +449,69 @@ function aktualizujWidokGry(stanGry) {
     }
 
     // --- Aktualizacja górnych paneli informacyjnych ---
-    const kontraktTyp = rozdanie.kontrakt?.typ; // Jaki jest aktualny kontrakt?
-    const infoSrodekEl = document.getElementById('info-srodek');
+    const kontraktTyp = rozdanie.kontrakt?.typ;
     const infoLewyRogEl = document.getElementById('info-lewy-rog');
-    const infoPrawyRogEl = document.getElementById('info-prawy-rog');
-    const infoStawkaEl = document.getElementById('info-stawka');
+    const kontenerPrawy = document.getElementById('kontener-info-prawy-rog');
 
-    if (stanGry.max_graczy === 3) { // Tryb 3-osobowy
-        // Wyświetl wynik meczu dla każdego gracza
-        const wynikHtml = Object.entries(stanGry.punkty_meczu)
+
+    if (stanGry.max_graczy === 3) {
+        const wynikHtml = Object.entries(stanGry.punkty_meczu || {}) // Added default {}
             .map(([nazwa, pkt]) => `<strong>${nazwa}:</strong> ${pkt}`)
             .join(' / ');
         if (infoLewyRogEl) infoLewyRogEl.innerHTML = `<div class="info-box">Wynik: ${wynikHtml}</div>`;
 
-        // Wyświetl punkty w rozdaniu lub pozostałe lewy
         let srodekHtml = '';
-        if (kontraktTyp === 'LEPSZA' || kontraktTyp === 'GORSZA') { // Gry solo
-            const iloscLew = rozdanie.rece_graczy[nazwaGracza]?.length || 0;
+        const rekaGracza = rozdanie.rece_graczy ? rozdanie.rece_graczy[nazwaGracza] : null; // Check rece_graczy
+        const iloscLew = rekaGracza?.length || 0; // Check rekaGracza
+
+        if (kontraktTyp === 'LEPSZA' || kontraktTyp === 'GORSZA') {
             srodekHtml = `Pozostało lew: <strong>${iloscLew}</strong>`;
-        } else if (kontraktTyp === 'BEZ_PYTANIA' && rozdanie.gracz_grajacy) { // Gra solo "Bez Pytania"
-            const pktGrajacego = rozdanie.punkty_w_rozdaniu[rozdanie.gracz_grajacy] || 0;
+        } else if (kontraktTyp === 'BEZ_PYTANIA' && rozdanie.gracz_grajacy) {
+            const pktGrajacego = (rozdanie.punkty_w_rozdaniu && rozdanie.punkty_w_rozdaniu[rozdanie.gracz_grajacy]) || 0; // Check punkty_w_rozdaniu
             srodekHtml = `Punkty 👑 ${rozdanie.gracz_grajacy}: <strong>${pktGrajacego}</strong>`;
-        } else { // Normalna gra lub faza licytacji
-            let punktyHtml = Object.entries(rozdanie.punkty_w_rozdaniu)
+        } else {
+             let punktyHtml = Object.entries(rozdanie.punkty_w_rozdaniu || {}) // Added default {}
                 .map(([nazwa, pkt]) => {
                     const ikona = (nazwa === rozdanie.gracz_grajacy) ? '👑 ' : '';
-                    return `${ikona}${nazwa.substring(0, 8)}: ${pkt}`; // Skróć nicki, jeśli są długie
+                    return `${ikona}${nazwa.substring(0, 8)}: ${pkt}`;
                 })
                 .join(' / ');
             srodekHtml = `Punkty: ${punktyHtml}`;
         }
-        if (infoSrodekEl) infoSrodekEl.innerHTML = `<div class="info-box">${srodekHtml}</div>`;
+        if (infoSrodekTrescEl) infoSrodekTrescEl.innerHTML = `<div class="info-box">${srodekHtml}</div>`;
 
-    } else { // Tryb 4-osobowy
-        // Wyświetl wynik meczu dla drużyn
+    } else {
         const nazwaTeam1 = nazwyDruzyn.My;
         const nazwaTeam2 = nazwyDruzyn.Oni;
-        const mojePunktyMeczu = stanGry.punkty_meczu[slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2] || 0;
-        const ichPunktyMeczu = stanGry.punkty_meczu[slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1] || 0;
+        const mojePunktyMeczu = (stanGry.punkty_meczu && stanGry.punkty_meczu[slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2]) || 0; // Check punkty_meczu
+        const ichPunktyMeczu = (stanGry.punkty_meczu && stanGry.punkty_meczu[slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1]) || 0; // Check punkty_meczu
         if (infoLewyRogEl) infoLewyRogEl.innerHTML = `<div class="info-box">Wynik: <strong>My ${mojePunktyMeczu} - ${ichPunktyMeczu} Oni</strong></div>`;
 
-        // Wyświetl punkty w rozdaniu lub pozostałe lewy
         let srodekHtml = '';
-        if (kontraktTyp === 'LEPSZA' || kontraktTyp === 'GORSZA') { // Gry solo
-            const iloscLew = rozdanie.rece_graczy[nazwaGracza]?.length || 0;
+        const rekaGracza = rozdanie.rece_graczy ? rozdanie.rece_graczy[nazwaGracza] : null; // Check rece_graczy
+        const iloscLew = rekaGracza?.length || 0; // Check rekaGracza
+
+        if (kontraktTyp === 'LEPSZA' || kontraktTyp === 'GORSZA') {
             srodekHtml = `Pozostało lew: <strong>${iloscLew}</strong>`;
-        } else if (kontraktTyp === 'BEZ_PYTANIA' && rozdanie.gracz_grajacy) { // Gra solo "Bez Pytania"
-            const grajacySlot = stanGry.slots.find(s => s.nazwa === rozdanie.gracz_grajacy);
-            const druzynaGrajacego = grajacySlot?.druzyna; // Dodano ?. dla bezpieczeństwa
-            const nazwaDruzynyGrajacego = nazwyDruzyn[druzynaGrajacego] || 'Błąd';
-            const pktGrajacego = rozdanie.punkty_w_rozdaniu[nazwaDruzynyGrajacego] || 0;
+        } else if (kontraktTyp === 'BEZ_PYTANIA' && rozdanie.gracz_grajacy) {
+            const grajacySlot = stanGry.slots.find(s => s && s.nazwa === rozdanie.gracz_grajacy); // Check s
+            const druzynaGrajacego = grajacySlot?.druzyna;
+            const nazwaDruzynyGrajacego = druzynaGrajacego ? nazwyDruzyn[druzynaGrajacego] : 'Błąd';
+            const pktGrajacego = (rozdanie.punkty_w_rozdaniu && rozdanie.punkty_w_rozdaniu[nazwaDruzynyGrajacego]) || 0; // Check punkty_w_rozdaniu
             srodekHtml = `Punkty 👑 ${rozdanie.gracz_grajacy}: <strong>${pktGrajacego}</strong>`;
-        } else { // Normalna gra lub faza licytacji
-            const mojePunktyRozdania = rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2] || 0;
-            const ichPunktyRozdania = rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1] || 0;
+        } else {
+            const mojePunktyRozdania = (rozdanie.punkty_w_rozdaniu && rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam1 : nazwaTeam2]) || 0; // Check punkty_w_rozdaniu
+            const ichPunktyRozdania = (rozdanie.punkty_w_rozdaniu && rozdanie.punkty_w_rozdaniu[slotGracza.druzyna === 'My' ? nazwaTeam2 : nazwaTeam1]) || 0; // Check punkty_w_rozdaniu
             srodekHtml = `Punkty: My ${mojePunktyRozdania} - ${ichPunktyRozdania} Oni`;
         }
-        if (infoSrodekEl) infoSrodekEl.innerHTML = `<div class="info-box">${srodekHtml}</div>`;
+        if (infoSrodekTrescEl) infoSrodekTrescEl.innerHTML = `<div class="info-box">${srodekHtml}</div>`;
     }
 
-    // Wyświetl aktualny kontrakt i stawkę rozdania
-    const kontenerPrawy = document.getElementById('kontener-info-prawy-rog'); // Znajdź główny kontener
     if (kontenerPrawy) {
-        // Wyczyść tylko elementy info, zachowaj przycisk ustawień
         const infoPrawyIstniejacy = kontenerPrawy.querySelector('#info-prawy-rog');
         const infoStawkaIstniejaca = kontenerPrawy.querySelector('#info-stawka');
         if(infoPrawyIstniejacy) infoPrawyIstniejacy.innerHTML = `<div class="info-box">Kontrakt: ${formatujKontrakt(rozdanie.kontrakt)}</div>`;
-        
+
         const aktualnaStawka = stanGry.rozdanie.aktualna_stawka || 0;
         if(infoStawkaIstniejaca){
              if (aktualnaStawka > 0) {
@@ -569,23 +523,23 @@ function aktualizujWidokGry(stanGry) {
         }
     }
 
-
     // --- Renderowanie kart na ręce gracza ---
     const rekaGlownaEl = document.querySelector('#gracz-dol .reka-glowna');
     if (rekaGlownaEl) {
-        rekaGlownaEl.innerHTML = ''; // Wyczyść stare karty
-        const rekaTwojegoGracza = rozdanie.rece_graczy[nazwaGracza] || [];
+        rekaGlownaEl.innerHTML = '';
+        const rekaTwojegoGracza = (rozdanie.rece_graczy && rozdanie.rece_graczy[nazwaGracza]) || []; // Check rece_graczy
+        const grywalneKarty = rozdanie.grywalne_karty || []; // Default to empty array
+
         rekaTwojegoGracza.forEach(nazwaKarty => {
             const img = document.createElement('img');
             img.className = 'karta';
-            img.src = `/static/karty/${nazwaKarty.replace(' ', '')}.png`; // Ścieżka do obrazka karty
-            // Jeśli karta jest grywalna, dodaj klasę i obsługę kliknięcia
-            if (rozdanie.grywalne_karty.includes(nazwaKarty)) {
+            img.src = `/static/karty/${nazwaKarty.replace(' ', '')}.png`;
+            if (grywalneKarty.includes(nazwaKarty)) { // Use checked grywalneKarty
                 img.classList.add('grywalna');
                 img.onclick = (e) => {
                     const celEl = document.getElementById('slot-karty-dol');
-                    if (celEl) animujZagranieKarty(e.target, celEl); // Uruchom animację
-                    wyslijAkcjeGry({ typ: 'zagraj_karte', karta: nazwaKarty }); // Wyślij akcję do serwera
+                    if (celEl) animujZagranieKarty(e.target, celEl);
+                    wyslijAkcjeGry({ typ: 'zagraj_karte', karta: nazwaKarty });
                 };
             }
             rekaGlownaEl.appendChild(img);
@@ -594,12 +548,11 @@ function aktualizujWidokGry(stanGry) {
 
     // --- Renderowanie rewersów kart dla pozostałych graczy ---
     for (const [pos, slot] of Object.entries(pozycje)) {
-        if (pos === 'dol' || !slot) continue; // Pomiń gracza dolnego i puste sloty
+        if (pos === 'dol' || !slot) continue;
         const rekaEl = document.querySelector(`#gracz-${pos} .reka-${pos === 'gora' ? 'gorna' : 'boczna'}`);
         if (!rekaEl) continue;
-        rekaEl.innerHTML = ''; // Wyczyść stare rewersy
-        const iloscKart = (rozdanie.rece_graczy[slot.nazwa] || []).length;
-        // Dodaj odpowiednią liczbę rewersów
+        rekaEl.innerHTML = '';
+        const iloscKart = (rozdanie.rece_graczy && rozdanie.rece_graczy[slot.nazwa])?.length || 0; // Check rece_graczy
         for (let i = 0; i < iloscKart; i++) {
             const img = document.createElement('img');
             img.className = 'karta';
@@ -610,13 +563,12 @@ function aktualizujWidokGry(stanGry) {
 
     // --- Renderowanie kart zagranych na stół ---
     document.querySelectorAll('.slot-karty').forEach(slot => {
-         if(slot) slot.innerHTML = ''; // Wyczyść stół
+         if(slot) slot.innerHTML = '';
     });
-    rozdanie.karty_na_stole.forEach(item => {
-        const pozycjaGracza = pozycjeWgNazwy[item.gracz]; // Znajdź pozycję gracza, który zagrał kartę
+    (rozdanie.karty_na_stole || []).forEach(item => { // Added default []
+        const pozycjaGracza = pozycjeWgNazwy[item.gracz];
         if (pozycjaGracza) {
             const slotEl = document.getElementById(`slot-karty-${pozycjaGracza}`);
-            // Wyświetl kartę w odpowiednim slocie na stole
             if (slotEl) {
                 slotEl.innerHTML = `<img class="karta" src="/static/karty/${item.karta.replace(' ', '')}.png">`;
             }
@@ -626,24 +578,24 @@ function aktualizujWidokGry(stanGry) {
     // --- Renderowanie przycisków akcji (licytacja) ---
     const kontenerAkcjiEl = document.getElementById('kontener-akcji');
     if (kontenerAkcjiEl) {
-        // Pokaż przyciski tylko, gdy jest tura gracza, nie jest to faza rozgrywki i są dostępne akcje
-        if (rozdanie.kolej_gracza === nazwaGracza && rozdanie.faza !== 'ROZGRYWKA' && rozdanie.mozliwe_akcje.length > 0) {
-            renderujPrzyciskiLicytacji(rozdanie.mozliwe_akcje);
+        const mozliweAkcje = rozdanie.mozliwe_akcje || []; // Default to empty array
+        if (rozdanie.kolej_gracza === nazwaGracza && rozdanie.faza !== 'ROZGRYWKA' && mozliweAkcje.length > 0) {
+            renderujPrzyciskiLicytacji(mozliweAkcje); // Use checked mozliweAkcje
         } else {
-            kontenerAkcjiEl.innerHTML = ''; // Ukryj przyciski
+            kontenerAkcjiEl.innerHTML = '';
         }
     }
 
     // --- Renderowanie historii rozdania (prawa kolumna) ---
     const historiaListaEl = document.getElementById('historia-lista');
     if (historiaListaEl) {
-        historiaListaEl.innerHTML = ''; // Wyczyść starą historię
-        (rozdanie.historia_rozdania || []).forEach(log => {
+        historiaListaEl.innerHTML = '';
+        (rozdanie.historia_rozdania || []).forEach(log => { // Added default []
             const p = document.createElement('p');
-            p.innerHTML = formatujWpisHistorii(log); // Formatuj wpis na czytelny tekst
+            p.innerHTML = formatujWpisHistorii(log);
             historiaListaEl.appendChild(p);
         });
-        historiaListaEl.scrollTop = historiaListaEl.scrollHeight; // Przewiń na dół
+        historiaListaEl.scrollTop = historiaListaEl.scrollHeight;
     }
 
     // --- Pokaż podsumowanie rozdania, jeśli jest dostępne ---
@@ -651,48 +603,38 @@ function aktualizujWidokGry(stanGry) {
         pokazPodsumowanieRozdania(stanGry);
     }
     else if (podsumowanieRozdaniaEl && !podsumowanieRozdaniaEl.classList.contains('hidden')) {
-         // Ukryj tylko modal podsumowania, niekoniecznie cały overlay (np. jeśli ustawienia są otwarte)
          podsumowanieRozdaniaEl.classList.add('hidden');
-         // Jeśli w overlay'u nie ma już żadnych widocznych paneli, ukryj go
          if (modalOverlayEl && !modalOverlayEl.querySelector('.panel:not(.hidden)')) {
              modalOverlayEl.classList.add('hidden');
          }
-         console.log("DEBUG: Ukryto modal podsumowania rozdania, bo faza gry to:", rozdanie.faza); // Log
+         console.log("DEBUG: Ukryto modal podsumowania rozdania, bo faza gry to:", rozdanie.faza);
     }
 
     // --- Jeśli lewa ma być zamknięta, wyślij akcję finalizacji po chwili ---
     if (rozdanie.lewa_do_zamkniecia) {
-        setTimeout(() => wyslijAkcjeGry({ typ: 'finalizuj_lewe' }), 2000); // Czekaj 2 sekundy
+        setTimeout(() => wyslijAkcjeGry({ typ: 'finalizuj_lewe' }), 2000);
     }
 
     // --- Renderowanie historii partii (lewa górna kolumna) ---
     if (partiaHistoriaListaEl) {
-        partiaHistoriaListaEl.innerHTML = ''; // Wyczyść starą historię partii
-        (stanGry.historia_partii || []).forEach(wpis => {
+        partiaHistoriaListaEl.innerHTML = '';
+        (stanGry.historia_partii || []).forEach(wpis => { // Added default []
             const p = document.createElement('p');
-            p.textContent = wpis; // Wyświetl sformatowany wpis z backendu
+            p.textContent = wpis;
             partiaHistoriaListaEl.appendChild(p);
         });
-        // Przewiń na dół, jeśli jest nowa zawartość
         if (stanGry.historia_partii && stanGry.historia_partii.length > 0) {
              partiaHistoriaListaEl.scrollTop = partiaHistoriaListaEl.scrollHeight;
         }
     }
 
-    // Pokaż dymek z ostatnią akcją licytacyjną lub meldunkiem
-    // Musi być wywołane PO zrenderowaniu graczy
     pokazDymekPoOstatniejAkcji(stanGry, pozycje);
 }
 
 /* ==========================================================================
    SEKCJA 6: LOGIKA EFEKTÓW (DŹWIĘKI I ANIMACJE)
    ========================================================================== */
-/**
- * Uruchamia efekty wizualne (animacje) i dźwiękowe na podstawie różnic
- * między nowym a starym stanem gry.
- */
 function uruchomEfektyWizualne(nowyStan, staryStan) {
-    // Podstawowe zabezpieczenie, jeśli któryś stan lub rozdanie nie istnieje
     if (!staryStan?.rozdanie || !nowyStan?.rozdanie) {
         console.log("Brak danych do porównania efektów", {nowyStan, staryStan});
         return;
@@ -703,123 +645,100 @@ function uruchomEfektyWizualne(nowyStan, staryStan) {
     const noweKartyNaStole = noweRozdanie.karty_na_stole || [];
     const stareKartyNaStole = stareRozdanie.karty_na_stole || [];
 
-    // --- Animacja zagrania karty przez innego gracza ---
     if (noweKartyNaStole.length > stareKartyNaStole.length) {
-        // Znajdź nowo zagraną kartę porównując obie listy
         const nowaKartaZagranie = noweKartyNaStole.find(nk =>
             !stareKartyNaStole.some(sk => sk.karta === nk.karta && sk.gracz === nk.gracz)
         );
 
-        // Jeśli znaleziono nową kartę i nie została zagrana przez nas
         if (nowaKartaZagranie && nowaKartaZagranie.gracz !== nazwaGracza) {
-             let pozycje = {}; // Ustal pozycje graczy na ekranie
-             const slotGracza = nowyStan.slots.find(s => s.nazwa === nazwaGracza);
-            if (!slotGracza) return; // Zabezpieczenie
+             let pozycje = {};
+             const slotGracza = nowyStan.slots.find(s => s && s.nazwa === nazwaGracza); // Check s
+            if (!slotGracza) return;
 
             if (nowyStan.max_graczy === 3) {
-                const inniGracze = nowyStan.slots.filter(s => s.nazwa !== nazwaGracza);
+                const inniGracze = nowyStan.slots.filter(s => s && s.nazwa !== nazwaGracza); // Check s
                 pozycje = { dol: slotGracza, lewy: inniGracze[0], prawy: inniGracze[1] };
             } else {
-                const partner = nowyStan.slots.find(s => s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza);
-                const przeciwnicy = nowyStan.slots.filter(s => s.druzyna !== slotGracza.druzyna);
+                const partner = nowyStan.slots.find(s => s && s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza); // Check s
+                const przeciwnicy = nowyStan.slots.filter(s => s && s.druzyna !== slotGracza.druzyna); // Check s
                 pozycje = { dol: slotGracza, gora: partner, lewy: przeciwnicy[0], prawy: przeciwnicy[1] };
             }
-            // Odwrócona mapa: nazwa -> pozycja
-            const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]));
+            const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]).filter(([nazwa, _]) => nazwa)); // Filter undefined names
 
-            const pozycjaGracza = pozycjeWgNazwy[nowaKartaZagranie.gracz]; // Znajdź pozycję gracza, który zagrał
+            const pozycjaGracza = pozycjeWgNazwy[nowaKartaZagranie.gracz];
             if (pozycjaGracza) {
-                // Element startowy animacji (nick gracza)
                 const startEl = document.querySelector(`#gracz-${pozycjaGracza} .info-gracza`);
-                // Element docelowy (slot karty na stole)
                 const celEl = document.getElementById(`slot-karty-${pozycjaGracza}`);
                 if (startEl && celEl) {
-                    // Uruchom animację
                     animujZagranieKarty(startEl, celEl, nowaKartaZagranie.karta);
                 }
             }
         }
     }
-    // Uruchom efekty dźwiękowe
     uruchomEfektyDzwiekowe(nowyStan, staryStan);
 }
 
-/**
- * Tworzy i animuje element karty lecącej od gracza na stół.
- */
 function animujZagranieKarty(startEl, celEl, nazwaKarty = null) {
-    const startRect = startEl.getBoundingClientRect(); // Pozycja startowa
-    const celRect = celEl.getBoundingClientRect();   // Pozycja docelowa
+    const startRect = startEl.getBoundingClientRect();
+    const celRect = celEl.getBoundingClientRect();
 
     const animowanaKarta = document.createElement('img');
     animowanaKarta.className = 'animowana-karta';
-    // Użyj obrazka karty, jeśli podano, inaczej użyj obrazka elementu startowego (dla gracza dolnego)
-    animowanaKarta.src = nazwaKarty ? `/static/karty/${nazwaKarty.replace(' ', '')}.png` : startEl.src;
+    animowanaKarta.src = nazwaKarty ? `/static/karty/${nazwaKarty.replace(' ', '')}.png` : (startEl.src || '/static/karty/Rewers.png'); // Added fallback src
     animowanaKarta.style.left = `${startRect.left}px`;
     animowanaKarta.style.top = `${startRect.top}px`;
+    animowanaKarta.style.width = startEl.tagName === 'IMG' ? `${startRect.width}px` : '70px'; // Set width based on source
+    animowanaKarta.style.height = 'auto'; // Maintain aspect ratio
 
-    // Dodaj kartę do warstwy animacji
     if (animationOverlayEl) animationOverlayEl.appendChild(animowanaKarta);
 
-    // Jeśli animacja startuje z karty gracza (IMG), ukryj ją na czas animacji
     if (startEl.tagName === 'IMG') {
         startEl.style.visibility = 'hidden';
     }
 
-    // Wymuszenie reflow - potrzebne, aby animacja zadziałała od razu
     void animowanaKarta.offsetWidth;
 
-    // Oblicz przesunięcie
-    const deltaX = celRect.left - startRect.left;
-    const deltaY = celRect.top - startRect.top;
-    // Zastosuj transformację, która uruchomi animację zdefiniowaną w CSS
-    animowanaKarta.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    const deltaX = celRect.left + (celRect.width / 2) - (startRect.left + (startRect.width / 2)); // Center animation
+    const deltaY = celRect.top + (celRect.height / 2) - (startRect.top + (startRect.height / 2)); // Center animation
+    animowanaKarta.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1)`; // Ensure scale is 1 initially maybe?
 
-    // Usuń animowaną kartę i pokaż z powrotem oryginalną kartę gracza po zakończeniu animacji
     setTimeout(() => {
         animowanaKarta.remove();
         if (startEl.style.visibility === 'hidden') {
-            startEl.style.visibility = 'visible'; // Pokaż z powrotem kartę gracza
+            startEl.style.visibility = 'visible';
         }
-    }, 400); // Czas animacji zdefiniowany w CSS
+    }, 400);
 }
 
-/**
- * Odtwarza odpowiednie dźwięki na podstawie zmian w stanie gry.
- */
 function uruchomEfektyDzwiekowe(nowyStan, staryStan) {
-     // Podstawowe zabezpieczenie, jeśli któryś stan lub rozdanie nie istnieje
     if (!staryStan?.rozdanie || !nowyStan?.rozdanie) return;
 
     const noweRozdanie = nowyStan.rozdanie;
     const stareRozdanie = staryStan.rozdanie;
 
-    // Dźwięk zagrania karty
     const noweKartyStol = noweRozdanie.karty_na_stole || [];
     const stareKartyStol = stareRozdanie.karty_na_stole || [];
     if (noweKartyStol.length > stareKartyStol.length && !noweRozdanie.lewa_do_zamkniecia) {
         odtworzDzwiek('zagranieKarty');
     }
-    // Dźwięk wygrania lewy
     if (noweRozdanie.lewa_do_zamkniecia && !stareRozdanie.lewa_do_zamkniecia) {
          odtworzDzwiek('wygranaLewa');
     }
-    // Dźwięki licytacji (pas vs inne akcje)
     const nowaHistoria = noweRozdanie.historia_rozdania || [];
     const staraHistoria = stareRozdanie.historia_rozdania || [];
     if (nowaHistoria.length > staraHistoria.length) {
         const noweLogi = nowaHistoria.slice(staraHistoria.length);
         const logAkcji = noweLogi.find(log => log.typ === 'akcja_licytacyjna');
-        if (logAkcji && logAkcji.akcja) { // Dodano sprawdzenie logAkcji.akcja
+        if (logAkcji && logAkcji.akcja) {
             const akcja = logAkcji.akcja;
-            if (akcja.typ === 'pas' || akcja.typ === 'pas_lufa') {
+            const typAkcji = akcja.typ?.name || akcja.typ; // Handle enum or string
+            if (typAkcji === 'pas' || typAkcji === 'pas_lufa') {
                 odtworzDzwiek('pas');
-            } else if (['deklaracja', 'przebicie', 'lufa', 'kontra', 'zmiana_kontraktu', 'pytanie', 'nie_pytam', 'graj_normalnie'].includes(akcja.typ)) {
+            } else if (['deklaracja', 'przebicie', 'lufa', 'kontra', 'zmiana_kontraktu', 'pytanie', 'nie_pytam', 'graj_normalnie', 'do_konca'].includes(typAkcji)) { // Added do_konca
                 odtworzDzwiek('licytacja');
             }
         }
     }
-    // Dźwięk końca rozdania
     if (noweRozdanie.faza === 'PODSUMOWANIE_ROZDANIA' && stareRozdanie.faza !== 'PODSUMOWANIE_ROZDANIA') {
         odtworzDzwiek('koniecRozdania');
     }
@@ -829,62 +748,43 @@ function uruchomEfektyDzwiekowe(nowyStan, staryStan) {
 /* ==========================================================================
    SEKCJA 7: FUNKCJE POMOCNICZE I OBSŁUGA ZDARZEŃ
    ========================================================================== */
-/**
- * Pokazuje wybrany panel modalny (np. podsumowanie, ustawienia).
- */
 function pokazModal(modalElement) {
-    if (!modalOverlayEl || !modalElement) return; // Zabezpieczenie
-    // Ukryj wszystkie inne panele wewnątrz overlay'a
-    modalOverlayEl.querySelectorAll('.panel').forEach(panel => {
-        panel.classList.add('hidden');
-    });
-    // Pokaż overlay i wybrany panel
+    if (!modalOverlayEl || !modalElement) return;
+    modalOverlayEl.querySelectorAll('.panel').forEach(panel => panel.classList.add('hidden'));
     modalElement.classList.remove('hidden');
     modalOverlayEl.classList.remove('hidden');
 }
 
-/**
- * Ukrywa overlay modalny i wszystkie panele wewnątrz.
- */
 function ukryjModal() {
-    if (!modalOverlayEl) return; // Zabezpieczenie
+    if (!modalOverlayEl) return;
     modalOverlayEl.classList.add('hidden');
-    // Ukryj wszystkie panele na wszelki wypadek
-    modalOverlayEl.querySelectorAll('.panel').forEach(panel => {
-        panel.classList.add('hidden');
-    });
+    modalOverlayEl.querySelectorAll('.panel').forEach(panel => panel.classList.add('hidden'));
 }
 
-/**
- * Formatuje obiekt kontraktu na czytelny ciąg znaków HTML.
- */
 function formatujKontrakt(kontrakt) {
-    if (!kontrakt || !kontrakt.typ) return 'Brak'; // Jeśli brak kontraktu
-    const kontraktTyp = kontrakt.typ.name || kontrakt.typ; // Obsługa enum lub string z backendu
-    const atut = kontrakt.atut?.name || kontrakt.atut; // Obsługa enum lub string
-    const info = mapowanieKolorow[atut]; // Znajdź symbol i klasę dla koloru atutowego
+    if (!kontrakt || !kontrakt.typ) return 'Brak';
+    const kontraktTyp = kontrakt.typ.name || kontrakt.typ;
+    const atut = kontrakt.atut?.name || kontrakt.atut;
+    const info = atut ? mapowanieKolorow[atut] : null; // Check if atut exists
 
-    if (kontraktTyp === 'NORMALNA' && info) { // Normalna gra z atutem
+    if (kontraktTyp === 'NORMALNA' && info) {
         return `<span class="symbol-koloru ${info.klasa}">${info.symbol}</span>`;
     }
-    if (kontraktTyp === 'BEZ_PYTANIA' && info) { // Gra "Bez Pytania" z atutem
+    if (kontraktTyp === 'BEZ_PYTANIA' && info) {
         return `<span class="symbol-koloru ${info.klasa}">${info.symbol}</span><span class="znak-zapytania-przekreslony">?</span>`;
     }
-    // Inne kontrakty (Lepsza, Gorsza) lub błąd
-    return `<strong>${kontraktTyp}</strong>`;
+    // Handle cases like LEPSZA, GORSZA, or if info is null
+    const readableName = kontraktTyp.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()); // Format name
+    return `<strong>${readableName}</strong>`;
 }
 
-/**
- * Wyświetla modal z podsumowaniem zakończonego rozdania.
- */
 function pokazPodsumowanieRozdania(stanGry) {
-    const podsumowanie = stanGry.rozdanie?.podsumowanie; // Dodano ?.
+    const podsumowanie = stanGry.rozdanie?.podsumowanie;
     const modalPanelEl = podsumowanieRozdaniaEl;
-    if (!modalPanelEl || !podsumowanie) return; // Zabezpieczenie
+    if (!modalPanelEl || !podsumowanie) return;
     const podsumowanieTrescEl = document.getElementById('podsumowanie-tresc');
-    modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove()); // Usuń stare przyciski
+    modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove());
 
-    // Dodaj informacje o bonusach, jeśli wystąpiły
     let bonusInfo = '';
     if (podsumowanie.bonus_z_trzech_kart) {
         bonusInfo += `<p style="color: yellow; font-weight: bold;">Bonus za grę z ${stanGry.max_graczy === 3 ? '4' : '3'} kart (x2)!</p>`;
@@ -893,7 +793,6 @@ function pokazPodsumowanieRozdania(stanGry) {
         bonusInfo += `<p style="color: orange; font-weight: bold;">Bonus za lufy (x${podsumowanie.mnoznik_lufy})!</p>`;
     }
 
-    // Wyświetl informację o zwycięzcach rozdania
     let wygraniHtml = '';
     if (stanGry.max_graczy === 3) {
         wygraniHtml = `Rozdanie wygrane przez: <strong>${(podsumowanie.wygrani_gracze || []).join(', ')}</strong>`;
@@ -901,19 +800,19 @@ function pokazPodsumowanieRozdania(stanGry) {
         wygraniHtml = `Rozdanie wygrane przez: <strong>${podsumowanie.wygrana_druzyna || 'Brak'}</strong>`;
     }
 
-    // Wypełnij treść modala
     if (podsumowanieTrescEl) {
         podsumowanieTrescEl.innerHTML = `<p>${wygraniHtml}</p>
                                         <p>Zdobyte punkty: <strong>${podsumowanie.przyznane_punkty || 0}</strong></p>
-                                        ${bonusInfo}`;
+                                        ${bonusInfo}
+                                        <p style="font-size: 0.9em; color: #ccc;">(${podsumowanie.powod || 'Koniec rozdania'})</p>`; // Added reason
     }
     const tytulEl = document.getElementById('podsumowanie-tytul');
     if (tytulEl) tytulEl.textContent = 'Koniec Rozdania!';
 
-    // Dodaj przycisk "Dalej" / "Oczekiwanie..."
     const nastepneRozdanieBtn = document.createElement('button');
     modalPanelEl.appendChild(nastepneRozdanieBtn);
-    const czyJestesGotowy = stanGry.gracze_gotowi && stanGry.gracze_gotowi.includes(nazwaGracza);
+    const graczeGotowi = stanGry.gracze_gotowi || []; // Default to empty array
+    const czyJestesGotowy = graczeGotowi.includes(nazwaGracza);
     if (czyJestesGotowy) {
         nastepneRozdanieBtn.textContent = 'Oczekiwanie na pozostałych...';
         nastepneRozdanieBtn.disabled = true;
@@ -922,85 +821,74 @@ function pokazPodsumowanieRozdania(stanGry) {
         nastepneRozdanieBtn.disabled = false;
         nastepneRozdanieBtn.onclick = () => {
             wyslijAkcjeGry({ typ: 'nastepne_rozdanie' });
-            // Zmień tekst i wyłącz przycisk po kliknięciu
             nastepneRozdanieBtn.textContent = 'Oczekiwanie na pozostałych...';
             nastepneRozdanieBtn.disabled = true;
         };
     }
-    // Pokaż modal
     pokazModal(podsumowanieRozdaniaEl);
 }
 
-/**
- * Wyświetla modal z podsumowaniem zakończonego meczu.
- */
 function pokazPodsumowanieMeczu(stanGry) {
     const tytulEl = document.getElementById('podsumowanie-tytul');
     const trescEl = document.getElementById('podsumowanie-tresc');
-    const modalPanelEl = podsumowanieRozdaniaEl; // Używamy tego samego modala co dla rozdania
+    const modalPanelEl = podsumowanieRozdaniaEl;
     if (!modalPanelEl || !tytulEl || !trescEl) return;
 
-    modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove()); // Usuń stare przyciski
+    modalPanelEl.querySelectorAll('button').forEach(btn => btn.remove());
 
-    // Znajdź zwycięzcę i sformatuj wynik
     let zwyciezca = 'Brak';
     let wynikHtml = 'Brak danych';
-    if(stanGry.max_graczy === 3) { // Tryb 3-osobowy
+    if(stanGry.max_graczy === 3) {
         const wyniki = Object.entries(stanGry.punkty_meczu || {});
         if (wyniki.length > 0) {
             const posortowani = wyniki.sort((a, b) => b[1] - a[1]);
             zwyciezca = posortowani[0][0];
             wynikHtml = wyniki.map(([nazwa, pkt]) => `${nazwa}: ${pkt}`).join(', ');
         }
-    } else { // Tryb 4-osobowy
+    } else {
         const nazwaTeam1 = nazwyDruzyn.My;
         const nazwaTeam2 = nazwyDruzyn.Oni;
         const punkty1 = stanGry.punkty_meczu ? stanGry.punkty_meczu[nazwaTeam1] || 0 : 0;
         const punkty2 = stanGry.punkty_meczu ? stanGry.punkty_meczu[nazwaTeam2] || 0 : 0;
-        zwyciezca = punkty1 >= 66 ? nazwaTeam1 : (punkty2 >= 66 ? nazwaTeam2 : 'Błąd');
+        zwyciezca = punkty1 >= 66 ? nazwaTeam1 : (punkty2 >= 66 ? nazwaTeam2 : 'Remis/Błąd'); // Handle draw/error
         wynikHtml = `${nazwaTeam1} ${punkty1} - ${punkty2} ${nazwaTeam2}`;
     }
 
-    // Wypełnij treść modala
     tytulEl.textContent = 'Koniec Meczu!';
-    trescEl.innerHTML = `<h2>Wygrał gracz "${zwyciezca}"!</h2>
+    trescEl.innerHTML = `<h2>Wygrał ${stanGry.max_graczy === 3 ? 'gracz' : 'drużyna'} "${zwyciezca}"!</h2>
                          <p>Wynik końcowy: ${wynikHtml}</p>`;
 
-    // Dodaj przycisk "Wyjdź do menu"
     const wyjdzBtn = document.createElement('button');
     wyjdzBtn.textContent = 'Wyjdź do menu';
-    wyjdzBtn.onclick = () => { 
-    sessionStorage.removeItem('lobbyHaslo'); // Wyczyść hasło przy wyjściu
-    window.location.href = '/'; 
+    wyjdzBtn.onclick = () => {
+        localStorage.removeItem('lobbyHaslo'); // Changed
+        localStorage.removeItem('rejoinGameId'); // Remove rejoin ID on exit
+        window.location.href = '/';
     };
     modalPanelEl.appendChild(wyjdzBtn);
 
-    // W grze online dodaj przycisk "Powrót do lobby" dla hosta
-    if (stanGry.tryb_gry === 'online') {
+    if (stanGry.tryb_gry === 'online' && stanGry.host === nazwaGracza) { // Show only for host in online game
         const lobbyBtn = document.createElement('button');
-        if (stanGry.host === nazwaGracza) { // Tylko host może wrócić do lobby
-            lobbyBtn.textContent = 'Powrót do lobby';
-            lobbyBtn.onclick = () => { wyslijAkcjeGry({ typ: 'powrot_do_lobby' }); };
-        } else {
-            lobbyBtn.textContent = 'Oczekiwanie na hosta...';
-            lobbyBtn.disabled = true;
-        }
+        lobbyBtn.textContent = 'Powrót do lobby';
+        lobbyBtn.onclick = () => { wyslijAkcjeGry({ typ: 'powrot_do_lobby' }); };
         modalPanelEl.appendChild(lobbyBtn);
+    } else if (stanGry.tryb_gry === 'online') { // Show waiting text for non-hosts
+        const waitingText = document.createElement('p');
+        waitingText.textContent = 'Oczekiwanie na hosta...';
+        waitingText.style.marginTop = '10px';
+        modalPanelEl.appendChild(waitingText);
     }
-    // Pokaż modal
     pokazModal(podsumowanieRozdaniaEl);
 }
 
-/**
- * Formatuje wpis z historii rozdania na czytelny ciąg znaków HTML.
- */
+
 function formatujWpisHistorii(log) {
-    const gracz = `<strong>${log.gracz || 'System'}</strong>`; // Pogrub nick gracza
+    const gracz = `<strong>${log.gracz || 'System'}</strong>`;
     switch (log.typ) {
         case 'akcja_licytacyjna': {
             const akcja = log.akcja;
-            if (!akcja) return `${gracz} wykonał nieznaną akcję.`; // Zabezpieczenie
-            const typAkcji = akcja.typ?.name || akcja.typ; // Obsługa enum lub string
+            if (!akcja) return `${gracz} wykonał nieznaną akcję.`;
+            const typAkcji = akcja.typ?.name || akcja.typ;
             const kontraktAkcji = akcja.kontrakt?.name || akcja.kontrakt;
             const atutAkcji = akcja.atut?.name || akcja.atut;
 
@@ -1019,222 +907,181 @@ function formatujWpisHistorii(log) {
                 return `${gracz} przebija na: <strong>${kontraktAkcji}</strong>.`;
             }
              if (typAkcji === 'lufa' || typAkcji === 'kontra' || typAkcji === 'do_konca') {
-                 let txt = typAkcji.charAt(0).toUpperCase() + typAkcji.slice(1);
-                 // Sprawdźmy, czy jest kontekst lufy
-                 if(typAkcji === 'lufa' && kontraktAkcji && atutAkcji) {
-                     const kontraktStr = formatujKontrakt({ typ: kontraktAkcji, atut: atutAkcji });
+                 let txt = typAkcji.charAt(0).toUpperCase() + typAkcji.slice(1).replace('_', ' '); // Format name
+                 if(typAkcji === 'lufa' && kontraktAkcji) { // Removed atut check, might not be available
+                     const kontraktStr = formatujKontrakt({ typ: kontraktAkcji, atut: atutAkcji }); // Still try to format
                      txt = `Lufa (na ${kontraktStr})`;
                  }
                 return `${gracz} mówi: <strong>${txt}</strong>.`;
             }
-            // Domyślny format dla innych akcji licytacyjnych
             return `${gracz} wykonuje akcję: ${typAkcji}.`;
         }
         case 'zagranie_karty':
-            return `${gracz} zagrał ${log.karta || 'nieznaną kartę'}.`;
+            return `${gracz} zagrał ${log.karta || 'kartę'}.`; // Simplified
         case 'koniec_lewy':
-            return `Lewę wygrywa <strong>${log.zwyciezca || '?'}</strong> (zdobywając ${log.punkty || 0} pkt).`;
+            return `Lewę ${log.numer_lewy ? `nr ${log.numer_lewy} ` : ''}wygrywa <strong>${log.zwyciezca || '?'}</strong> (+${log.punkty || 0} pkt).`; // Added trick number if available
         case 'meldunek':
-            return `${gracz} melduje parę za ${log.punkty || 0} pkt.`;
+            return `${gracz} melduje ${log.punkty === 40 ? 'dużą ' : ''}parę (+${log.punkty || 0} pkt).`; // Better text
         case 'bonus':
-            // Użyj globalnego 'ostatniStanGry' do określenia liczby graczy
             const liczbaGraczy = ostatniStanGry.max_graczy || 4;
             const opisBonusu = log.opis ? `(${log.opis})` : `z ${liczbaGraczy === 3 ? '4' : '3'} kart`;
             return `Bonus za grę <strong>${gracz}</strong> ${opisBonusu}.`;
-        default: // Nieznany typ logu
+        case 'nowe_rozdanie': // Added log type
+             return `--- Rozdanie ${log.numer_rozdania || '?'} (Rozdający: ${log.rozdajacy || '?'}) ---`;
+        case 'koniec_rozdania': // Added log type
+             return `--- Koniec Rozdania ---`;
+        default:
             try {
-                const tresc = JSON.stringify(log);
-                return `[${log.typ || 'Nieznany typ'}] ${tresc.substring(0, 50)}`;
-            } catch {
-                return `[Nieznany log]`;
-            }
+                // Try to format common simple logs
+                let details = Object.entries(log).filter(([key, _]) => key !== 'typ').map(([key, val]) => `${key}: ${val}`).join(', ');
+                return `[${log.typ || 'Log'}] ${details}`;
+            } catch { return `[Nieznany log]`; }
     }
 }
 
-/**
- * Pokazuje dymek z ostatnią akcją licytacyjną lub meldunkiem nad odpowiednim graczem.
- * Porównuje historię z poprzednim stanem gry, aby znaleźć nowe wpisy.
- */
 function pokazDymekPoOstatniejAkcji(stanGry, pozycje) {
-     // Podstawowe zabezpieczenie
     if (!stanGry?.rozdanie || !ostatniStanGry?.rozdanie) return;
 
-    // Porównaj historię obecną z zapisaną historią z poprzedniego stanu
     const nowaHistoria = stanGry.rozdanie.historia_rozdania || [];
     const staraHistoria = ostatniStanGry.rozdanie.historia_rozdania || [];
     const nowaDlugosc = nowaHistoria.length;
     const staraDlugosc = staraHistoria.length;
 
-    // Jeśli nie ma nowych wpisów, nic nie rób
-    if (nowaDlugosc <= staraDlugosc) {
-        return;
-    }
+    if (nowaDlugosc <= staraDlugosc) return;
 
-    // Znajdź ostatni wpis o akcji licytacyjnej lub meldunku wśród NOWYCH wpisów
     const noweLogi = nowaHistoria.slice(staraDlugosc);
     let logDoWyswietlenia = null;
     for (let i = noweLogi.length - 1; i >= 0; i--) {
         const log = noweLogi[i];
         if (log.typ === 'akcja_licytacyjna' || log.typ === 'meldunek') {
-            logDoWyswietlenia = log;
-            break;
+            logDoWyswietlenia = log; break;
         }
     }
 
-    // Jeśli nie znaleziono odpowiedniego logu, nic nie rób
-    if (!logDoWyswietlenia) {
-        return;
-    }
+    if (!logDoWyswietlenia || !logDoWyswietlenia.gracz) return; // Added check for gracz
 
-    // Znajdź pozycję gracza, który wykonał akcję
     const pozycjaGracza = Object.keys(pozycje).find(p => pozycje[p] && pozycje[p].nazwa === logDoWyswietlenia.gracz);
-    if (!pozycjaGracza) {
-        return;
-    }
+    if (!pozycjaGracza) return;
 
-    // Sformatuj tekst dymka na podstawie typu akcji
     let tekstDymka = '';
     if (logDoWyswietlenia.typ === 'akcja_licytacyjna') {
         const akcja = logDoWyswietlenia.akcja;
-        if (!akcja) return; // Zabezpieczenie
+        if (!akcja) return;
         const typAkcji = akcja.typ?.name || akcja.typ;
         const kontraktAkcji = akcja.kontrakt?.name || akcja.kontrakt;
         const atutAkcji = akcja.atut?.name || akcja.atut;
 
         switch (typAkcji) {
-            case 'deklaracja':
-                tekstDymka = formatujKontrakt({ typ: kontraktAkcji, atut: atutAkcji });
-                break;
-            case 'zmiana_kontraktu':
-                tekstDymka = `Zmieniam na: <strong>${kontraktAkcji}</strong>`;
-                break;
-            case 'przebicie':
-                tekstDymka = `Przebijam: ${kontraktAkcji}!`;
-                break;
+            case 'deklaracja': tekstDymka = formatujKontrakt({ typ: kontraktAkcji, atut: atutAkcji }); break;
+            case 'zmiana_kontraktu': tekstDymka = `Zmieniam na: ${formatujKontrakt({ typ: kontraktAkcji })}`; break; // Use formatter
+            case 'przebicie': tekstDymka = `Przebijam: ${formatujKontrakt({ typ: kontraktAkcji })}!`; break; // Use formatter
             case 'pas': case 'pas_lufa': tekstDymka = 'Pas'; break;
             case 'pytanie': tekstDymka = 'Pytam?'; break;
             case 'nie_pytam': tekstDymka = 'Bez Pytania!'; break;
             case 'graj_normalnie': tekstDymka = 'Gramy!'; break;
             case 'do_konca': tekstDymka = 'Do końca!'; break;
-            default: // Dla 'lufa', 'kontra' itp.
-                 tekstDymka = typAkcji.charAt(0).toUpperCase() + typAkcji.slice(1);
-                 if (typAkcji === 'lufa' && kontraktAkcji && atutAkcji) {
+            default:
+                 tekstDymka = typAkcji.charAt(0).toUpperCase() + typAkcji.slice(1).replace('_', ' ');
+                 if (typAkcji === 'lufa' && kontraktAkcji) {
                      const kontraktStr = formatujKontrakt({ typ: kontraktAkcji, atut: atutAkcji });
-                     tekstDymka = `Lufa (na ${kontraktStr})`;
+                     tekstDymka = `Lufa (${kontraktStr})`; // Simplified text
                  }
                 break;
         }
     } else if (logDoWyswietlenia.typ === 'meldunek') {
-        tekstDymka = `Para (${logDoWyswietlenia.punkty || 0} pkt)!`;
+        tekstDymka = `${logDoWyswietlenia.punkty === 40 ? 'Duża ' : ''}Para! (+${logDoWyswietlenia.punkty || 0})`; // Better text
     }
 
-    // Jeśli tekst został sformatowany, pokaż dymek
-    if (tekstDymka) {
-        pokazDymekAkcji(pozycjaGracza, tekstDymka);
-    }
+    if (tekstDymka) pokazDymekAkcji(pozycjaGracza, tekstDymka);
 }
 
 
-/**
- * Tworzy i wyświetla element dymka nad kontenerem gracza na określony czas.
- */
 function pokazDymekAkcji(pozycja, tekst) {
     const kontenerGracza = document.getElementById(`gracz-${pozycja}`);
-    if (!kontenerGracza) return; // Zabezpieczenie
+    if (!kontenerGracza) return;
 
-    // Usuń poprzedni dymek, jeśli istnieje
     const staryDymek = kontenerGracza.querySelector('.dymek-akcji');
     if (staryDymek) staryDymek.remove();
 
-    // Stwórz nowy dymek
     const dymek = document.createElement('div');
     dymek.className = 'dymek-akcji';
-    dymek.innerHTML = tekst; // Użyj HTML (np. dla formatowania kontraktu)
+    dymek.innerHTML = tekst;
     kontenerGracza.appendChild(dymek);
 
-    // Usuń dymek po 4 sekundach
     setTimeout(() => {
-        // Sprawdź, czy dymek nadal istnieje (na wypadek szybkiego odświeżenia)
-        if (dymek.parentNode) {
-            dymek.remove();
-        }
+        if (dymek.parentNode) dymek.remove();
     }, 4000);
 }
 
-/**
- * Renderuje przyciski dostępne dla gracza w fazie licytacji.
- * Grupuje przyciski według typu kontraktu (np. NORMALNA) i koloru.
- */
 function renderujPrzyciskiLicytacji(akcje) {
     const kontener = document.getElementById('kontener-akcji');
     if (!kontener) return;
-    kontener.innerHTML = ''; // Wyczyść stare przyciski
+    kontener.innerHTML = '';
 
-    // Pogrupuj akcje (np. wszystkie deklaracje 'NORMALNA' razem)
     const grupy = akcje.reduce((acc, akcja) => {
-        let klucz;
-        // Używaj .name jeśli to enum, inaczej użyj stringa
         const typAkcji = akcja.typ?.name || akcja.typ;
         const kontraktAkcji = akcja.kontrakt?.name || akcja.kontrakt;
-
-        if (typAkcji === 'przebicie') klucz = kontraktAkcji;
-        else if (typAkcji === 'deklaracja') klucz = kontraktAkcji;
-        else klucz = typAkcji; // pas, lufa, pytanie, etc.
-
+        let klucz = typAkcji === 'deklaracja' || typAkcji === 'przebicie' ? kontraktAkcji : typAkcji;
         if (!acc[klucz]) acc[klucz] = [];
-        acc[klucz].push(akcja); // Przechowuj oryginalny obiekt akcji
+        acc[klucz].push(akcja);
         return acc;
     }, {});
 
-    // Stwórz przyciski dla każdej grupy
     for (const [nazwaGrupy, akcjeWGrupie] of Object.entries(grupy)) {
         const btn = document.createElement('button');
-        const pierwszaAkcja = akcjeWGrupie[0]; // Weź pierwszą akcję jako reprezentanta grupy
+        const pierwszaAkcja = akcjeWGrupie[0];
+        const typAkcjiGrupy = pierwszaAkcja.typ?.name || pierwszaAkcja.typ; // Type of the group's first action
 
-        if (nazwaGrupy === 'lufa') { // Specjalne formatowanie dla przycisku "Lufa"
+        if (typAkcjiGrupy === 'lufa') {
             const kontekst = pierwszaAkcja;
-            // Sprawdź, czy serwer podał kontekst (kontrakt i atut)
-            if (kontekst.kontrakt && kontekst.atut) {
-                const kontraktStr = formatujKontrakt({ typ: kontekst.kontrakt, atut: kontekst.atut });
-                btn.innerHTML = `Lufa (na ${kontraktStr})`;
-            } else { // Domyślne "Lufa"
-                btn.textContent = "Lufa";
+             let btnHTML = "Lufa"; // Default
+            if (kontekst.kontrakt) { // Check if contract context is provided
+                 const kontraktStr = formatujKontrakt({ typ: kontekst.kontrakt, atut: kontekst.atut });
+                 btnHTML = `Lufa (${kontraktStr})`;
             }
+             btn.innerHTML = btnHTML;
             btn.onclick = () => wyslijAkcjeGry(pierwszaAkcja);
         }
-        // Przyciski pojedyncze bez atutu (pas, LEPSZA, GORSZA, pytanie, etc.)
-        else if (akcjeWGrupie.length === 1 && !pierwszaAkcja.atut) {
-            // Zamień nazwę grupy (np. 'LEPSZA', 'GORSZA', 'pas_lufa') na bardziej czytelną
-             let btnText = nazwaGrupy.replace('_', ' ');
-             // Użyj wielkiej litery na początku dla czytelności
-             btnText = btnText.charAt(0).toUpperCase() + btnText.slice(1).toLowerCase();
-             // Specjalny przypadek dla Pas Lufa
-             if(nazwaGrupy === 'pas_lufa') btnText = 'Pas Lufa';
+        else if (akcjeWGrupie.length === 1 && !pierwszaAkcja.atut && typAkcjiGrupy !== 'deklaracja') { // Single action buttons without suits (pas, LEPSZA, pytanie, etc.) AND NOT a declaration
+            let btnText = nazwaGrupy.replace('_', ' ');
+            btnText = btnText.charAt(0).toUpperCase() + btnText.slice(1).toLowerCase();
+            if(nazwaGrupy === 'pas_lufa') btnText = 'Pas Lufa';
+            if(nazwaGrupy === 'do_konca') btnText = 'Do Końca'; // Better formatting
+            if(nazwaGrupy === 'graj_normalnie') btnText = 'Graj Normalnie'; // Better formatting
+            if(nazwaGrupy === 'nie_pytam') btnText = 'Bez Pytania'; // Better formatting
 
              btn.textContent = btnText;
             btn.onclick = () => wyslijAkcjeGry(pierwszaAkcja);
-        } else { // Przyciski grupujące kolory (NORMALNA, BEZ_PYTANIA)
-            btn.textContent = nazwaGrupy; // Wyświetl nazwę kontraktu
-            btn.onclick = () => { // Po kliknięciu pokaż przyciski kolorów
-                kontener.innerHTML = ''; // Wyczyść przyciski grup
-                akcjeWGrupie.forEach(akcjaKoloru => { // Dla każdej akcji z kolorem w tej grupie
-                    const kolorBtn = document.createElement('button');
-                    const atutKoloru = akcjaKoloru.atut?.name || akcjaKoloru.atut; // Pobierz nazwę atutu
+        } else { // Buttons grouping suits (NORMALNA, BEZ_PYTANIA declarations) OR single declarations (LEPSZA, GORSZA)
+            // Use formatujKontrakt to display the button text (handles LEPSZA, GORSZA nicely)
+            btn.innerHTML = formatujKontrakt({ typ: nazwaGrupy }); // Display contract name correctly
 
-                    if (atutKoloru) {
-                        const info = mapowanieKolorow[atutKoloru];
-                        if (info) { // Wyświetl symbol i nazwę koloru
-                            kolorBtn.innerHTML = `<span class="symbol-koloru ${info.klasa}">${info.symbol}</span> ${atutKoloru}`;
-                        } else { // Fallback
-                            kolorBtn.textContent = atutKoloru;
-                        }
-                    } else { // Fallback, jeśli brak atutu
-                        kolorBtn.textContent = nazwaGrupy;
-                    }
-                    kolorBtn.onclick = () => wyslijAkcjeGry(akcjaKoloru); // Wyślij akcję z wybranym kolorem
-                    kontener.appendChild(kolorBtn);
-                });
-            };
+            if (akcjeWGrupie.length === 1 && !pierwszaAkcja.atut) {
+                // If it's a single declaration without a suit (LEPSZA, GORSZA), assign action directly
+                btn.onclick = () => wyslijAkcjeGry(pierwszaAkcja);
+            } else {
+                // Otherwise (NORMALNA, BEZ_PYTANIA with suits), show suit buttons on click
+                btn.onclick = () => {
+                    kontener.innerHTML = '';
+                    akcjeWGrupie.forEach(akcjaKoloru => {
+                        const kolorBtn = document.createElement('button');
+                        const atutKoloru = akcjaKoloru.atut?.name || akcjaKoloru.atut;
+                        if (atutKoloru) {
+                            const info = mapowanieKolorow[atutKoloru];
+                            if (info) kolorBtn.innerHTML = `<span class="symbol-koloru ${info.klasa}">${info.symbol}</span> ${atutKoloru}`;
+                            else kolorBtn.textContent = atutKoloru;
+                        } else kolorBtn.textContent = nazwaGrupy; // Fallback
+                        kolorBtn.onclick = () => wyslijAkcjeGry(akcjaKoloru);
+                        kontener.appendChild(kolorBtn);
+                    });
+                     // Add a back button
+                     const backBtn = document.createElement('button');
+                     backBtn.textContent = '<< Wstecz';
+                     backBtn.style.backgroundColor = '#6c757d';
+                     backBtn.onclick = () => renderujPrzyciskiLicytacji(akcje); // Re-render initial buttons
+                     kontener.appendChild(backBtn);
+                };
+            }
         }
         kontener.appendChild(btn);
     }
@@ -1243,35 +1090,25 @@ function renderujPrzyciskiLicytacji(akcje) {
 /* ==========================================================================
    SEKCJA 8: OBSŁUGA CZATU
    ========================================================================== */
-/**
- * Wysyła wiadomość wpisaną w polu czatu do serwera.
- */
 function wyslijWiadomoscCzat() {
     if (!czatInputEl) return;
-    const wiadomosc = czatInputEl.value.trim(); // Pobierz i oczyść wiadomość
+    const wiadomosc = czatInputEl.value.trim();
     if (wiadomosc && socket?.readyState === WebSocket.OPEN) {
-        // Wyślij wiadomość jako obiekt JSON
         socket.send(JSON.stringify({
-            gracz: nazwaGracza,
-            typ_wiadomosci: 'czat',
-            tresc: wiadomosc
+            gracz: nazwaGracza, typ_wiadomosci: 'czat', tresc: wiadomosc
         }));
-        czatInputEl.value = ''; // Wyczyść pole input
+        czatInputEl.value = '';
     }
 }
 
-/**
- * Dodaje nową wiadomość do okna czatu.
- */
 function dodajWiadomoscDoCzatu(gracz, tresc) {
     if (!czatWiadomosciEl) return;
     const p = document.createElement('p');
-    // Użyj innerHTML, aby pogrubić nick, ale zabezpiecz treść przed HTML injection
-    p.innerHTML = `<strong>${gracz}:</strong> ${tresc.replace(/</g, "&lt;").replace(/>/g, "&gt;")}`;
+    // Sanitize HTML content before inserting
+    const sanitizedContent = tresc.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    p.innerHTML = `<strong>${gracz}:</strong> ${sanitizedContent}`;
     czatWiadomosciEl.appendChild(p);
-    // Automatycznie przewiń na dół
     czatWiadomosciEl.scrollTop = czatWiadomosciEl.scrollHeight;
-    // Odtwórz dźwięk powiadomienia, jeśli wiadomość nie jest od nas
     if (gracz !== nazwaGracza) {
         odtworzDzwiek('wiadomoscCzat');
     }

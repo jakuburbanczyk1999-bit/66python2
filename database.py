@@ -1,7 +1,7 @@
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Text
 
 # 1. Definicja bazy danych:
 # To stworzy plik 'gra66.db' w tym samym folderze co projekt.
@@ -32,6 +32,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    settings = Column(Text, nullable=True)
     
     # W przyszłości dodamy tu np.:
     # elo = Column(Integer, default=1200)
