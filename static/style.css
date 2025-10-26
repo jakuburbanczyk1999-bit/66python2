@@ -790,3 +790,143 @@ input[type="text"]::placeholder {
 .ekran-gry.brak-oceny #pasek-ewaluacji-kontener {
     display: none;
 }
+/* ==========================================================================
+   SEKCJA X: ULEPSZENIA STRONY STARTOWEJ (start.html)
+   ========================================================================== */
+
+/* --- Główny kontener --- */
+#ekran-startowy {
+    width: 600px; /* Zdefiniuj szerokość */
+    max-width: 90%;
+    margin: 40px auto; /* Centrowanie i margines górny/dolny */
+    background-color: rgba(0, 0, 0, 0.6); /* Ciemniejsze, półprzezroczyste tło */
+    padding: 40px; /* Więcej wewnętrznego marginesu */
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+    text-align: center; /* Wycentruj tekst wewnątrz */
+    border: 1px solid rgba(255, 255, 255, 0.1); /* Subtelna ramka */
+}
+
+#ekran-startowy h1 {
+    font-size: 3em; /* Większy tytuł */
+    margin-bottom: 30px; /* Większy odstęp pod tytułem */
+    color: #f0f0f0;
+    border-bottom: 2px solid yellow; /* Linia pod tytułem */
+    padding-bottom: 15px;
+    display: inline-block; /* Aby border-bottom objął tylko tekst */
+}
+
+/* --- Kontener logowania/rejestracji --- */
+#auth-kontener {
+    margin-bottom: 30px; /* Odstęp od przycisków lobby */
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.05); /* Lekkie tło dla sekcji */
+    border-radius: 8px;
+}
+
+#login-form-kontener h3 {
+    margin-bottom: 20px;
+    color: #e0e0e0;
+}
+
+#auth-pola {
+    display: flex; /* Ułóż pola obok siebie */
+    justify-content: center; /* Wycentruj */
+    gap: 10px; /* Odstęp między polami */
+    margin-bottom: 15px;
+}
+
+#auth-pola input[type="text"],
+#auth-pola input[type="password"] {
+    width: 40%; /* Szerokość pól */
+    padding: 10px;
+    font-size: 1em; /* Ujednolicenie rozmiaru czcionki */
+}
+
+#auth-przyciski button {
+    padding: 10px 25px; /* Dopasowanie paddingu */
+    margin: 0 5px; /* Marginesy boczne */
+}
+
+#auth-blad {
+    color: #ff6b6b; /* Czerwony kolor dla błędów */
+    margin-top: 15px;
+    font-weight: bold;
+}
+
+/* --- Kontener zalogowanego użytkownika --- */
+#zalogowany-kontener {
+    font-size: 1.2em;
+}
+
+#zalogowany-kontener p {
+    margin-bottom: 15px;
+}
+#zalogowany-kontener strong {
+    color: yellow; /* Podświetlenie nazwy użytkownika */
+}
+
+#logout-btn {
+    background-color: #6c757d; /* Szary przycisk wylogowania */
+    padding: 8px 18px;
+}
+#logout-btn:hover {
+    background-color: #5a6268;
+}
+
+/* --- Przyciski tworzenia/przeglądania lobby --- */
+.tryby-gry-kontener {
+    margin-bottom: 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1); /* Separator */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Separator */
+    padding: 25px 0;
+}
+
+/* --- Sekcja dołączania po kodzie --- */
+#dolacz-kontener {
+    margin-bottom: 30px;
+}
+
+#dolacz-kontener p:first-child { /* "Masz kod do gry?..." */
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: #ccc;
+}
+
+#dolacz-kontener input[type="text"] {
+    padding: 10px;
+    width: 200px; /* Stała szerokość pola kodu */
+    margin-right: 5px; /* Odstęp od przycisku */
+    text-transform: uppercase; /* Kod zawsze wielkimi literami */
+}
+#dolacz-kontener input[type="text"]::placeholder {
+    text-transform: none; /* Placeholder normalnie */
+}
+
+
+#dolacz-kontener button {
+    padding: 10px 20px;
+}
+
+#blad-lobby {
+    color: #ff6b6b;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+/* --- Przycisk zasad --- */
+#zasady-btn {
+    display: inline-block; /* Traktuj jak blok */
+    margin-top: 20px;
+    color: #ccc;
+    text-decoration: none;
+    padding: 8px 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+#zasady-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}

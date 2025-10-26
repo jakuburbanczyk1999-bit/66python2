@@ -6,11 +6,16 @@ import asyncio
 import string
 import traceback
 import time
-from typing import Any, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from typing import Any, Optional, AsyncGenerator
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel # POPRAWKA: Pydantic
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel 
+from database import init_db, async_session_maker, User
+from auth_utils import hash_password, verify_password
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from contextlib import asynccontextmanager
 
 import silnik_gry
 import boty  # Import modułu botów
@@ -19,6 +24,16 @@ import boty  # Import modułu botów
 class LocalGameRequest(BaseModel):
     nazwa_gracza: str
 
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    username: str
+    active_game_id: Optional[str] = None
+
 class CreateGameRequest(BaseModel):
     nazwa_gracza: str
     tryb_gry: str # '4p' lub '3p'
@@ -26,9 +41,27 @@ class CreateGameRequest(BaseModel):
     publiczna: bool # NOWE
     haslo: Optional[str] = None # NOWE
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Kod uruchamiany przy starcie (dawny 'startup')
+    print("Serwer startuje... Inicjalizacja bazy danych.")
+    await init_db()
+    print("Baza danych jest gotowa.")
+
+    yield # W tym miejscu aplikacja działa
+
+    # Kod uruchamiany przy wyłączeniu (dawny 'shutdown')
+    print("Serwer się zamyka.")
 # --- Aplikacja FastAPI ---
 app = FastAPI()
 mcts_bot = boty.MCTS_Bot()  # Globalna instancja bota MCTS
+
+@app.on_event("startup")
+async def on_startup():
+    """Inicjalizuje bazę danych przy starcie serwera."""
+    print("Serwer startuje... Inicjalizacja bazy danych.")
+    await init_db()
+    print("Baza danych jest gotowa.")
 
 # --- Przechowywanie stanu gier ---
 gry = {}
@@ -84,6 +117,14 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # === Funkcje Pomocnicze ===
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """Funkcja 'zależności' (dependency) FastAPI do zarządzania sesją bazy danych."""
+    async with async_session_maker() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 def generuj_krotki_id(dlugosc=6) -> str:
     """Generuje unikalny, krótki identyfikator gry."""
@@ -186,6 +227,113 @@ def read_rules_page():
     """Zwraca stronę z zasadami gry."""
     return FileResponse('static/zasady.html')
 
+
+@app.post("/register")
+async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+    """Rejestruje nowego użytkownika."""
+
+    # 1. Sprawdź, czy użytkownik już istnieje
+    query = select(User).where(User.username == user_data.username)
+    result = await db.execute(query)
+    existing_user = result.scalar_one_or_none()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Użytkownik o tej nazwie już istnieje."
+        )
+
+    # 2. Sprawdź hasło
+    if len(user_data.password) < 4:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Hasło musi mieć co najmniej 4 znaki."
+        )
+
+    # 3. Stwórz nowego użytkownika
+    hashed_pass = hash_password(user_data.password)
+    new_user = User(username=user_data.username, hashed_password=hashed_pass)
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    # 4. Zwróć sukces (i "token" do logowania)
+    # Na razie nasz "token" to po prostu nazwa użytkownika
+    return Token(access_token=new_user.username, token_type="bearer", username=new_user.username)
+
+@app.post("/login")
+async def login_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+    """Loguje istniejącego użytkownika i sprawdza, czy jest w aktywnej grze."""
+
+    # 1. Znajdź użytkownika (bez zmian)
+    query = select(User).where(User.username == user_data.username)
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+
+    # 2. Sprawdź użytkownika i hasło (bez zmian)
+    if not user or not verify_password(user_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Nieprawidłowa nazwa użytkownika lub hasło."
+        )
+
+    # --- NOWE: Sprawdź aktywne gry ---
+    active_game_id_found = None
+    try:
+        gry_copy = list(gry.values()) # Bezpieczna kopia do iteracji
+        for partia in gry_copy:
+            if partia.get("status_partii") == "W_TRAKCIE":
+                slots = partia.get("slots", [])
+                # Szukaj slotu z TĄ nazwą użytkownika ORAZ statusem 'rozlaczony'
+                slot_gracza = next((s for s in slots if s.get("nazwa") == user.username and s.get("typ") == "rozlaczony"), None)
+                if slot_gracza:
+                    active_game_id_found = partia.get("id_gry")
+                    print(f"Użytkownik {user.username} znaleziony w aktywnej grze {active_game_id_found}")
+                    break # Znaleziono grę, przerwij pętlę
+    except RuntimeError:
+         print("Ostrzeżenie: Słownik gier zmienił się podczas sprawdzania statusu logowania.")
+    # --- KONIEC NOWEGO SPRAWDZANIA ---
+
+    # 3. Zwróć sukces (i "token" oraz ID gry, jeśli znaleziono)
+    return Token(
+        access_token=user.username, 
+        token_type="bearer", 
+        username=user.username,
+        active_game_id=active_game_id_found # <-- DODANE ID GRY
+    )
+
+@app.get("/check_active_game/{username}")
+async def check_active_game(username: str):
+    """Sprawdza, czy dany użytkownik ma aktywną grę, do której może wrócić."""
+    active_game_id_found = None
+    try:
+        gry_copy = list(gry.values()) # Bezpieczna kopia
+        for partia in gry_copy:
+            if partia.get("status_partii") == "W_TRAKCIE":
+                slots = partia.get("slots", [])
+                # Szukaj slotu z TĄ nazwą użytkownika ORAZ statusem 'rozlaczony' LUB 'czlowiek'
+                # (Jeśli jest 'czlowiek', ale połączenie WS nie istnieje, też może wrócić)
+                slot_gracza = next((s for s in slots if s.get("nazwa") == username and s.get("typ") in ["rozlaczony", "czlowiek"]), None)
+                if slot_gracza:
+                    # Dodatkowo sprawdźmy, czy gracz faktycznie NIE jest połączony przez WebSocket
+                    # (proste sprawdzenie - czy w ogóle są jakieś połączenia dla tej gry?)
+                    # Lepsze byłoby śledzenie połączeń per użytkownik, ale to uproszczenie
+                    jest_polaczony_ws = False
+                    if partia.get("id_gry") in manager.active_connections:
+                        # Tutaj przydałoby się bardziej szczegółowe sprawdzenie
+                        # Na razie zakładamy, że jeśli slot istnieje, a gracz nie jest botem, to może wrócić
+                        pass # Uproszczenie - pozwalamy wrócić, jeśli slot istnieje
+
+                    if not jest_polaczony_ws: # Jeśli nie jest aktywnie połączony
+                        active_game_id_found = partia.get("id_gry")
+                        print(f"Znaleziono potencjalną grę do powrotu dla {username}: {active_game_id_found}")
+                        break
+    except RuntimeError:
+         print("Ostrzeżenie: Słownik gier zmienił się podczas sprawdzania /check_active_game.")
+
+    return {"active_game_id": active_game_id_found}
+
 @app.get("/gra/lista_lobby")
 def pobierz_liste_lobby():
     """Pobiera listę publicznych, otwartych lobby online."""
@@ -285,42 +433,59 @@ def stworz_gre(request: CreateGameRequest):
         partia["status_partii"] = "W_TRAKCIE"
         partia["slots"][0].update({"nazwa": nazwa_gracza, "typ": "czlowiek"})
 
-        if request.tryb_gry == '4p':
-            partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot", "druzyna": "Oni"})
-            partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot", "druzyna": "My"})
-            partia["slots"][3].update({"nazwa": "Bot_3", "typ": "bot", "druzyna": "Oni"})
+        try: # --- Dodany blok try ---
+            if request.tryb_gry == '4p':
+                partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot", "druzyna": "Oni"})
+                partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot", "druzyna": "My"})
+                partia["slots"][3].update({"nazwa": "Bot_3", "typ": "bot", "druzyna": "Oni"})
 
-            # Inicjalizuj silnik dla 4p
-            d_my, d_oni = silnik_gry.Druzyna(partia["nazwy_druzyn"]["My"]), silnik_gry.Druzyna(partia["nazwy_druzyn"]["Oni"])
-            d_my.przeciwnicy, d_oni.przeciwnicy = d_oni, d_my
-            gracze_tmp = [None] * 4
-            for slot in partia["slots"]:
-                g = silnik_gry.Gracz(slot["nazwa"])
-                gracze_tmp[slot["slot_id"]] = g
-                (d_my if slot["druzyna"] == "My" else d_oni).dodaj_gracza(g)
+                d_my = silnik_gry.Druzyna(partia["nazwy_druzyn"]["My"])
+                d_oni = silnik_gry.Druzyna(partia["nazwy_druzyn"]["Oni"])
+                d_my.przeciwnicy, d_oni.przeciwnicy = d_oni, d_my
+                gracze_tmp = [None] * 4
+                for slot in partia["slots"]:
+                    g = silnik_gry.Gracz(slot["nazwa"])
+                    gracze_tmp[slot["slot_id"]] = g
+                    (d_my if slot["druzyna"] == "My" else d_oni).dodaj_gracza(g)
 
-            partia.update({"gracze_engine": gracze_tmp, "druzyny_engine": [d_my, d_oni]})
-            rozdanie = silnik_gry.Rozdanie(partia["gracze_engine"], partia["druzyny_engine"], 0)
+                partia.update({"gracze_engine": gracze_tmp, "druzyny_engine": [d_my, d_oni]})
+                print(f"[{id_gry}] Tworzenie lokalnego rozdania 4p...")
+                rozdanie = silnik_gry.Rozdanie(partia["gracze_engine"], partia["druzyny_engine"], 0)
+                print(f"[{id_gry}] Rozdanie 4p stworzone.")
 
-        else: # 3p lokalna
-            partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot"})
-            partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot"})
+            else: # 3p lokalna
+                partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot"})
+                partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot"})
 
-            # Inicjalizuj silnik dla 3p
-            gracze_tmp = [None] * 3
-            for slot in partia["slots"]:
-                g = silnik_gry.Gracz(slot["nazwa"])
-                g.punkty_meczu = 0
-                gracze_tmp[slot["slot_id"]] = g
+                gracze_tmp = [None] * 3
+                for slot in partia["slots"]:
+                    g = silnik_gry.Gracz(slot["nazwa"])
+                    g.punkty_meczu = 0
+                    gracze_tmp[slot["slot_id"]] = g
 
-            partia.update({"gracze_engine": gracze_tmp, "punkty_meczu": {g.nazwa: 0 for g in gracze_tmp}})
-            rozdanie = silnik_gry.RozdanieTrzyOsoby(partia["gracze_engine"], 0)
+                partia.update({"gracze_engine": gracze_tmp, "punkty_meczu": {g.nazwa: 0 for g in gracze_tmp}})
+                print(f"[{id_gry}] Tworzenie lokalnego rozdania 3p...")
+                rozdanie = silnik_gry.RozdanieTrzyOsoby(partia["gracze_engine"], 0)
+                print(f"[{id_gry}] Rozdanie 3p stworzone.")
 
-        rozdanie.rozpocznij_nowe_rozdanie()
-        partia["aktualne_rozdanie"] = rozdanie
+            # Wywołaj rozpoczęcie rozdania tylko jeśli zostało poprawnie stworzone
+            if rozdanie:
+                print(f"[{id_gry}] Rozpoczynanie nowego rozdania...")
+                rozdanie.rozpocznij_nowe_rozdanie()
+                print(f"[{id_gry}] Rozdanie rozpoczęte.")
+                partia["aktualne_rozdanie"] = rozdanie
+            else:
+                 raise ValueError("Nie udało się zainicjalizować obiektu rozdania.")
 
-    # Jeśli lobby jest ONLINE, po prostu je stwórz (gracz dołączy przez WS)
-    # (Nie trzeba nic więcej robić, sloty są puste)
+        except Exception as e: # --- Dodany blok except ---
+            print(f"!!! KRYTYCZNY BŁĄD podczas tworzenia gry lokalnej {id_gry} !!!")
+            traceback.print_exc()
+            # Zwróć błąd zamiast pozwalać na Internal Server Error
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Błąd serwera podczas inicjalizacji gry lokalnej: {e}"
+            )
+
 
     gry[id_gry] = partia
     return {"id_gry": id_gry}
@@ -586,18 +751,39 @@ async def replacement_timer(id_gry: str, slot_id: int):
         stara_nazwa = slot.get("nazwa", "Gracz")
         nowa_nazwa_bota = f"Bot_{stara_nazwa[:8]}"
         print(f"[{id_gry}] Gracz {stara_nazwa} nie wrócił. Zastępowanie botem {nowa_nazwa_bota}.")
-        
+
         slot["nazwa"] = nowa_nazwa_bota
         slot["typ"] = "bot"
         slot["disconnect_task"] = None # Wyczyść zadanie
-        
+
         # Zaktualizuj nazwę gracza w silniku gry!
         if partia.get("gracze_engine"):
             gracz_obj = next((g for g in partia["gracze_engine"] if g.nazwa == stara_nazwa), None)
             if gracz_obj:
-                gracz_obj.nazwa = nowa_nazwa_bota # Zmień nazwę w obiekcie silnika
-        
-        # Poinformuj wszystkich i uruchom pętlę botów (może być tura bota)
+                gracz_obj.nazwa = nowa_nazwa_bota
+
+        # --- NOWY BLOK: Sprawdź, czy zostali jacyś ludzie ---
+        pozostali_ludzie = any(s.get("typ") == "czlowiek" for s in partia.get("slots", []))
+
+        if not pozostali_ludzie:
+            print(f"[{id_gry}] Brak graczy ludzkich po zastąpieniu {stara_nazwa}. Usuwanie gry.")
+            try:
+                # Zamknij pozostałe połączenia (jeśli jakieś boty były połączone?)
+                if id_gry in manager.active_connections:
+                    connections_copy = manager.active_connections[id_gry][:]
+                    for conn in connections_copy:
+                        await conn.close(code=1000, reason="Gra zakończona - brak graczy.")
+                    del manager.active_connections[id_gry] # Usuń wpis z managera
+                
+                # Usuń grę
+                del gry[id_gry]
+            except KeyError:
+                print(f"[{id_gry}] Nie można było usunąć gry (może już usunięta).")
+            return # Zakończ funkcję timera, nie rób broadcastu ani pętli botów
+        # --- KONIEC NOWEGO BLOKU ---
+
+        # Poinformuj wszystkich (jeśli gra nie została usunięta) i uruchom pętlę botów
+        print(f"[{id_gry}] Zostali gracze ludzcy. Kontynuowanie gry.")
         await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
         await uruchom_petle_botow(id_gry)
     else:
@@ -755,30 +941,51 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
         elif partia["status_partii"] == "W_TRAKCIE":
             slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
             
-            if slot_gracza: # Jeśli gracz należy do tej gry
-                if slot_gracza.get("typ") == "rozlaczony":
-                    # Gracz wraca do gry!
-                    print(f"[{id_gry}] Gracz {nazwa_gracza} dołączył ponownie.")
-                    slot_gracza["typ"] = "czlowiek"
-                    slot_gracza["disconnect_time"] = None
-                    
-                    # ANULOWANIE TIMERA 
-                    task = slot_gracza.get("disconnect_task")
-                    if task:
-                        task.cancel()
-                        print(f"[{id_gry}] Anulowano timer dla slotu {slot_gracza['slot_id']}.")
-                        slot_gracza["disconnect_task"] = None
-                elif slot_gracza.get("typ") == "czlowiek":
-                    # Gracz już jest połączony (np. druga karta przeglądarki)
-                    await websocket.accept() # Zaakceptuj, żeby wysłać powód
+            if not slot_gracza:
+                # Gracz nie należy do tej gry
+                # await websocket.accept() # JUŻ NIEPOTRZEBNE - połączenie jest akceptowane przez manager.connect
+                await websocket.close(code=1008, reason="Gra jest w toku, nie możesz dołączyć.")
+                return # Zakończ obsługę
+
+            # Sprawdź typ slotu gracza
+            typ_slotu = slot_gracza.get("typ")
+
+            if typ_slotu == "rozlaczony":
+                # Gracz wraca do gry!
+                print(f"[{id_gry}] Gracz {nazwa_gracza} dołączył ponownie.")
+                slot_gracza["typ"] = "czlowiek"
+                slot_gracza["disconnect_time"] = None
+                
+                # Anuluj timer
+                task = slot_gracza.get("disconnect_task")
+                if task:
+                    task.cancel()
+                    print(f"[{id_gry}] Anulowano timer dla slotu {slot_gracza['slot_id']}.")
+                    slot_gracza["disconnect_task"] = None
+                # Kontynuuj normalnie poniżej (wyślij stan itp.)
+
+            elif typ_slotu == "czlowiek":
+                # To MOŻE być druga karta LUB pierwsze połączenie do gry lokalnej
+                czy_lokalna = partia.get("tryb_gry") == "lokalna"
+                
+                # Jeśli to NIE jest gra lokalna LUB gracz już jest aktywny (np. druga karta)
+                # Musimy sprawdzić, czy gracz jest już na liście aktywnych połączeń
+                gracz_juz_polaczony = False
+                if id_gry in manager.active_connections:
+                     # Sprawdźmy, czy jest już inne połączenie dla tego gracza
+                     # (Potrzebujemy sposobu identyfikacji połączeń - na razie zakładamy, że tylko jedno na gracza)
+                     # Proste sprawdzenie: czy jest więcej niż jedno połączenie w grze?
+                     # Lepsze byłoby przechowywanie mapowania nazwa_gracza -> websocket
+                     pass # Na razie pomijamy tę logikę odrzucania drugiej karty
+
+                if not czy_lokalna and gracz_juz_polaczony: # Uproszczone: odrzuć tylko drugą kartę w grze online
+                    # await websocket.accept() # JUŻ NIEPOTRZEBNE
                     await websocket.close(code=1008, reason="Jesteś już połączony z tą grą.")
                     return # Nie łącz
-                # Jeśli gracz jest botem, nie może dołączyć jako człowiek
-            else:
-                # Gracz nie należy do tej gry
-                await websocket.accept()
-                await websocket.close(code=1008, reason="Gra jest w toku, nie możesz dołączyć.")
-                return
+                else:
+                     # To jest pierwsze połączenie do gry lokalnej LUB pierwsza karta gry online
+                     print(f"[{id_gry}] Gracz {nazwa_gracza} połączył się (status W_TRAKCIE).")
+                     # Po prostu kontynuuj normalnie poniżej
 
         # Wyślij stan początkowy, jeśli gracz dołączył w trakcie gry
         # (broadcast na początku obsługuje lobby)

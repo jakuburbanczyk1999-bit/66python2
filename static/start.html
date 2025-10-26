@@ -10,14 +10,49 @@
    <div id="ekran-startowy">
     <h1>Gra w 66</h1>
 
-    <div id="ustaw-nazwe-kontener">
-        <label for="nazwa-gracza-input">Twoja wyswietlana nazwa:</label>
-        <input type="text" id="nazwa-gracza-input" maxlength="15" placeholder="Wpisz swoją nazwę...">
+    <div id="auth-kontener">
+        <div id="niezalogowany-kontener" class="hidden">
+            <div id="initial-guest-options">
+                <button id="show-login-btn">Zaloguj / Zarejestruj</button>
+                <button id="guest-login-btn">Graj jako Gość</button>
+            </div>
+            <div id="guest-name-selection" class="hidden">
+                <input type="text" id="guest-name-input" placeholder="Wpisz nazwę gościa..." maxlength="15">
+                <button id="confirm-guest-btn">Potwierdź</button>
+                <button id="cancel-guest-btn" style="background-color: #6c757d;">Anuluj</button>
+                <p style="font-size: 0.9em; color: #ccc;">(Pozostaw puste dla losowej nazwy)</p>
+            </div>
+        </div>
+
+        <div id="login-form-kontener" class="hidden">
+            <h3>Zaloguj się lub Zarejestruj</h3>
+            <div id="auth-pola">
+                <input type="text" id="auth-username" placeholder="Nazwa użytkownika" maxlength="15">
+                <input type="password" id="auth-password" placeholder="Hasło" maxlength="50">
+            </div>
+            <div id="auth-przyciski">
+                <button id="login-btn">Zaloguj</button>
+                <button id="register-btn">Zarejestruj</button>
+                <button id="cancel-login-btn" style="background-color: #6c757d;">Anuluj</button>
+            </div>
+            <p id="auth-blad" class="hidden"></p>
+        </div>
+
+        <div id="zalogowany-kontener" class="hidden">
+            <p>Witaj, <strong id="zalogowany-nazwa"></strong>!</p>
+            <button id="logout-btn">Wyloguj</button>
+        </div>
     </div>
+    
     <div class="tryby-gry-kontener">
         <button id="open-create-lobby-btn" class="duzy-przycisk">Stwórz Lobby</button>
         <a href="/lobby.html" id="browse-lobby-btn" class="duzy-przycisk">Przeglądaj Lobby</a>
     </div>
+    <div id="rejoin-kontener" class="hidden" style="margin-bottom: 25px; padding: 15px; background-color: rgba(255, 255, 100, 0.15); border-radius: 8px;">
+        <p style="margin-bottom: 10px;">Wygląda na to, że opuściłeś trwającą grę!</p>
+        <button id="rejoin-btn" class="duzy-przycisk" style="background-color: #ffc107; color: #333;">Wróć do gry</button>
+    </div>
+
     
 
     <div id="dolacz-kontener">
