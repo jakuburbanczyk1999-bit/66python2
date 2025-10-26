@@ -224,12 +224,12 @@ input[type="text"]::placeholder {
 .ekran-gry {
     display: grid;
     grid-template-areas:
-        "info-lewy    info-srodek   panel-prawy" 
-        "panel-lewy   obszar-gry    panel-prawy" 
-        "panel-lewy   gracz-dol     panel-prawy"; 
+        "info-lewy    info-srodek   panel-prawy"
+        "panel-lewy   obszar-gry    panel-prawy"
+        "panel-lewy   gracz-dol     panel-prawy";
 
     grid-template-rows: auto 1fr auto;
-    grid-template-columns: 350px 1fr 350px;
+    grid-template-columns: 280px 1fr 280px; /* Np. 280px zamiast 350px */
     height: 100vh;
     width: 100vw;
     box-sizing: border-box;
@@ -244,7 +244,7 @@ input[type="text"]::placeholder {
         ".   info-srodek   panel-prawy"
         ".   obszar-gry    panel-prawy"
         ".   gracz-dol     panel-prawy";
-    grid-template-columns: 0px 1fr 350px;
+    grid-template-columns: 0px 1fr 280px;
     gap: 0 10px;
 }
 .ekran-gry.czat-ukryty.partia-historia-ukryta #panel-lewy-kontener,
@@ -253,17 +253,17 @@ input[type="text"]::placeholder {
 }
 
 /* Ukrycie prawej kolumny */
-.ekran-gry.historia-ukryta { 
+
+.ekran-gry.czat-ukryty.partia-historia-ukryta.historia-ukryta {
     grid-template-areas:
-        "info-lewy   info-srodek   ."
-        "panel-lewy  obszar-gry    ."
-        "panel-lewy  gracz-dol     .";
-    grid-template-columns: 350px 1fr 0px;
-    gap: 0 10px;
+        ".   info-srodek   ."
+        ".   obszar-gry    ."
+        ".   gracz-dol     .";
+    grid-template-columns: 0px 1fr 0px; /* Prawa kolumna znika */
+    gap: 0;
 }
-.ekran-gry.historia-ukryta #panel-prawy-kontener { 
-    display: none;
-}
+
+
 .ekran-gry.historia-ukryta #panel-historii {
     display: none;
 }
@@ -274,6 +274,7 @@ input[type="text"]::placeholder {
         ".   info-srodek   ."
         ".   obszar-gry    ."
         ".   gracz-dol     .";
+    /* --- ZMIANA: Dostosuj kolumny przy ukrywaniu --- */
     grid-template-columns: 0px 1fr 0px;
     gap: 0;
 }
@@ -295,8 +296,10 @@ input[type="text"]::placeholder {
 /* --- Górne panele informacyjne --- */
 #info-lewy-rog {
     grid-area: info-lewy;
-    align-self: start; /* --- POPRAWKA --- */
-    padding: 10px; /* --- POPRAWKA --- */
+    align-self: start;
+    padding: 10px;
+    justify-self: center;
+    text-align: center; /* Dodatkowo wyśrodkuj tekst wewnątrz */
 }
 
 #info-srodek {
@@ -375,17 +378,18 @@ input[type="text"]::placeholder {
 .obszar-gry {
     grid-area: obszar-gry;
     display: flex;
-    justify-content: center; 
-    align-items: center;     
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
 }
 
 .kontener-stolu {
     display: flex;
     justify-content: center;
     align-items: center;
-    flex-shrink: 0; 
-    gap: 120px; 
-    position: relative; 
+    flex-shrink: 0;
+    gap: 180px; /* Zwiększ z 120px */
+    position: relative;
 }
 
 .strefa-srodkowa {
@@ -398,18 +402,15 @@ input[type="text"]::placeholder {
 }
 
 #stol-gry {
-    width: 400px;
-    height: 250px;
+    width: 500px;  
+    height: 300px; 
     background-color: rgba(0, 0, 0, 0.2);
     border-radius: 10px;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(2, 1fr);
-    gap: 5px;
-    justify-items: center;
-    align-items: center;
+    /* Usunięto grid-template-*, bo sloty są pozycjonowane absolutnie */
     padding: 10px;
-    position: relative; /* Ważne dla pozycjonowania slotów kart */
+    position: relative;
     flex-shrink: 0;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3); /* Dodano cień dla lepszego wyglądu */
 }
 
 #stol-gry .slot-karty {
@@ -419,21 +420,24 @@ input[type="text"]::placeholder {
     display: flex;
     justify-content: center;
     align-items: center;
+    background-color: rgba(255, 255, 255, 0.05); /* Opcjonalnie: lekkie tło dla slotów */
+    border: 1px dashed rgba(255, 255, 255, 0.1); /* Opcjonalnie: ramka dla slotów */
 }
 
 /* Pozycjonowanie slotów kart na stole */
-#slot-karty-gora { top: -5px; left: 50%; transform: translateX(-50%); }
-#slot-karty-lewy { left: 5px; top: 50%; transform: translateY(-50%); }
-#slot-karty-prawy { right: 5px; top: 50%; transform: translateY(-50%);  }
-#slot-karty-dol { bottom: 5px; left: 50%; transform: translateX(-50%); }
+#slot-karty-gora { top: 10px; left: 50%; transform: translateX(-50%); } /* Wyżej */
+#slot-karty-lewy { left: 10px; top: 50%; transform: translateY(-50%); } /* Bardziej w lewo */
+#slot-karty-prawy { right: 10px; top: 50%; transform: translateY(-50%); } /* Bardziej w prawo */
+#slot-karty-dol { bottom: 10px; left: 50%; transform: translateX(-50%); } /* Niżej */
 
 /* --- Gracze --- */
-.gracz-boczny { /* Lewy i Prawy */
+.gracz-boczny {
     display: flex;
     flex-direction: column;
-    align-items: center; 
-    position: relative; /* Dla dymków akcji */
+    align-items: center;
+    position: relative;
     margin-top:150px;
+
 }
 
 #gracz-lewy .info-gracza, #gracz-prawy .info-gracza, #gracz-gora .info-gracza, #gracz-dol .info-gracza {
@@ -595,8 +599,10 @@ input[type="text"]::placeholder {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-height: 0; 
-    align-self: stretch; /* Rozciąga kontener na całą wysokość komórki */
+    min-height: 0;
+    align-self: stretch;
+    /* --- ZMIANA: Dodajemy padding, aby odsunąć od krawędzi --- */
+    padding-left: 10px;
 }
 
 /* --- Panel historii partii (lewy górny) --- */
@@ -730,8 +736,39 @@ input[type="text"]::placeholder {
 .ekran-gry.tryb-3-osoby #slot-karty-lewy { top: 50%; left: 0; transform: translateY(-50%) rotate(0deg); }
 .ekran-gry.tryb-3-osoby #slot-karty-prawy { top: 50%; right: 0; transform: translateY(-50%) rotate(0deg); }
 .ekran-gry.tryb-3-osoby #slot-karty-dol { bottom: 0; left: 50%; transform: translateX(-50%); }
-.ekran-gry.tryb-3-osoby #slot-karty-gora { display: none; } /* Ukryj slot górnego gracza */
+.ekran-gry.tryb-3-osoby #slot-karty-gora { display: none; } 
 
 .ekran-gry.tryb-3-osoby .kontener-stolu {
-    gap: 80px; /* Mniejszy odstęp między graczami bocznymi w trybie 3-osobowym */
+    gap: 120px; /* Mniejszy odstęp między graczami bocznymi w trybie 3-osobowym */
+}
+
+/* --- Pasek Ewaluacji --- */
+#pasek-ewaluacji-kontener {
+    grid-area: info-srodek; /* Umieśćmy go na razie w tym samym obszarze co info */
+    justify-self: center;   /* Wycentruj */
+    align-self: end;        /* Przyklej do dołu obszaru info-srodek */
+    margin-bottom: -5px;     /* Lekkie przesunięcie w dół */
+    width: 300px;           /* Szerokość paska */
+    height: 18px;           /* Wysokość paska */
+    background-color: #555; /* Ciemne tło */
+    border: 1px solid #888;
+    border-radius: 4px;
+    overflow: hidden;       /* Ukryj zawartość wychodzącą poza */
+    position: relative;     /* Dla pozycjonowania wartości */
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); /* Wewnętrzny cień */
+}
+
+#pasek-ewaluacji-wartosc {
+    height: 100%;
+    width: 50%; /* Domyślnie 50% (neutralna ocena) */
+    background-color: #bdbdbd; /* Kolor "wygranej" (jasnoszary) */
+    transition: width 0.3s ease-out; /* Płynne przejście */
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+/* Ukryj pasek, jeśli nie ma oceny */
+.ekran-gry.brak-oceny #pasek-ewaluacji-kontener {
+    display: none;
 }

@@ -423,6 +423,29 @@ function aktualizujWidokGry(stanGry) {
     const rozdanie = stanGry.rozdanie;
     const slotGracza = stanGry.slots.find(s => s.nazwa === nazwaGracza);
     if (!slotGracza) return; // Gracz nie jest już w grze?
+    const pasekKontenerEl = document.getElementById('pasek-ewaluacji-kontener');
+    const pasekWartoscEl = document.getElementById('pasek-ewaluacji-wartosc');
+    const ocenaSilnika = stanGry.rozdanie?.aktualna_ocena; // ? dla bezpieczeństwa
+    const fazaGry = stanGry.rozdanie?.faza;
+    const czyLewaDoZamkniecia = stanGry.rozdanie?.lewa_do_zamkniecia;
+
+    if (pasekKontenerEl && pasekWartoscEl) {
+        // UPROSZCZONY WARUNEK: Pokaż pasek ZAWSZE, gdy ocenaSilnika ma wartość.
+        const czyPokazacPasek = (ocenaSilnika !== null && ocenaSilnika !== undefined);
+
+        if (ekranGryEl) {
+             ekranGryEl.classList.toggle('brak-oceny', !czyPokazacPasek);
+        }
+
+        if (czyPokazacPasek) {
+            // Przekształć ocenę [-1.0, 1.0] na procent [0, 100]
+            const procentWygranej = Math.max(0, Math.min(100, (ocenaSilnika + 1.0) / 2.0 * 100.0)); // Dodano Math.max/min dla pewności
+            pasekWartoscEl.style.width = `${procentWygranej}%`;
+        } else {
+            // Jeśli nie ma oceny LUB jest 0 (co może się zdarzyć), ustaw na 50%
+             pasekWartoscEl.style.width = '50%';
+        }
+    }
 
     // --- Ustal pozycje graczy na ekranie (dol, gora, lewy, prawy) ---
     let pozycje = {}; // Obiekt mapujący pozycję na slot gracza
