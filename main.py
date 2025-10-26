@@ -5,6 +5,7 @@ import json
 import asyncio
 import string
 import traceback
+import time
 from typing import Any, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.staticfiles import StaticFiles
@@ -202,7 +203,8 @@ def pobierz_liste_lobby():
         try:
             opcje = partia.get("opcje", {})
             # Sprawdzamy warunki: LOBBY, online i publiczna
-            if (partia.get("status_partii") == "LOBBY" and
+            status = partia.get("status_partii")
+            if (status in ["LOBBY", "W_TRAKCIE"] and
                 partia.get("tryb_gry") == "online"):
                 
                 # Zlicz ilu graczy jest w lobby
@@ -217,7 +219,9 @@ def pobierz_liste_lobby():
                     "tryb_gry": opcje.get("tryb_gry", "4p"), # '4p' lub '3p'
                     "ma_haslo": bool(opcje.get("haslo")),
                     "aktualni_gracze": aktualni_gracze,
-                    "max_gracze": max_gracze
+                    "max_gracze": max_gracze,
+                    "status": status,  # <-- NOWE POLE
+                    "gracze": [s.get("nazwa") for s in slots if s.get("nazwa")]
                 }
                 lista_publiczna.append(lobby_info)
         except Exception as e:
@@ -563,6 +567,41 @@ def przetworz_akcje_gracza(data: dict, partia: dict):
         print(f"BŁĄD podczas przetwarzania akcji gracza {gracz_akcji_nazwa}: {e}")
         traceback.print_exc()
 
+async def replacement_timer(id_gry: str, slot_id: int):
+    """
+    Czeka 60 sekund i zastępuje gracza botem, jeśli nadal jest rozłączony.
+    """
+    print(f"[{id_gry}] Uruchomiono 60s timer dla slotu {slot_id}...")
+    await asyncio.sleep(60)
+    
+    partia = gry.get(id_gry)
+    if not partia or partia["status_partii"] != "W_TRAKCIE":
+        print(f"[{id_gry}] Timer anulowany (gra zakończona lub wróciła do lobby).")
+        return # Gra już nie istnieje lub wróciła do lobby
+
+    slot = next((s for s in partia["slots"] if s["slot_id"] == slot_id), None)
+    
+    # Jeśli po 60s gracz wciąż jest rozłączony
+    if slot and slot.get("typ") == "rozlaczony":
+        stara_nazwa = slot.get("nazwa", "Gracz")
+        nowa_nazwa_bota = f"Bot_{stara_nazwa[:8]}"
+        print(f"[{id_gry}] Gracz {stara_nazwa} nie wrócił. Zastępowanie botem {nowa_nazwa_bota}.")
+        
+        slot["nazwa"] = nowa_nazwa_bota
+        slot["typ"] = "bot"
+        slot["disconnect_task"] = None # Wyczyść zadanie
+        
+        # Zaktualizuj nazwę gracza w silniku gry!
+        if partia.get("gracze_engine"):
+            gracz_obj = next((g for g in partia["gracze_engine"] if g.nazwa == stara_nazwa), None)
+            if gracz_obj:
+                gracz_obj.nazwa = nowa_nazwa_bota # Zmień nazwę w obiekcie silnika
+        
+        # Poinformuj wszystkich i uruchom pętlę botów (może być tura bota)
+        await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
+        await uruchom_petle_botow(id_gry)
+    else:
+        print(f"[{id_gry}] Timer dla slotu {slot_id} anulowany (gracz wrócił).")
 
 # === Pętla Botów ===
 async def uruchom_petle_botow(id_gry: str):
@@ -713,7 +752,33 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
                      await websocket.close(code=1008, reason="Lobby jest pełne.")
                      manager.disconnect(websocket, id_gry)
                      return
-        # Jeśli gracz już był w lobby (np. odświeżył stronę), nie trzeba nic robić
+        elif partia["status_partii"] == "W_TRAKCIE":
+            slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
+            
+            if slot_gracza: # Jeśli gracz należy do tej gry
+                if slot_gracza.get("typ") == "rozlaczony":
+                    # Gracz wraca do gry!
+                    print(f"[{id_gry}] Gracz {nazwa_gracza} dołączył ponownie.")
+                    slot_gracza["typ"] = "czlowiek"
+                    slot_gracza["disconnect_time"] = None
+                    
+                    # ANULOWANIE TIMERA 
+                    task = slot_gracza.get("disconnect_task")
+                    if task:
+                        task.cancel()
+                        print(f"[{id_gry}] Anulowano timer dla slotu {slot_gracza['slot_id']}.")
+                        slot_gracza["disconnect_task"] = None
+                elif slot_gracza.get("typ") == "czlowiek":
+                    # Gracz już jest połączony (np. druga karta przeglądarki)
+                    await websocket.accept() # Zaakceptuj, żeby wysłać powód
+                    await websocket.close(code=1008, reason="Jesteś już połączony z tą grą.")
+                    return # Nie łącz
+                # Jeśli gracz jest botem, nie może dołączyć jako człowiek
+            else:
+                # Gracz nie należy do tej gry
+                await websocket.accept()
+                await websocket.close(code=1008, reason="Gra jest w toku, nie możesz dołączyć.")
+                return
 
         # Wyślij stan początkowy, jeśli gracz dołączył w trakcie gry
         # (broadcast na początku obsługuje lobby)
@@ -795,11 +860,22 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
                      except KeyError:
                          print(f"Nie można było usunąć lobby {id_gry}, być może zostało już usunięte.")
         elif partia and partia["status_partii"] == "W_TRAKCIE":
-            print(f"Gracz {nazwa_gracza} rozłączył się w trakcie gry {id_gry}. Gra może zostać zablokowana.")
+            print(f"Gracz {nazwa_gracza} rozłączył się w trakcie gry {id_gry}.")
             slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
-            if slot_gracza and slot_gracza.get('typ') != 'rozlaczony': # Sprawdź, czy już nie jest oznaczony
-                 slot_gracza['typ'] = 'rozlaczony' # Oznacz slot jako rozłączony
+            
+            # Uruchom timer tylko jeśli to był człowiek i nie ma już aktywnego timera
+            if slot_gracza and slot_gracza.get('typ') == 'czlowiek':
+                 slot_gracza['typ'] = 'rozlaczony'
+                 slot_gracza['disconnect_time'] = time.time()
+                 
+                 # Uruchom zadanie zastąpienia botem w tle
+                 task = asyncio.create_task(replacement_timer(id_gry, slot_gracza["slot_id"]))
+                 slot_gracza['disconnect_task'] = task # Zapisz referencję do zadania
                  stan_zmieniony = True
+            elif slot_gracza and slot_gracza.get('typ') == 'rozlaczony':
+                # Gracz się rozłączył, ale już był oznaczony (np. druga karta)
+                # Nie rób nic, timer już tyka
+                pass
 
         # Wyślij broadcast tylko jeśli stan się zmienił i gra nadal istnieje
         if stan_zmieniony and not lobby_usunięte and partia:
@@ -810,31 +886,25 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
                  print(f"INFO: Nie udało się wysłać broadcastu po rozłączeniu gracza {nazwa_gracza}: {broadcast_error}")
         # WAŻNE: Nie rób nic więcej z 'websocket' po disconnect
 
-    except Exception as e: # Obsłuż WSZYSTKIE INNE błędy
-        # NIE próbuj ponownie zamykać websocket!
+    except Exception as e: 
+        # Ten blok łapie WSZYSTKIE inne błędy (RuntimeError, błędy logiki itp.)
         print(f"!!! KRYTYCZNY BŁĄD WEBSOCKET DLA GRY {id_gry} !!! Gracz: {nazwa_gracza}")
-        print(f"Typ błędu: {type(e).__name__}") # Dodaj typ błędu do logów
+        print(f"Typ błędu: {type(e).__name__}")
         traceback.print_exc()
-        try:
-            # Spróbuj powiadomić pozostałych graczy, jeśli gra jeszcze istnieje
-            if id_gry in manager.active_connections:
-                 # Użyj safe_serializer, bo 'e' może nie być serializowalne
-                 error_details = json.dumps({"details": str(e)}, default=lambda o: f"<Unserializable: {type(o).__name__}>")
-                 await manager.broadcast(id_gry, {"error": "Krytyczny błąd serwera. Gra może być niestabilna.", "details_json": error_details})
-        except Exception as broadcast_error:
-            print(f"BŁĄD podczas broadcastu błędu krytycznego: {broadcast_error}")
-
-        # Po krytycznym błędzie (innym niż disconnect) bezpiecznie usuń połączenie z managera
-        manager.disconnect(websocket, id_gry)
-    except Exception as e:
-        print(f"!!! KRYTYCZNY BŁĄD WEBSOCKET DLA GRY {id_gry} !!! Gracz: {nazwa_gracza}")
-        traceback.print_exc()
+        
         try:
             # Spróbuj powiadomić pozostałych graczy
             if id_gry in manager.active_connections:
                  await manager.broadcast(id_gry, {"error": "Krytyczny błąd serwera. Gra może być niestabilna.", "details": str(e)})
         except Exception as broadcast_error:
             print(f"BŁĄD podczas broadcastu błędu krytycznego: {broadcast_error}")
-        # Rozważ zamknięcie połączenia z graczem, u którego wystąpił błąd
-        await websocket.close(code=1011, reason="Internal server error")
-        manager.disconnect(websocket, id_gry) # Upewnij się, że jest rozłączony
+
+        # Bezpiecznie zamknij połączenie, jeśli nadal jest otwarte
+        # NIE wywołuj tutaj websocket.accept()!
+        try:
+            await websocket.close(code=1011, reason="Internal server error")
+        except RuntimeError as close_error:
+            # (Ignoruj błąd, jeśli połączenie już się zamknęło, np. "Cannot call 'close' in state 'DISCONNECTED'")
+            print(f"Info: Błąd podczas zamykania websocket po krytycznym błędzie: {close_error}")
+            
+        manager.disconnect(websocket, id_gry)

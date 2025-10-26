@@ -31,8 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             ladowanieInfo.classList.add('hidden'); // Ukryj "ładowanie"
             listaLobbyKontener.innerHTML = ''; // Wyczyść wszystko
-
-            if (data.lobby_list && data.lobby_list.length > 0) {
+if (data.lobby_list && data.lobby_list.length > 0) {
                 data.lobby_list.forEach(lobby => {
                     const wpis = document.createElement('div');
                     wpis.className = 'wpis-lobby';
@@ -41,18 +40,49 @@ document.addEventListener('DOMContentLoaded', () => {
                     const graczeText = `${lobby.aktualni_gracze} / ${lobby.max_gracze}`;
                     const hasloText = lobby.ma_haslo ? 'Tak 🔒' : 'Nie';
                     
+                    let statusText = '';
+                    let przyciskText = 'Dołącz';
+                    let czyMoznaDolaczyc = true;
+
+                    const mojGracz = sessionStorage.getItem('nazwaGracza');
+                    const jestemWGrze = lobby.gracze.includes(mojGracz);
+
+                    if (lobby.status === 'W_TRAKCIE') {
+                        if (jestemWGrze) {
+                            statusText = '<strong style="color: #ffc107;">Rozłączono</strong>';
+                            przyciskText = 'Dołącz Ponownie';
+                            czyMoznaDolaczyc = true; // Zawsze można spróbować dołączyć ponownie
+                        } else {
+                            statusText = '<strong style="color: #ffc107;">W Trakcie</strong>';
+                            przyciskText = 'Obserwuj';
+                            czyMoznaDolaczyc = false; // Na razie wyłączamy obserwowanie
+                        }
+                    } else if (lobby.aktualni_gracze >= lobby.max_gracze) {
+                        statusText = '<strong style="color: #dc3545;">Pełne</strong>';
+                        przyciskText = 'Pełne';
+                        czyMoznaDolaczyc = false;
+                    } else {
+                        statusText = '<strong style="color: #28a745;">Otwarte</strong>';
+                        przyciskText = 'Dołącz';
+                        czyMoznaDolaczyc = true;
+                    }
+                    // --- KONIEC NOWEJ LOGIKI ---
+                    
                     const dolaczBtn = document.createElement('button');
-                    dolaczBtn.textContent = 'Dołącz';
-                    dolaczBtn.onclick = () => {
-                        obsluzDolaczenie(lobby.id_gry, lobby.ma_haslo);
-                    };
+                    dolaczBtn.textContent = przyciskText;
+                    dolaczBtn.disabled = !czyMoznaDolaczyc; // Wyłącz przycisk, jeśli nie można dołączyć
+                    if (czyMoznaDolaczyc) {
+                        dolaczBtn.onclick = () => {
+                            obsluzDolaczenie(lobby.id_gry, lobby.ma_haslo);
+                        };
+                    }
 
                     wpis.innerHTML = `
                         <div>${lobby.host}</div>
                         <div>${trybGryText}</div>
                         <div>${graczeText}</div>
                         <div>${hasloText}</div>
-                    `;
+                        <div>${statusText}</div> `;
                     wpis.appendChild(dolaczBtn); // Dodaj przycisk jako element DOM
                     
                     listaLobbyKontener.appendChild(wpis);
