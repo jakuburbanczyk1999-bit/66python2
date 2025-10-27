@@ -7,17 +7,14 @@
     <link rel="icon" href="/static/icon.png" type="image/png">
 </head>
 <body>
-   <div id="ekran-startowy">
-    <h1>Gra w 66</h1>
+   <div id="ekran-startowy"> <h1>Gra w 66</h1>
 
     <div id="auth-kontener">
         <div id="niezalogowany-kontener" class="hidden">
-            <div id="initial-guest-options">
-                <button id="show-login-btn">Zaloguj / Zarejestruj</button>
+            <div id="initial-guest-options"> <button id="show-login-btn">Zaloguj / Zarejestruj</button>
                 <button id="guest-login-btn">Graj jako Gość</button>
             </div>
-            <div id="guest-name-selection" class="hidden">
-                <input type="text" id="guest-name-input" placeholder="Wpisz nazwę gościa..." maxlength="15">
+            <div id="guest-name-selection" class="hidden"> <input type="text" id="guest-name-input" placeholder="Wpisz nazwę gościa..." maxlength="15">
                 <button id="confirm-guest-btn">Potwierdź</button>
                 <button id="cancel-guest-btn" style="background-color: #6c757d;">Anuluj</button>
                 <p style="font-size: 0.9em; color: #ccc;">(Pozostaw puste dla losowej nazwy)</p>
@@ -26,24 +23,20 @@
 
         <div id="login-form-kontener" class="hidden">
             <h3>Zaloguj się lub Zarejestruj</h3>
-            <div id="auth-pola">
-                <input type="text" id="auth-username" placeholder="Nazwa użytkownika" maxlength="15">
+            <div id="auth-pola"> <input type="text" id="auth-username" placeholder="Nazwa użytkownika" maxlength="15">
                 <input type="password" id="auth-password" placeholder="Hasło" maxlength="50">
             </div>
-            <div id="auth-przyciski">
-                <button id="login-btn">Zaloguj</button>
+            <div id="auth-przyciski"> <button id="login-btn">Zaloguj</button>
                 <button id="register-btn">Zarejestruj</button>
                 <button id="cancel-login-btn" style="background-color: #6c757d;">Anuluj</button>
             </div>
-            <p id="auth-blad" class="hidden"></p>
-        </div>
+            <p id="auth-blad" class="hidden"></p> </div>
 
         <div id="zalogowany-kontener" class="hidden">
-            <p>Witaj, <strong id="zalogowany-nazwa"></strong>!</p>
-            <button id="logout-btn">Wyloguj</button>
+            <p>Witaj, <strong id="zalogowany-nazwa"></strong>!</p> <button id="logout-btn">Wyloguj</button>
         </div>
     </div>
-    
+
     <div class="tryby-gry-kontener">
         <button id="open-create-lobby-btn" class="duzy-przycisk">Stwórz Lobby</button>
         <a href="/lobby.html" id="browse-lobby-btn" class="duzy-przycisk">Przeglądaj Lobby</a>
@@ -53,45 +46,42 @@
         <button id="rejoin-btn" class="duzy-przycisk" style="background-color: #ffc107; color: #333;">Wróć do gry</button>
     </div>
 
-    
-
-    <div id="dolacz-kontener">
-        <p>Masz kod do gry? Dołącz tutaj:</p>
-        <input type="text" id="kod-gry-input" placeholder="Wpisz kod lobby...">
-        <button id="dolacz-btn">Dołącz</button>
-        <p id="blad-lobby" class="hidden"></p>
-    </div>
     <a href="/zasady.html" id="zasady-btn">Zasady Gry</a>
-</div>
-<div id="modal-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999;"></div>
 
-<div id="modal-stworz-lobby" class="panel hidden" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
-    <h2>Ustawienia Lobby</h2>
-    <div class="setting-group" style="text-align: left; margin-bottom: 20px;">
-        <label for="tryb-lobby-select" style="display: block; margin-bottom: 5px;">Typ Lobby:</label>
-        <select id="tryb-lobby-select" style="width: 100%; padding: 8px; font-size: 1em;">
-            <option value="online">Online</option>
-            <option value="lokalna">Lokalnie z Botami</option>
-        </select>
-    </div>
+   </div> <div id="modal-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999;"></div>
 
-    <div class="setting-group" style="text-align: left; margin-bottom: 15px;">
-        <label for="tryb-gry-select" style="display: block; margin-bottom: 5px;">Tryb Gry:</label>
-        <select id="tryb-gry-select" style="width: 100%; padding: 8px; font-size: 1em;">
-            <option value="4p">4-osobowy (2v2)</option>
-            <option value="3p">3-osobowy (FFA)</option>
-        </select>
-    </div>
-    <div id="haslo-kontener" class="setting-group" style="text-align: left; margin-bottom: 20px;">
+    <div id="modal-stworz-lobby" class="panel hidden" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 400px; max-width: 90%;">
+        <h2>Ustawienia Lobby</h2>
+        <div class="setting-group" style="text-align: left; margin-bottom: 20px;">
+            <label for="tryb-lobby-select" style="display: block; margin-bottom: 5px;">Typ Lobby:</label>
+            <select id="tryb-lobby-select" style="width: 100%; padding: 8px; font-size: 1em;">
+                <option value="online">Online</option>
+                <option value="lokalna">Lokalnie z Botami</option>
+            </select>
+        </div>
+        <div class="setting-group" style="text-align: left; margin-bottom: 15px;">
+            <label for="tryb-gry-select" style="display: block; margin-bottom: 5px;">Tryb Gry:</label>
+            <select id="tryb-gry-select" style="width: 100%; padding: 8px; font-size: 1em;">
+                <option value="4p">4-osobowy (2v2)</option>
+                <option value="3p">3-osobowy (FFA)</option>
+            </select>
+        </div>
+        <div id="rankingowa-kontener" class="setting-group" style="text-align: left; margin-bottom: 20px;">
+            <div class="setting-option" style="display: flex; align-items: center;">
+                <input type="checkbox" id="rankingowa-checkbox">
+                <label for="rankingowa-checkbox" style="margin-left: 10px;">Gra Rankingowa 🏆</label>
+            </div>
+            <p style="font-size: 0.9em; color: #ccc; margin-top: 5px;">
+                (Dostępne tylko dla gier Online. Wpłynie na Twoje Elo.)
+            </p>
+        </div>
+        <div id="haslo-kontener" class="setting-group" style="text-align: left; margin-bottom: 20px;">
             <label for="haslo-lobby-input" style="display: block; margin-bottom: 5px;">Hasło (pozostaw puste aby lobby było publiczne):</label>
             <input type="text" id="haslo-lobby-input" placeholder="Wpisz hasło..." style="width: 95%;">
         </div>
-
-    
-
-    <button id="create-lobby-btn" style="width: 60%;">Stwórz</button>
-    <button id="cancel-create-lobby-btn" style="width: 30%; background-color: #6c757d;">Anuluj</button>
-</div>
+        <button id="create-lobby-btn" style="width: 60%;">Stwórz</button>
+        <button id="cancel-create-lobby-btn" style="width: 30%; background-color: #6c757d;">Anuluj</button>
+    </div>
 
     <script src="/static/start.js"></script>
 </body>

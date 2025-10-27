@@ -474,6 +474,10 @@ input[type="text"]::placeholder {
     margin-bottom: 5px; /* Odstęp od kart */
     font-size: 0.9em;
     white-space: nowrap; /* Zapobiega zawijaniu nicku */
+    display: flex;           /* Użyj Flexboxa do ułożenia elementów wewnątrz */
+    justify-content: center; /* Wyśrodkuj zawartość (nazwę i timer) w poziomie */
+    align-items: center;     /* Wyśrodkuj zawartość w pionie */
+    gap: 8px;
 }
 
 #gracz-gora {
@@ -969,4 +973,29 @@ input[type="text"]::placeholder {
 #zasady-btn:hover {
     background-color: rgba(255, 255, 255, 0.1);
     color: white;
+}
+
+.timer-display {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 2px 6px;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: normal;
+    color: #eee;
+    flex-shrink: 0; /* Zapobiegaj kurczeniu się timera */
+}
+
+.timer-display.hidden {
+    display: none;
+}
+
+.timer-display.low-time {
+    color: #ffc107;
+    font-weight: bold;
+}
+.timer-display.very-low-time {
+    color: #dc3545;
+    font-weight: bold;
 }

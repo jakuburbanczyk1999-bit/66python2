@@ -21,16 +21,13 @@
             </div>
     </div>
 
-
-    <div id="animation-overlay"></div>
-
-    <div class="ekran-gry hidden">
-
-    <div id="info-lewy-rog">
+    <div id="animation-overlay">
         </div>
-    <div id="info-srodek">
-        <div id="info-srodek-tresc">
-                </div>
+
+    <div class="ekran-gry hidden"> <div id="info-lewy-rog">
+            </div>
+        <div id="info-srodek">
+            <div id="info-srodek-tresc"></div>
             <div id="pasek-ewaluacji-kontener">
                 <div id="pasek-ewaluacji-wartosc"></div>
                 <div class="pasek-legenda pasek-legenda-lewa">Grający Przegrywa</div>
@@ -39,97 +36,90 @@
                 <div class="pasek-etykieta" style="left: 50%; transform: translateX(-50%);">0.0</div>
                 <div class="pasek-etykieta" style="right: 0;">1.0</div>
             </div>
+        </div>
+        <div id="panel-prawy-kontener"> <div id="kontener-info-prawy-rog">
+                <div id="info-prawy-rog" class="info-box"></div>
+                <div id="info-stawka" class="info-box hidden"></div>
+                <div id="settings-btn" class="info-box" title="Ustawienia Interfejsu">⚙️</div>
             </div>
-    <div id="panel-prawy-kontener">
-        <div id="kontener-info-prawy-rog">
-            <div id="info-prawy-rog">
+            <div id="panel-historii">
+                <div class="panel-header">
+                    <h3>Historia</h3>
                 </div>
-            <div id="info-stawka" class="info-box hidden">
-                </div>
-            <div id="settings-btn" class="info-box" title="Ustawienia Interfejsu">⚙️</div>
+                <div id="historia-lista"></div>
+            </div>
         </div>
 
-        <div id="panel-historii">
-            <div class="panel-header">
-                <h3>Historia</h3>
-            </div>
-            <div id="historia-lista"></div>
-        </div>
-    </div>
-    <div class="obszar-gry">
-        <div class="kontener-stolu">
-
-            <div id="gracz-lewy" class="gracz-boczny">
-                <div class="info-gracza">Gracz Lewy</div>
-                <div class="reka-boczna">
-                    </div>
-            </div>
-
-            <div class="strefa-srodkowa">
-                <div id="gracz-gora">
-                    <div class="info-gracza">Gracz Górny</div>
-                    <div class="reka-gorna">
+        <div class="obszar-gry"> <div class="kontener-stolu"> <div id="gracz-lewy" class="gracz-boczny">
+                    <div class="info-gracza">
+                        Gracz Lewy
+                        <span class="timer-display hidden"></span> </div>
+                    <div class="reka-boczna">
                         </div>
                 </div>
 
-                <div id="stol-gry">
-                    <div id="slot-karty-lewy" class="slot-karty"></div>
-                    <div id="slot-karty-gora" class="slot-karty"></div>
-                    <div id="slot-karty-prawy" class="slot-karty"></div>
-                    <div id="slot-karty-dol" class="slot-karty"></div>
-                </div>
-            </div>
-
-            <div id="gracz-prawy" class="gracz-boczny">
-                <div class="info-gracza">Gracz Prawy</div>
-                <div class="reka-boczna">
+                <div class="strefa-srodkowa">
+                    <div id="gracz-gora">
+                        <div class="info-gracza">
+                            Gracz Górny
+                            <span class="timer-display hidden"></span> </div>
+                        <div class="reka-gorna">
+                            </div>
                     </div>
-            </div>
-
-        </div>
-    </div>
-
-    <div id="strefa-gracza-glownego">
-        <div id="kontener-akcji">
-            </div>
-        <div id="gracz-dol">
-            <div class="reka-glowna">
+                    <div id="stol-gry">
+                        <div id="slot-karty-lewy" class="slot-karty"></div>
+                        <div id="slot-karty-gora" class="slot-karty"></div>
+                        <div id="slot-karty-prawy" class="slot-karty"></div>
+                        <div id="slot-karty-dol" class="slot-karty"></div>
+                    </div>
                 </div>
-            <div class="info-gracza">Twój Nick</div>
-        </div>
-    </div>
 
-
-    <div id="panel-lewy-kontener">
-        <div id="panel-historii-partii">
-            <div class="panel-header">
-                <h3>Historia Partii</h3>
-            </div>
-            <div id="partia-historia-lista">
+                <div id="gracz-prawy" class="gracz-boczny">
+                    <div class="info-gracza">
+                        Gracz Prawy
+                        <span class="timer-display hidden"></span> </div>
+                    <div class="reka-boczna">
+                        </div>
                 </div>
+
+            </div> </div> <div id="strefa-gracza-glownego">
+            <div id="kontener-akcji">
+                </div>
+            <div id="gracz-dol">
+                <div class="reka-glowna">
+                    </div>
+                <div class="info-gracza">
+                    Twój Nick
+                    <span class="timer-display hidden"></span> </div>
+            </div>
         </div>
 
-        <div id="panel-czatu">
-            <div class="panel-header">
-                <h3>Czat</h3>
+        <div id="panel-lewy-kontener">
+            <div id="panel-historii-partii">
+                <div class="panel-header">
+                    <h3>Historia Partii</h3>
+                </div>
+                <div id="partia-historia-lista"></div>
             </div>
-            <div id="czat-wiadomosci"></div>
-            <div id="czat-input-kontener">
-                 <input type="text" id="czat-input" placeholder="Napisz wiadomość...">
-                 <button id="czat-wyslij-btn">Wyślij</button>
+            <div id="panel-czatu">
+                <div class="panel-header">
+                    <h3>Czat</h3>
+                </div>
+                <div id="czat-wiadomosci"></div>
+                <div id="czat-input-kontener">
+                     <input type="text" id="czat-input" placeholder="Napisz wiadomość...">
+                     <button id="czat-wyslij-btn">Wyślij</button>
+                </div>
             </div>
         </div>
-    </div>
 
-    </div> <div id="modal-overlay" class="hidden">
-        <div id="podsumowanie-rozdania" class="panel hidden">
+    </div> <div id="modal-overlay" class="hidden"> <div id="podsumowanie-rozdania" class="panel hidden">
             <h2 id="podsumowanie-tytul">Koniec Rozdania!</h2>
             <div id="podsumowanie-tresc"></div>
             </div>
 
         <div id="modal-ustawienia" class="panel hidden">
             <h2>Ustawienia Interfejsu</h2>
-
             <div class="setting-group">
                 <h3>Wygląd</h3>
                 <div class="setting-option">
@@ -149,7 +139,6 @@
                     <label for="setting-ukryj-pasek-ewaluacji">Ukryj pasek ewaluacji</label>
                 </div>
             </div>
-
             <button id="settings-close-btn">Zamknij</button>
         </div>
     </div>

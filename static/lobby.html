@@ -8,9 +8,9 @@
     <style>
         /* Style specyficzne dla przeglądarki lobby */
         #ekran-przegladarki-lobby {
-            width: 900px;
+            width: 900px; /* Szerokość kontenera */
             max-width: 90%;
-            margin: 40px auto;
+            margin: 40px auto; /* Centrowanie */
             background-color: rgba(0, 0, 0, 0.7);
             padding: 30px;
             border-radius: 12px;
@@ -24,22 +24,30 @@
             padding-bottom: 10px;
             margin-bottom: 20px;
         }
-        .przycisk-menu {
+        .przycisk-menu { /* Styl dla przycisku "Menu Główne" */
             font-size: 1em;
             padding: 10px 20px;
             background-color: #6c757d;
+            text-decoration: none; /* Usuń podkreślenie linku */
+            color: white; /* Ustaw kolor tekstu */
+            border-radius: 5px; /* Zaokrąglenie jak przycisk */
+            margin-left: 10px; /* Odstęp od Odśwież */
         }
         .przycisk-menu:hover {
             background-color: #5a6268;
         }
-        #lista-lobby-kontener {
-            min-height: 300px;
-            max-height: 60vh;
-            overflow-y: auto;
+        #lista-lobby-kontener { /* Kontener na listę gier */
+            min-height: 300px; /* Minimalna wysokość */
+            max-height: 60vh; /* Maksymalna wysokość (ograniczenie przewijania) */
+            overflow-y: auto; /* Dodaj przewijanie pionowe */
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Subtelna ramka */
+            border-radius: 5px; /* Zaokrąglenie */
+            padding: 10px; /* Wewnętrzny margines */
         }
-        .wpis-lobby {
+        .wpis-lobby { /* Styl pojedynczego wiersza w tabeli lobby */
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 100px 100px 120px;
+            /* Definicja kolumn siatki CSS */
+            grid-template-columns: 2fr 1.5fr 1fr 100px 100px 100px 1fr 120px; /* Dostosowane szerokości */
             align-items: center;
             background-color: rgba(255, 255, 255, 0.05);
             padding: 15px;
@@ -47,37 +55,43 @@
             border-radius: 5px;
             border: 1px solid rgba(255, 255, 255, 0.1);
             font-size: 1.1em;
+            gap: 10px; /* Odstęp między kolumnami */
         }
-        .wpis-lobby:nth-child(even) {
+        .wpis-lobby:nth-child(even) { /* Paski zebry dla lepszej czytelności */
             background-color: rgba(255, 255, 255, 0.1);
         }
-        .wpis-lobby-naglowek {
+        .wpis-lobby-naglowek { /* Styl nagłówka tabeli */
             font-weight: bold;
             color: yellow;
+            background-color: transparent; /* Bez tła dla nagłówka */
+            border-bottom: 2px solid yellow; /* Linia pod nagłówkiem */
+            padding-bottom: 10px;
+            margin-bottom: 15px;
         }
     </style>
 </head>
 <body>
 
-    <div id="ekran-przegladarki-lobby">
-        <div class="naglowek-lobby">
+    <div id="ekran-przegladarki-lobby"> <div class="naglowek-lobby">
             <h1>Dostępne Lobby</h1>
             <div>
                 <button id="odswiez-btn">Odśwież</button>
-                <a href="/" class="przycisk-menu" style="text-decoration: none;">Menu Główne</a>
+                <a href="/" class="przycisk-menu">Menu Główne</a>
             </div>
         </div>
 
         <div class="wpis-lobby wpis-lobby-naglowek">
-        <div>Host</div>
-        <div>Tryb Gry</div>
-        <div>Gracze</div>
-        <div>Hasło</div>
-        <div>Status</div> <div></div> </div>
+            <div>Host</div>
+            <div>Tryb Gry</div>
+            <div>Gracze</div>
+            <div>Hasło</div>
+            <div>Ranking</div>
+            <div>Średnie Elo</div>
+            <div>Status</div>
+            <div></div> </div>
 
         <div id="lista-lobby-kontener">
-            <p id="ladowanie-lobby-info">Ładowanie listy lobby...</p>
-        </div>
+            <p id="ladowanie-lobby-info">Ładowanie listy lobby...</p> </div>
     </div>
 
     <div id="modal-backdrop" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 999;"></div>
@@ -86,8 +100,7 @@
         <h2>Lobby chronione hasłem</h2>
         <p id="haslo-info-text">Host ustawił hasło dla tego lobby.</p>
         <input type="text" id="haslo-input" placeholder="Wpisz hasło..." style="width: 90%; margin: 15px 0;">
-        <p id="blad-hasla" class="hidden" style="color: #ff5555; margin-top: 0;"></p>
-        <button id="zatwierdz-haslo-btn" style="width: 50%;">Dołącz</button>
+        <p id="blad-hasla" class="hidden" style="color: #ff5555; margin-top: 0;"></p> <button id="zatwierdz-haslo-btn" style="width: 50%;">Dołącz</button>
         <button id="anuluj-haslo-btn" style="width: 40%; background-color: #6c757d;">Anuluj</button>
     </div>
 

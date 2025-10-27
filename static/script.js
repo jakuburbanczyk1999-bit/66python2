@@ -191,6 +191,7 @@ function inicjalizujWebSocket() {
                 if (ekranLobbyEl) ekranLobbyEl.classList.add('hidden');
                 if (ekranGryEl) ekranGryEl.classList.remove('hidden');
                 aktualizujWidokGry(stan);
+                
             }
             ostatniStanGry = JSON.parse(JSON.stringify(stan));
         } catch (error) {
@@ -403,14 +404,10 @@ function aktualizujWidokGry(stanGry) {
     if (pasekKontenerEl && pasekWartoscEl) {
         const czyFazaRozgrywki = (rozdanie.faza === 'ROZGRYWKA');
         const czyPokazacPasek = (ocenaSilnika !== null && ocenaSilnika !== undefined);
-        console.log("DEBUG Paska:", { faza: rozdanie.faza, ocena: ocenaSilnika, czyPokazac: czyPokazacPasek }); // Dodaj logowanie
         if (ekranGryEl) ekranGryEl.classList.toggle('brak-oceny', !czyPokazacPasek);
         if (czyPokazacPasek) {
             let procentWygranej = (ocenaSilnika + 1.0) / 2.0 * 100.0;
             procentWygranej = Math.max(0, Math.min(100, procentWygranej));
-
-            console.log("DEBUG Paska - Aktualizacja:", { ocena: ocenaSilnika, procent: procentWygranej }); // Dodaj logowanie obliczeń
-
             // Ustaw szerokość
             pasekWartoscEl.style.width = `${procentWygranej}%`;
         } else {
@@ -432,22 +429,86 @@ function aktualizujWidokGry(stanGry) {
 
     // --- Aktualizacja informacji o graczach (nazwy, podświetlenie tury) ---
     document.querySelectorAll('.gracz-boczny, #gracz-gora, #gracz-dol').forEach(el => {
-        if(el) el.classList.remove('aktywny-gracz');
+       if(el) {
+            el.classList.remove('aktywny-gracz');
+            const timerEl = el.querySelector('.timer-display');
+            if (timerEl) timerEl.classList.add('hidden');
+        }
     });
+    const timery = stanGry.timery || {}; // Pobierz dane o czasomierzach
+    const czyRankingowa = stanGry.opcje?.rankingowa; 
     for (const [pos, slot] of Object.entries(pozycje)) {
         const kontenerGraczaEl = document.getElementById(`gracz-${pos}`);
+        
         if (kontenerGraczaEl && slot) {
-            const czyGrajacy = rozdanie.gracz_grajacy === slot.nazwa;
-            const ikonaGrajacego = czyGrajacy ? '<span class="crown-icon">👑</span> ' : '';
-            const statusText = slot.typ === 'rozlaczony' ? ' <span style="color:red;">(🔌)</span>' : ''; // Indicate disconnected in-game
-            const infoGraczaEl = kontenerGraczaEl.querySelector('.info-gracza');
-            if (infoGraczaEl) infoGraczaEl.innerHTML = `${ikonaGrajacego}${slot.nazwa}${statusText}`; // Show status
+            const infoGraczaEl = kontenerGraczaEl.querySelector('.info-gracza'); // Znajdź div .info-gracza
+            
+            // Znajdź element timera WCZEŚNIEJ, ZANIM go nadpiszemy!
+            const timerEl = infoGraczaEl?.querySelector('.timer-display'); 
+
+            if (infoGraczaEl) {
+                // -- ZAKTUALIZUJ NAZWĘ GRACZA BEZ NADPISYWANIA TIMERA --
+                
+                // 1. Wyczyść poprzednią zawartość (oprócz timera, jeśli istnieje)
+                // Usuwamy wszystkie dzieci oprócz spana timera
+                Array.from(infoGraczaEl.childNodes).forEach(node => {
+                    if (node !== timerEl) { // Nie usuwaj samego timera!
+                        infoGraczaEl.removeChild(node);
+                    }
+                });
+
+                // 2. Przygotuj nową zawartość (ikona + nazwa + status)
+                const czyGrajacy = rozdanie.gracz_grajacy === slot.nazwa;
+                const ikonaGrajacego = czyGrajacy ? '👑 ' : '';
+                const statusText = slot.typ === 'rozlaczony' ? ' <span style="color:red;">(🔌)</span>' : '';
+                
+                // 3. Wstaw nową zawartość PRZED timerem (jeśli timer istnieje)
+                const nowaZawartosc = document.createElement('span'); // Użyj spana, aby wstawić HTML poprawnie
+                nowaZawartosc.innerHTML = `${ikonaGrajacego}${slot.nazwa}${statusText}`; 
+                
+                if (timerEl) {
+                    infoGraczaEl.insertBefore(nowaZawartosc, timerEl); // Wstaw PRZED timerem
+                } else {
+                    infoGraczaEl.appendChild(nowaZawartosc); // Jeśli timer jakimś cudem nie istnieje, dodaj na końcu
+                }
+                // -- KONIEC AKTUALIZACJI NAZWY --
+
+            } else {
+                 console.warn(`Nie znaleziono .info-gracza dla pozycji ${pos}`);
+                 continue; 
+            }
+
+            // --- LOGIKA TIMERA (teraz timerEl jest już znaleziony) ---
+            const czyRankingowa = stanGry.opcje?.rankingowa;
+            const czasGracza = timery[slot?.nazwa]; 
+
+            // Warunek IF 
+            if (timerEl && czasGracza !== undefined && czyRankingowa === true) { 
+                const czasSekundy = Math.max(0, Math.floor(czasGracza));
+                const minuty = Math.floor(czasSekundy / 60);
+                const sekundy = czasSekundy % 60;
+                timerEl.textContent = `${minuty}:${sekundy.toString().padStart(2, '0')}`;
+                timerEl.classList.remove('hidden', 'low-time', 'very-low-time');
+
+                if (czasSekundy <= 60) timerEl.classList.add('low-time');
+                if (czasSekundy <= 15) timerEl.classList.add('very-low-time');
+            } else {               
+                 if (timerEl && !timerEl.classList.contains('hidden')) {
+                     timerEl.classList.add('hidden');
+                 }
+            }
+            // --- KONIEC LOGIKI TIMERA ---
+
+            // Podświetlenie aktywnego gracza (bez zmian)
             if (rozdanie.kolej_gracza === slot.nazwa) {
                 kontenerGraczaEl.classList.add('aktywny-gracz');
+            } else {
+                kontenerGraczaEl.classList.remove('aktywny-gracz'); // Dodano usuwanie klasy dla pewności
             }
+        } else {
+             console.warn(`[Debug Timera Final] Pomijam pozycję ${pos}. Brak kontenera (${!!kontenerGraczaEl}) lub slotu (${!!slot}).`);
         }
     }
-
     // --- Aktualizacja górnych paneli informacyjnych ---
     const kontraktTyp = rozdanie.kontrakt?.typ;
     const infoLewyRogEl = document.getElementById('info-lewy-rog');
@@ -607,7 +668,6 @@ function aktualizujWidokGry(stanGry) {
          if (modalOverlayEl && !modalOverlayEl.querySelector('.panel:not(.hidden)')) {
              modalOverlayEl.classList.add('hidden');
          }
-         console.log("DEBUG: Ukryto modal podsumowania rozdania, bo faza gry to:", rozdanie.faza);
     }
 
     // --- Jeśli lewa ma być zamknięta, wyślij akcję finalizacji po chwili ---
@@ -636,7 +696,6 @@ function aktualizujWidokGry(stanGry) {
    ========================================================================== */
 function uruchomEfektyWizualne(nowyStan, staryStan) {
     if (!staryStan?.rozdanie || !nowyStan?.rozdanie) {
-        console.log("Brak danych do porównania efektów", {nowyStan, staryStan});
         return;
     }
 
@@ -761,6 +820,14 @@ function ukryjModal() {
     modalOverlayEl.querySelectorAll('.panel').forEach(panel => panel.classList.add('hidden'));
 }
 
+function formatujCzas(sekundy) {
+    const czas = Math.max(0, Math.floor(sekundy));
+    const minuty = Math.floor(czas / 60);
+    const sek = czas % 60;
+    return `${minuty}:${sek.toString().padStart(2, '0')}`;
+}
+
+
 function formatujKontrakt(kontrakt) {
     if (!kontrakt || !kontrakt.typ) return 'Brak';
     const kontraktTyp = kontrakt.typ.name || kontrakt.typ;
@@ -853,10 +920,24 @@ function pokazPodsumowanieMeczu(stanGry) {
         zwyciezca = punkty1 >= 66 ? nazwaTeam1 : (punkty2 >= 66 ? nazwaTeam2 : 'Remis/Błąd'); // Handle draw/error
         wynikHtml = `${nazwaTeam1} ${punkty1} - ${punkty2} ${nazwaTeam2}`;
     }
+    let eloSummaryHtml = '';
+    // Pobierz wyniki Elo ze stanu gry wysłanego przez serwer
+    const wynikElo = stanGry.wynik_elo; 
+
+    // Sprawdź, czy dane Elo istnieją i nie są puste
+    if (wynikElo && typeof wynikElo === 'object' && Object.keys(wynikElo).length > 0) {
+        eloSummaryHtml = '<h3>Zmiany Rankingu Elo:</h3><ul style="list-style: none; padding: 0;">';
+        // Przejdź przez wpisy Elo dla każdego gracza
+        for (const [gracz, zmiana] of Object.entries(wynikElo)) {
+            eloSummaryHtml += `<li style="margin-bottom: 5px;"><strong>${gracz}:</strong> ${zmiana}</li>`;
+        }
+        eloSummaryHtml += '</ul>';
+    }
 
     tytulEl.textContent = 'Koniec Meczu!';
     trescEl.innerHTML = `<h2>Wygrał ${stanGry.max_graczy === 3 ? 'gracz' : 'drużyna'} "${zwyciezca}"!</h2>
-                         <p>Wynik końcowy: ${wynikHtml}</p>`;
+                         <p>Wynik końcowy: ${wynikHtml}</p>
+                         ${eloSummaryHtml}`;
 
     const wyjdzBtn = document.createElement('button');
     wyjdzBtn.textContent = 'Wyjdź do menu';
