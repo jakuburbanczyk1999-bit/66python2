@@ -36,6 +36,16 @@ const mapowanieKolorow = {
     'WINO':     { symbol: '♠', klasa: 'kolor-wino' }
 };
 
+// --- Algorytmy botów ---
+
+const DOSTEPNE_ALGORYTMY_BOTOW = ['mcts', 'heuristic', 'mcts_fair']; 
+const DOMYSLNY_ALGORYTM_BOTA = 'mcts';
+const NAZWY_ALGORYTMOW_BOTOW = {
+    'mcts': { nazwa: "SMOLUCH (elo : 3000)", skrot: "MCTS+" }, // Oszukujący
+    'mcts_fair': { nazwa: "Pietrek (elo : 2000)", skrot: "MCTS" }, // Uczciwy
+    'heuristic': { nazwa: "Noob Maciek (elo : 1300)", skrot: "Heur." }
+};
+
 /* ==========================================================================
    SEKCJA 2: ZARZĄDZANIE DŹWIĘKAMI
    ========================================================================== */
@@ -339,33 +349,89 @@ function stworzSlotLobby(slot, stan) {
     const slotDiv = document.createElement('div');
     slotDiv.className = 'slot-gracza';
     const jestesHostem = stan.host === nazwaGracza;
-    const czyHost = stan.host === slot.nazwa;
-    const ikonaHosta = czyHost ? '<span class="crown-icon">👑</span> ' : '';
+    const czyHostWSlocie = stan.host === slot.nazwa;
+    const ikonaHosta = czyHostWSlocie ? '<span class="crown-icon">👑</span> ' : '';
 
     if (slot.typ === "pusty") { // Pusty slot
+        // Przycisk "Dołącz tutaj" (bez zmian)
         const btn = document.createElement('button');
         btn.textContent = '🪑 Dołącz tutaj';
         btn.onclick = () => wyslijAkcjeLobby('dolacz_do_slota', { slot_id: slot.slot_id });
         slotDiv.appendChild(btn);
-        // Host może dodać bota
+        // Przycisk "Dodaj Bota" (tylko dla hosta)
         if (jestesHostem) {
+            // Przycisk dodaje domyślnego bota
             const botBtn = document.createElement('button');
             botBtn.textContent = '🤖 Dodaj Bota';
-            botBtn.onclick = (e) => { e.stopPropagation(); wyslijAkcjeLobby('zmien_slot', { slot_id: slot.slot_id, nowy_typ: 'bot' }); };
+            // Wyślij akcję 'zmien_slot' z typem 'bot', serwer użyje domyślnego algorytmu
+            botBtn.onclick = (e) => {
+                e.stopPropagation();
+                wyslijAkcjeLobby('zmien_slot', {
+                    slot_id: slot.slot_id,
+                    nowy_typ: 'bot'
+                    // Nie wysyłamy 'bot_algorithm', serwer użyje domyślnego
+                });
+            };
             slotDiv.appendChild(botBtn);
         }
-    } else if (slot.nazwa === nazwaGracza) { // Slot aktualnego gracza
+    } else if (slot.nazwa === nazwaGracza) { // Slot aktualnego gracza (bez zmian)
         slotDiv.innerHTML = `${ikonaHosta}<strong>👤 ${slot.nazwa} (Ty)</strong>`;
     } else { // Slot innego gracza lub bota
-        const ikonaTypu = slot.typ === 'bot' ? '🤖' : (slot.typ === 'rozlaczony' ? '🔌' : '👤'); // Added icon for disconnected
-        const statusText = slot.typ === 'rozlaczony' ? ' (Rozłączony)' : ''; // Added status text
-        slotDiv.innerHTML = `${ikonaHosta}${ikonaTypu} ${slot.nazwa}${statusText}`; // Display status
-        // Host może wyrzucić gracza/bota
+        const ikonaTypu = slot.typ === 'bot' ? '🤖' : (slot.typ === 'rozlaczony' ? '🔌' : '👤');
+        const statusText = slot.typ === 'rozlaczony' ? ' (Rozłączony)' : '';
+
+        //Wyświetlanie informacji o bocie i przycisku zmiany
+        if (slot.typ === 'bot') {
+        // Pobierz aktualny klucz algorytmu lub użyj domyślnego
+        const currentAlgorithmKey = slot.bot_algorithm || DOMYSLNY_ALGORYTM_BOTA;
+        // Pobierz informacje o wyświetlanej nazwie z mapowania
+        const botInfo = NAZWY_ALGORYTMOW_BOTOW[currentAlgorithmKey] || { nazwa: `Bot_${slot.slot_id}`, skrot: currentAlgorithmKey.toUpperCase() }; // Fallback, gdyby klucz był nieznany
+
+        // Wyświetl nazwę bota i jego skrót algorytmu w nawiasie
+        slotDiv.innerHTML = `${ikonaHosta}${ikonaTypu} ${botInfo.nazwa}`;
+
+        // Przycisk zmiany algorytmu (tylko dla hosta)
         if (jestesHostem) {
-            const btn = document.createElement('button');
-            btn.textContent = 'Wyrzuć';
-            btn.onclick = () => wyslijAkcjeLobby('zmien_slot', { slot_id: slot.slot_id, nowy_typ: 'pusty' });
-            slotDiv.appendChild(btn);
+            const changeBtn = document.createElement('button');
+            changeBtn.textContent = '⚙️ Zmień Algorytm'; // Zmieniono tekst
+            changeBtn.style.marginLeft = '5px';
+            changeBtn.title = 'Zmień algorytm bota';
+            changeBtn.onclick = () => {
+                // --- Logika cyklicznego przełączania algorytmów ---
+                // Znajdź indeks bieżącego algorytmu w liście
+                const currentIndex = DOSTEPNE_ALGORYTMY_BOTOW.indexOf(currentAlgorithmKey);
+                // Oblicz indeks następnego algorytmu (z zawinięciem)
+                const nextIndex = (currentIndex + 1) % DOSTEPNE_ALGORYTMY_BOTOW.length;
+                // Pobierz nazwę następnego algorytmu
+                const nextAlgorithm = DOSTEPNE_ALGORYTMY_BOTOW[nextIndex];
+                // --- Koniec logiki przełączania ---
+
+                // Wyślij akcję z nowym algorytmem do serwera
+                wyslijAkcjeLobby('zmien_slot', {
+                    slot_id: slot.slot_id,
+                    nowy_typ: 'bot', // Musimy wysłać typ
+                    bot_algorithm: nextAlgorithm // Wyślij NOWY algorytm
+                });
+            };
+            slotDiv.appendChild(changeBtn);
+
+            // Przycisk wyrzucenia (bez zmian)
+            const kickBtn = document.createElement('button');
+            kickBtn.textContent = 'Wyrzuć';
+            kickBtn.style.marginLeft = '5px';
+            kickBtn.onclick = () => wyslijAkcjeLobby('zmien_slot', { slot_id: slot.slot_id, nowy_typ: 'pusty' });
+            slotDiv.appendChild(kickBtn);
+        }
+    } else { // Inny gracz (człowiek)
+            slotDiv.innerHTML = `${ikonaHosta}${ikonaTypu} ${slot.nazwa}${statusText}`;
+            // Przycisk wyrzucenia (tylko dla hosta, nie można wyrzucić siebie)
+            if (jestesHostem && slot.nazwa !== nazwaGracza) {
+                const kickBtn = document.createElement('button');
+                kickBtn.textContent = 'Wyrzuć';
+                kickBtn.style.marginLeft = '10px';
+                kickBtn.onclick = () => wyslijAkcjeLobby('zmien_slot', { slot_id: slot.slot_id, nowy_typ: 'pusty' });
+                slotDiv.appendChild(kickBtn);
+            }
         }
     }
     return slotDiv;

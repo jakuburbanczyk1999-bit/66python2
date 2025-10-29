@@ -806,11 +806,14 @@ class Rozdanie:
 
         # Sprawdź, czy to była ostatnia lewa
         liczba_kart_w_grze = len(self.gracze) * 6
-        if sum(len(g.wygrane_karty) for g in self.gracze if g) == liczba_kart_w_grze:
+        kart_w_lewie = len(self.aktualna_lewa)
+        kart_wygranych = sum(len(g.wygrane_karty) for g in self.gracze if g)
+
+        if kart_wygranych + kart_w_lewie == liczba_kart_w_grze:
             self.zwyciezca_ostatniej_lewy = zwyciezca_lewy
-            # W NORMALNEJ, dodaj 10 pkt za ostatnią lewę
+            # W NORMALNEJ, dodaj  pkt za ostatnią lewę
             if self.kontrakt == Kontrakt.NORMALNA and zwyciezca_lewy.druzyna:
-                 self.punkty_w_rozdaniu[zwyciezca_lewy.druzyna.nazwa] += 10
+                 self.punkty_w_rozdaniu[zwyciezca_lewy.druzyna.nazwa] += 66
                  self._dodaj_log('bonus_ostatnia_lewa', gracz=zwyciezca_lewy.nazwa)
 
         # Resetowanie stanu lewy
@@ -1442,7 +1445,11 @@ class RozdanieTrzyOsoby:
         self.punkty_w_rozdaniu[zwyciezca.nazwa] += punkty_w_lewie
         zwyciezca.wygrane_karty.extend([karta for _, karta in self.aktualna_lewa])
         # Sprawdź ostatnią lewę (24 karty)
-        if sum(len(g.wygrane_karty) for g in self.gracze if g) == 24: self.zwyciezca_ostatniej_lewy = zwyciezca
+        kart_w_lewie = len(self.aktualna_lewa)
+        kart_wygranych = sum(len(g.wygrane_karty) for g in self.gracze if g)
+        
+        if kart_wygranych + kart_w_lewie == 24: # 3 graczy * 8 kart
+            self.zwyciezca_ostatniej_lewy = zwyciezca
         self.aktualna_lewa.clear(); self.lewa_do_zamkniecia = False; self.zwyciezca_lewy_tymczasowy = None
         # Ustaw następnego gracza
         if not self.rozdanie_zakonczone:

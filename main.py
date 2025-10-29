@@ -54,9 +54,20 @@ async def lifespan(app: FastAPI):
 # Używamy managera 'lifespan' do obsługi startu/zamknięcia.
 app = FastAPI(lifespan=lifespan)
 
-# --- Globalna instancja bota MCTS ---
-# Tworzymy jedną instancję bota, która będzie używana przez wszystkie gry.
-mcts_bot = boty.MCTS_Bot()
+# --- Globalna instancja botów ---
+# Tworzymy jedną instancję botów, która będzie używana przez wszystkie gry.
+fair_mcts_bot = boty.MCTS_Bot(perfect_information=False)
+cheating_mcts_bot = boty.MCTS_Bot(perfect_information=True)
+heuristic_bot = boty.AdvancedHeuristicBot()
+
+bot_instances = {
+    "mcts": cheating_mcts_bot,
+    "mcts_fair": fair_mcts_bot,
+    "heuristic": heuristic_bot 
+}
+default_bot_name = "mcts"
+
+
 
 # --- Przechowywanie stanu gier ---
 # Główny słownik przechowujący stan wszystkich aktywnych gier w pamięci serwera.
@@ -321,9 +332,62 @@ async def zaktualizuj_elo_po_meczu(partia: dict):
                     wynik_elo_dla_klienta[user.username] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_oni:+.0f})"
 
             else: # Logika dla gry 3-osobowej
-                # TODO: Implementacja obliczania Elo dla 3 graczy (każdy vs każdy?)
-                print(f"Obliczanie Elo dla 3 graczy (ID: {partia['id_gry']}) nie jest jeszcze zaimplementowane.")
-                pass # Na razie nic nie rób
+                print(f"[{partia['id_gry']}] Obliczanie Elo dla 3 graczy...")
+                gracze_engine = partia.get("gracze_engine")
+                if not gracze_engine or len(gracze_engine) != 3:
+                    print(f"BŁĄD Elo 3p: Nieprawidłowa liczba graczy ({len(gracze_engine) if gracze_engine else 0}) w stanie gry.")
+                    return
+
+                # Pobierz obiekty User z bazy danych dla wszystkich 3 graczy
+                nazwy_graczy = [g.nazwa for g in gracze_engine]
+                query = select(User).where(User.username.in_(nazwy_graczy))
+                users = (await session.execute(query)).scalars().all()
+
+                if len(users) != 3:
+                    print(f"BŁĄD Elo 3p [{partia['id_gry']}]: Nie wszyscy gracze ({len(users)}/{len(nazwy_graczy)}) zostali znalezieni w bazie danych.")
+                    return
+
+                # Stwórz mapowanie nazwa -> (user_obj, punkty_meczu) dla łatwiejszego dostępu
+                gracze_data = {
+                    g.nazwa: (next(u for u in users if u.username == g.nazwa), g.punkty_meczu)
+                    for g in gracze_engine
+                }
+
+                zmiany_elo = {nazwa: 0.0 for nazwa in nazwy_graczy} # Słownik na sumaryczne zmiany Elo
+
+                # --- Przeprowadź wirtualne pojedynki 1vs1 ---
+                gracze_list = list(gracze_data.items()) # Lista krotek (nazwa, (user, punkty))
+
+                for i in range(3):
+                    for j in range(i + 1, 3):
+                        nazwa_a, (user_a, punkty_a) = gracze_list[i]
+                        nazwa_b, (user_b, punkty_b) = gracze_list[j]
+
+                        # Ustal wynik pojedynku A vs B
+                        wynik_a = 0.5 # Domyślnie remis
+                        if punkty_a > punkty_b:
+                            wynik_a = 1.0 # A wygrał
+                        elif punkty_b > punkty_a:
+                            wynik_a = 0.0 # A przegrał (B wygrał)
+
+                        # Oblicz zmianę Elo dla A w tym pojedynku
+                        zmiana_a = oblicz_nowe_elo(user_a.elo_rating, user_b.elo_rating, wynik_a) - user_a.elo_rating
+                        # Oblicz zmianę Elo dla B w tym pojedynku (wynik B = 1.0 - wynik A)
+                        zmiana_b = oblicz_nowe_elo(user_b.elo_rating, user_a.elo_rating, 1.0 - wynik_a) - user_b.elo_rating
+
+                        # Dodaj zmiany do sumarycznych zmian dla obu graczy
+                        zmiany_elo[nazwa_a] += zmiana_a
+                        zmiany_elo[nazwa_b] += zmiana_b
+
+                # --- Zastosuj sumaryczne zmiany Elo i przygotuj podsumowanie ---
+                for nazwa, (user, _) in gracze_data.items():
+                    stare_elo = user.elo_rating
+                    # Uśrednij zmianę Elo (każdy grał 2 pojedynki, więc dzielimy sumę zmian przez 2)
+                    # Można też pominąć dzielenie dla szybszych zmian rankingu
+                    zmiana_finalna = zmiany_elo[nazwa] # / 2.0 <- Opcjonalne uśrednianie
+
+                    user.elo_rating += zmiana_finalna
+                    wynik_elo_dla_klienta[nazwa] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_finalna:+.0f})"
 
             # Zapisz zmiany w bazie danych
             await session.commit()
@@ -952,7 +1016,7 @@ def pobierz_stan_gry(id_gry: str) -> dict:
             if gracz_perspektywa:
                 try:
                     # Wywołaj metodę ewaluacji bota MCTS
-                    aktualna_ocena = mcts_bot.evaluate_state(
+                    aktualna_ocena = cheating_mcts_bot.evaluate_state(
                         stan_gry=rozdanie,
                         nazwa_gracza_perspektywa=gracz_perspektywa.nazwa,
                         limit_symulacji=500 # Liczba symulacji do oceny
@@ -1044,6 +1108,7 @@ async def przetworz_akcje_gracza(data: dict, partia: dict):
             elif akcja == "zmien_slot" and partia["host"] == gracz_akcji_nazwa: # Host zmienia typ slotu
                 slot_id = data.get("slot_id") # ID slotu do zmiany
                 nowy_typ = data.get("nowy_typ") # "pusty" lub "bot"
+                wybrany_algorytm = data.get("bot_algorithm") # Algorytm bota (jeśli dotyczy)
                 slot = next((s for s in partia["slots"] if s["slot_id"] == slot_id), None)
 
                 # Sprawdź, czy host nie próbuje zmienić swojego slotu lub czy slot istnieje
@@ -1061,7 +1126,14 @@ async def przetworz_akcje_gracza(data: dict, partia: dict):
                             partia.setdefault("kicked_players", []).append(slot["nazwa"])
                         slot.update({"nazwa": None, "typ": "pusty"})
                     elif nowy_typ == "bot": # Dodanie bota
-                        slot.update({"nazwa": f"Bot_{slot_id}", "typ": "bot"})
+                        # Użyj algorytmu z żądania lub domyślnego z `bot_instances`
+                        algorytm_do_zapisu = wybrany_algorytm if wybrany_algorytm in bot_instances else default_bot_name
+                        slot.update({
+                            "nazwa": f"Bot_{slot_id}",
+                            "typ": "bot",
+                            "bot_algorithm": algorytm_do_zapisu # Zapisz algorytm w slocie
+                        })
+                        print(f"[{id_gry}] Slot {slot_id} zmieniony na Bota ({algorytm_do_zapisu.upper()})")
 
             elif akcja == "start_gry" and partia["host"] == gracz_akcji_nazwa: # Host rozpoczyna grę
                 # Sprawdź, czy wszystkie sloty są zajęte
@@ -1357,18 +1429,26 @@ async def uruchom_petle_botow(id_gry: str):
 
         # Małe opóźnienie, aby dać UI czas na odświeżenie (opcjonalne)
         await asyncio.sleep(0.1)
-
-        # --- Wywołaj logikę bota MCTS ---
+        #Logika wyboru ruchu bota 
+        bot_algorithm_name = slot_gracza.get("bot_algorithm", default_bot_name)
+        bot_instance = bot_instances.get(bot_algorithm_name, bot_instances[default_bot_name]) # Pobierz instancję
+        if not bot_instance: # Fallback do domyślnego, jeśli nazwa jest nieprawidłowa
+            print(f"OSTRZEŻENIE: Nieznany algorytm bota '{bot_algorithm_name}', używam domyślnego '{default_bot_name}'.")
+            bot_instance = bot_instances[default_bot_name]
+        # --- Wywołaj logikę bota ---
         akcja_bota = None
         try:
-            # print(f"BOT MCTS ({gracz_w_turze.nazwa}): Myślenie...") # Usunięto log
+            # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
+            start_time = time.time()
+            # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
             # Wywołaj metodę bota, aby znaleźć najlepszy ruch
-            akcja_bota = mcts_bot.znajdz_najlepszy_ruch(
+            akcja_bota = await asyncio.to_thread(
+                bot_instance.znajdz_najlepszy_ruch,
                 poczatkowy_stan_gry=rozdanie,
-                nazwa_gracza_bota=gracz_w_turze.nazwa,
-                limit_czasu_s=1.0 # Czas na myślenie dla bota
+                nazwa_gracza_bota=gracz_w_turze.nazwa
             )
-            print(f"BOT MCTS ({gracz_w_turze.nazwa}): Wybrana akcja: {akcja_bota}")
+            end_time = time.time()
+            # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Wybrana akcja: {akcja_bota} (Czas: {end_time - start_time:.3f}s)")
         except Exception as e:
             # Złap błędy z logiki bota
             print(f"!!! KRYTYCZNY BŁĄD BOTA MCTS dla {gracz_w_turze.nazwa} w grze {id_gry}: {e}")
