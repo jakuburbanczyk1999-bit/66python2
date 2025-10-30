@@ -813,7 +813,6 @@ class Rozdanie:
             self.zwyciezca_ostatniej_lewy = zwyciezca_lewy
             # W NORMALNEJ, dodaj  pkt za ostatnią lewę
             if self.kontrakt == Kontrakt.NORMALNA and zwyciezca_lewy.druzyna:
-                 self.punkty_w_rozdaniu[zwyciezca_lewy.druzyna.nazwa] += 66
                  self._dodaj_log('bonus_ostatnia_lewa', gracz=zwyciezca_lewy.nazwa)
 
         # Resetowanie stanu lewy

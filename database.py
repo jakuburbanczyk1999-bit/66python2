@@ -23,7 +23,7 @@ engine = create_async_engine(DATABASE_URL, echo=True)
 # Sesja jest używana do wykonywania zapytań i zarządzania transakcjami.
 # 'expire_on_commit=False' zapobiega wygaszaniu obiektów po zatwierdzeniu transakcji,
 # co jest często potrzebne w aplikacjach asynchronicznych.
-async_session_maker = sessionmaker(
+async_sessionmaker = sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
 

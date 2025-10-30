@@ -16,8 +16,9 @@ import silnik_gry
 # ==========================================================================
 
 # Stałe używane do normalizacji wyników w MCTS
-MAX_PUNKTY_ROZDANIA = 66.0 # Maksymalna liczba punktów możliwa do zdobycia w kartach w rozdaniu
+MAX_PUNKTY_ROZDANIA = 120.0 # Maksymalna liczba punktów możliwa do zdobycia w kartach w rozdaniu
 MAX_NORMAL_GAME_POINTS = 3.0 # Maksymalna liczba punktów meczowych do zdobycia w kontrakcie NORMALNA
+MAX_EV_NORMALIZATION = 66.0 # Maksymalna wartość oczekiwana używana do normalizacji EV w licytacji
 
 def karta_ze_stringa(nazwa_karty: str) -> silnik_gry.Karta:
     """Konwertuje string reprezentujący kartę (np. "As Czerwien") na obiekt Karta."""
@@ -155,6 +156,7 @@ class MonteCarloTreeSearchNode:
         self._ilosc_wizyt = 0       # Liczba odwiedzin tego węzła
         self._wyniki_wygranych = 0.0 # Suma nagród (znormalizowanych) uzyskanych z symulacji przechodzących przez ten węzeł
         self._sum_wynik_zero_jeden = 0.0 # Przechowuje sumę nagrody 1.0 (wygrana) / -1.0 (przegrana)
+        self._sum_raw_ev = 0.0 # Przechowuje sumę surowej wartości oczekiwanej (EV) bez normalizacji
 
         # --- Informacje o turze ---
         # Określa, czy w tym węźle ruch należy do gracza/drużyny optymalizowanej
@@ -356,9 +358,6 @@ class MonteCarloTreeSearchNode:
         znane_karty = set()
         gracz_opt_obj = next((g for g in stan_determinizowany.gracze if g and g.nazwa == self._gracz_startowy_nazwa), None)
 
-        # Początek determinizacji 
-
-
         if gracz_opt_obj:
             znane_karty.update(gracz_opt_obj.reka)
 
@@ -382,34 +381,22 @@ class MonteCarloTreeSearchNode:
         nieznane_karty = list(pelna_talia - znane_karty)
         random.shuffle(nieznane_karty)
 
-        # 3. Ustal liczbę kart w rękach (użyj liczby kart bota jako referencji)
-        oczekiwana_liczba_kart_w_rece = 0
+        # 3. Ustal bazową liczbę kart (ile kart mieli gracze NA POCZĄTKU tej lewy)
+        liczba_kart_startowa_lewy = 0
         if gracz_opt_obj:
-            oczekiwana_liczba_kart_w_rece = len(gracz_opt_obj.reka)
+            liczba_kart_startowa_lewy = len(gracz_opt_obj.reka)
+            # Sprawdź, czy MY (gracz_opt_obj) już zagraliśmy w tej lewie
+            if (stan_determinizowany.aktualna_lewa and
+                any(g.nazwa == self._gracz_startowy_nazwa for g, k in stan_determinizowany.aktualna_lewa)):
+                # Jeśli tak, to na początku lewy mieliśmy o 1 kartę więcej
+                liczba_kart_startowa_lewy += 1
+        
+        # Awaryjny fallback - jeśli bot ma 0 kart, ale gra się toczy, coś jest nie tak,
+        # ale przynajmniej nie doprowadzimy do ujemnych liczb kart.
+        if liczba_kart_startowa_lewy < 0:
+            liczba_kart_startowa_lewy = 0
 
-            # --- START KRYTYCZNEJ POPRAWKI ---
-            # Sprawdź, czyja jest tura
-            gracz_w_turze_obj = None
-            if (stan_determinizowany.kolej_gracza_idx is not None and 
-                0 <= stan_determinizowany.kolej_gracza_idx < len(stan_determinizowany.gracze)):
-                gracz_w_turze_obj = stan_determinizowany.gracze[stan_determinizowany.kolej_gracza_idx]
-            
-            # Jeśli to tura PRZECIWNIKA ORAZ my (gracz_opt_obj) JUŻ ZAGRALIŚMY w tej lewie,
-            # to przeciwnik musi mieć o jedną kartę więcej niż my mamy teraz w ręce.
-            if (gracz_w_turze_obj and 
-                gracz_w_turze_obj.nazwa != self._gracz_startowy_nazwa and    # To tura przeciwnika
-                stan_determinizowany.aktualna_lewa and                      # Lewa jest w toku
-                any(g.nazwa == self._gracz_startowy_nazwa for g, k in stan_determinizowany.aktualna_lewa)): # My już zagraliśmy
-                
-                # Nasza ręka ma N-1 kart (bo zagraliśmy), więc przeciwnik musi mieć N kart
-                oczekiwana_liczba_kart_w_rece += 1
-            # --- KONIEC KRYTYCZNEJ POPRAWKI ---
-
-        if oczekiwana_liczba_kart_w_rece == 0 and stan_determinizowany.faza == silnik_gry.FazaGry.ROZGRYWKA:
-             # Ten log może się teraz pojawić tylko przy poprzednim błędzie (pusty stół)
-             print(f"  OSTRZEŻENIE Determinizacji: Oczekiwana liczba kart to 0, faza: {stan_determinizowany.faza.name}, stół: {len(stan_determinizowany.aktualna_lewa)}")
-
-        # === Logika ustalania voidów (braków w kolorach) ===
+        # === Logika ustalania voidów (braków w kolorach)  ===
         voidy_graczy = {g.nazwa: set() for g in stan_determinizowany.gracze if g and g.nazwa != self._gracz_startowy_nazwa}
         biezaca_lewa_karty = {}
         aktualny_kolor_wiodacy = None
@@ -439,12 +426,11 @@ class MonteCarloTreeSearchNode:
                         aktualny_kolor_wiodacy = None; gracze_w_lewie = []; biezaca_lewa_karty = {}
             elif log.get('typ') == 'koniec_lewy':
                  aktualny_kolor_wiodacy = None; gracze_w_lewie = []; biezaca_lewa_karty = {}
-
         # === Koniec ustalania voidów ===
 
-        # 4. Rozdaj nieznane karty przeciwnikom, respektując voidy
+        # 4. Rozdaj nieznane karty przeciwnikom, respektując voidy i POPRAWNĄ liczbę kart
         licznik_prob = 0
-        MAX_PROB_ROZDANIA = 100
+        MAX_PROB_ROZDANIA = 100 # (Tak jak było)
         przeciwnicy_do_rozdania = [g for g in stan_determinizowany.gracze if g and g.nazwa != self._gracz_startowy_nazwa]
 
         while licznik_prob < MAX_PROB_ROZDANIA:
@@ -452,21 +438,67 @@ class MonteCarloTreeSearchNode:
             kopia_nieznanych = nieznane_karty[:]
             rozdanie_udane = True
             wszystkie_rece = {}
+            
             random.shuffle(przeciwnicy_do_rozdania)
             
             for gracz in przeciwnicy_do_rozdania:
                 voidy = voidy_graczy.get(gracz.nazwa, set())
-            if rozdanie_udane:
+                
+                # --- START POPRAWIONEJ LOGIKI ---
+                
+                # 1. Oblicz, ile kart powinien mieć TEN KONKRETNY gracz
+                oczekiwana_liczba_kart_dla_tego_gracza = liczba_kart_startowa_lewy
+                
+                # 2. Sprawdź, czy TEN gracz już zagrał w bieżącej lewie
+                if (stan_determinizowany.aktualna_lewa and
+                    any(g.nazwa == gracz.nazwa for g, k in stan_determinizowany.aktualna_lewa)):
+                    # Jeśli tak, musi mieć o jedną kartę mniej
+                    oczekiwana_liczba_kart_dla_tego_gracza -= 1
+                
+                # Zabezpieczenie przed ujemną liczbą kart
+                if oczekiwana_liczba_kart_dla_tego_gracza < 0:
+                    oczekiwana_liczba_kart_dla_tego_gracza = 0
 
+                # 3. Znajdź karty, które ten gracz MOŻE wziąć (respektując voidy)
+                karty_do_wziecia = [k for k in kopia_nieznanych if k.kolor not in voidy]
+
+                # 4. Sprawdź, czy pula jest wystarczająca (użyj nowej, poprawnej zmiennej)
+                if len(karty_do_wziecia) < oczekiwana_liczba_kart_dla_tego_gracza:
+                    rozdanie_udane = False
+                    break 
+
+                # 5. Rozdaj karty (użyj nowej, poprawnej zmiennej)
+                try:
+                    # Nie rozdawaj kart, jeśli gracz nie powinien ich mieć (liczba = 0)
+                    if oczekiwana_liczba_kart_dla_tego_gracza > 0:
+                        reka_gracza = random.sample(karty_do_wziecia, oczekiwana_liczba_kart_dla_tego_gracza)
+                    else:
+                        reka_gracza = [] # Pusta ręka
+                except ValueError as e:
+                    print(f"BŁĄD KRYTYCZNY (random.sample) w determinizacji: {e}. Próba wzięcia {oczekiwana_liczba_kart_dla_tego_gracza} z {len(karty_do_wziecia)} kart.")
+                    rozdanie_udane = False
+                    break
+
+                # 6. Zapisz rękę i usuń karty z puli
+                wszystkie_rece[gracz.nazwa] = reka_gracza
+                if reka_gracza: # Usuń tylko jeśli coś zostało rozdane
+                    kopia_nieznanych = [k for k in kopia_nieznanych if k not in reka_gracza]
+                
+                # --- KONIEC POPRAWIONEJ LOGIKI ---
+
+            if rozdanie_udane:
+                # Przypisz ręce
                 for gracz in stan_determinizowany.gracze:
                     if gracz and gracz.nazwa in wszystkie_rece:
                         gracz.reka = wszystkie_rece[gracz.nazwa]
                         gracz.reka.sort(key=lambda k: (silnik_gry.KOLEJNOSC_KOLOROW_SORT[k.kolor], -k.ranga.value))
-                return stan_determinizowany
+                return stan_determinizowany # Zwróć pomyślnie zdeterminizowany stan
             else:
                 licznik_prob += 1
+                
+        # Jeśli pętla 'while' zakończyła się po MAX_PROB_ROZDANIA
         print(f"BŁĄD KRYTYCZNY Determinizacji: Nie udało się rozdać kart zgodnie z voidami po {MAX_PROB_ROZDANIA} próbach.")
-        traceback.print_exc()
+        # Zwróć stan bazowy, aby przynajmniej symulacja mogła kontynuować
         return copy.deepcopy(stan_do_determinizacji)
 
     def symuluj_rozgrywke(self) -> Tuple[float, float, float]:
@@ -476,6 +508,10 @@ class MonteCarloTreeSearchNode:
         Ogranicza liczbę luf/kontr do jednej na symulację.
         Zwraca KROTKĘ: (wynik_zero_jeden, wynik_skalowany_pkt, wynik_skalowany_normalny)
         """
+
+        wynik_zero_jeden = 0.0
+        wynik_skalowany_normalny = 0.0
+        ev_raw_points = 0.0 # NOWA METRYKA: Oczekiwana Wartość (EV)
         # --- Krok determinizacji (jeśli tryb fair) ---
         if not self.perfect_information:
             try:
@@ -547,7 +583,7 @@ class MonteCarloTreeSearchNode:
                 except Exception as e_akcje: print(f"BŁĄD podczas pobierania akcji w symulacji dla {gracz_w_turze_sym.nazwa}: {e_akcje}"); break
 
                 # Filtrowanie luf/kontr
-                if stan_symulacji.faza != silnik_gry.FazaGry.ROZGRYWKA and lufa_kontra_w_symulacji:
+                if stan_symulacji.faza != silnik_gry.FazaGry.ROZGRYWKA:
                     akcje_filtrowane = [a for a in akcje if a.get('typ') not in ['lufa', 'kontra', 'do_konca']]
                     if not akcje_filtrowane:
                          fallback_pas = None
@@ -618,11 +654,11 @@ class MonteCarloTreeSearchNode:
              return (0.0, 0.0, 0.0)
 
         # --- Obliczanie wyników z perspektywy optymalizującego ---
-        punkty_zdobyte = podsumowanie.get('przyznane_punkty', 0)
-        wynik_skalowany_pkt = 0.0
-        wynik_zero_jeden = 0.0
-        wynik_skalowany_normalny = 0.0
+        punkty_zdobyte = podsumowanie.get('przyznane_punkty', 0) # To SĄ surowe punkty meczowe
+        wynik_skalowany_pkt = 0.0 # Ta zmienna nie jest już używana do decyzji
 
+
+        # Metryka 'wynik_skalowany_pkt' nie jest już potrzebna do decyzji MCTS
         if MAX_PUNKTY_ROZDANIA > 0:
             wynik_skalowany_pkt = punkty_zdobyte / MAX_PUNKTY_ROZDANIA
             wynik_skalowany_pkt = max(-1.0, min(1.0, wynik_skalowany_pkt))
@@ -637,48 +673,64 @@ class MonteCarloTreeSearchNode:
             wygrani_gracze_nazwy = [g.nazwa if hasattr(g, 'nazwa') else g for g in wygrani_gracze_raw]
             if self.perspektywa_optymalizacji in wygrani_gracze_nazwy: wygralismy = True
 
-        wynik_zero_jeden = 1.0 if wygralismy else -1.0
-        if not wygralismy: wynik_skalowany_pkt = -abs(wynik_skalowany_pkt)
+        # Ustaw kluczowe metryki: Win/Loss (+1/-1) oraz EV (np. +6, -3)
+        if wygralismy:
+            wynik_zero_jeden = 1.0
+            ev_raw_points = float(punkty_zdobyte)
+        else:
+            wynik_zero_jeden = -1.0
+            ev_raw_points = float(-punkty_zdobyte)
 
+        # Oblicz specjalną metrykę skalowaną dla rozgrywki NORMALNEJ
         if kontrakt_przed_symulacja == silnik_gry.Kontrakt.NORMALNA:
              mnoznik_gry = podsumowanie.get('mnoznik_gry', 1)
-             punkty_meczu_normal = mnoznik_gry
+             punkty_meczu_normal = float(mnoznik_gry) # 1.0, 2.0, lub 3.0
              if MAX_NORMAL_GAME_POINTS > 0:
                  wynik_skalowany_normalny = punkty_meczu_normal / MAX_NORMAL_GAME_POINTS
-                 wynik_skalowany_normalny = max(0.0, min(1.0, wynik_skalowany_normalny))
              else: wynik_skalowany_normalny = 1.0
              if not wygralismy: wynik_skalowany_normalny = -wynik_skalowany_normalny
         else:
+            # Dla kontraktów solo (Lepsza, Gorsza) skalowana metryka to po prostu win/loss
             wynik_skalowany_normalny = wynik_zero_jeden
 
-        return (wynik_zero_jeden, wynik_skalowany_pkt, wynik_skalowany_normalny)
-
-    def propaguj_wynik_wstecz(self, wynik_zero_jeden: float, wynik_skalowany_pkt: float, wynik_skalowany_normalny: float):
+        # Zwróć: (Win/Loss, EV (Raw Points), Scaled Pts (dla rozgrywki Normalnej))
+        return (wynik_zero_jeden, ev_raw_points, wynik_skalowany_normalny)
+    def propaguj_wynik_wstecz(self, wynik_zero_jeden: float, ev_raw_points: float, wynik_skalowany_normalny: float):
         """
         Propaguje (przekazuje w górę drzewa) wynik symulacji, aktualizując statystyki
-        odwiedzin i wyników w węzłach nadrzędnych. Wybiera odpowiedni wynik
-        (znormalizowany) w zależności od fazy gry węzła.
+        odwiedzin i wyników w węzłach nadrzędnych. 
+        Normalizuje EV dla UCT, ale przechowuje surowe EV dla logów.
         """
-        wynik_do_uzycia = 0.0
-        # Wybierz odpowiednią nagrodę w zależności od fazy gry *tego węzła*
+        wynik_do_uzycia_dla_uct = 0.0
+        
+        # Wybierz odpowiednią "walutę" do myślenia dla UCT (zawsze znormalizowaną!)
         if self.faza_wezla == silnik_gry.FazaGry.ROZGRYWKA:
-            # W rozgrywce użyj wyniku dla Normalnej lub 0/1
-            if self.kontrakt_wezla == silnik_gry.Kontrakt.NORMALNA:
-                wynik_do_uzycia = wynik_skalowany_normalny
+            # W ROZGRYWCE: Użyj 'wynik_skalowany_normalny' (to jest już [-1, 1] lub [-3, 3]/3.0)
+            wynik_do_uzycia_dla_uct = wynik_skalowany_normalny
+        else: 
+            # W LICYTACJI (NOWA LOGIKA):
+            # Użyj surowego EV, ale ZNORMALIZOWANEGO przez naszą stałą (48.0),
+            # aby utrzymać relacje wartości (Lepsza > Gorsza), ale bez niszczenia UCT.
+            if MAX_EV_NORMALIZATION > 0:
+                wynik_do_uzycia_dla_uct = ev_raw_points / MAX_EV_NORMALIZATION
+                # Ogranicz do [-1, 1] na wypadek ekstremalnych wartości (np. lufa x16)
+                wynik_do_uzycia_dla_uct = max(-1.0, min(1.0, wynik_do_uzycia_dla_uct))
             else:
-                wynik_do_uzycia = wynik_zero_jeden
-        else: # W fazach licytacyjnych użyj skalowanych punktów rozdania
-            wynik_do_uzycia = wynik_skalowany_pkt
+                wynik_do_uzycia_dla_uct = wynik_zero_jeden # Fallback
 
         # Zaktualizuj statystyki tego węzła
         self._ilosc_wizyt += 1
-        self._wyniki_wygranych += wynik_do_uzycia
-        self._sum_wynik_zero_jeden += wynik_zero_jeden
+        
+        # _wyniki_wygranych (dla UCT) przechowuje teraz ZNORMALIZOWANĄ wartość EV
+        self._wyniki_wygranych += wynik_do_uzycia_dla_uct 
+        
+        # Przechowuj pozostałe metryki oddzielnie do logowania
+        self._sum_wynik_zero_jeden += wynik_zero_jeden 
+        self._sum_raw_ev += ev_raw_points # Zapisz SUROWE EV
 
-        # Przekaż wynik do rodzica (jeśli istnieje)
+        # Przekaż wszystkie metryki do rodzica (on sam je znormalizuje)
         if self.parent:
-            self.parent.propaguj_wynik_wstecz(wynik_zero_jeden, wynik_skalowany_pkt, wynik_skalowany_normalny)
-
+            self.parent.propaguj_wynik_wstecz(wynik_zero_jeden, ev_raw_points, wynik_skalowany_normalny)
 # ==========================================================================
 # SEKCJA 4: GŁÓWNA KLASA BOTA MCTS
 # ==========================================================================
@@ -686,7 +738,7 @@ class MonteCarloTreeSearchNode:
 class MCTS_Bot:
     """Implementuje algorytm Monte Carlo Tree Search do wybierania ruchów w grze."""
 
-    def __init__(self, stala_eksploracji: float = 2.0, perfect_information: bool = True):
+    def __init__(self, stala_eksploracji: float = 1.8, perfect_information: bool = True):
         """
         Inicjalizuje bota MCTS.
 
@@ -724,8 +776,8 @@ class MCTS_Bot:
         # --- 3. Symulacja ---
         # Przeprowadź losową rozgrywkę z aktualnego węzła (może być to nowy liść lub węzeł terminalny)
         if aktualny_wezel: # Sprawdź, czy węzeł istnieje
-            wynik_01, wynik_pkt, wynik_norm = aktualny_wezel.symuluj_rozgrywke()
-            aktualny_wezel.propaguj_wynik_wstecz(wynik_01, wynik_pkt, wynik_norm)
+            wynik_01, ev_raw_points, wynik_norm = aktualny_wezel.symuluj_rozgrywke()
+            aktualny_wezel.propaguj_wynik_wstecz(wynik_01, ev_raw_points, wynik_norm)
         else:
              # To nie powinno się zdarzyć, ale zabezpiecza przed błędami
              print("OSTRZEŻENIE MCTS: _wykonaj_pojedyncza_iteracje - aktualny_wezel jest None po selekcji/ekspansji.")
@@ -748,7 +800,7 @@ class MCTS_Bot:
         )
         mozliwe_akcje_korzenia = korzen._nieprzetestowane_akcje
         if len(mozliwe_akcje_korzenia) == 1:
-            print(f"BOT MCTS ({nazwa_gracza_bota}): Wykonuję jedyny możliwy ruch.")
+            # print(f"BOT MCTS ({nazwa_gracza_bota}): Wykonuję jedyny możliwy ruch.")
             # Zwróć kopię tej jedynej akcji
             return mozliwe_akcje_korzenia[0].copy()
 
@@ -768,8 +820,8 @@ class MCTS_Bot:
         czas_konca = time.time() + limit_czasu_s
         licznik_symulacji = 0
         MIN_SYMULACJI_DO_WCZESNEGO_WYJSCIA = 500 # Minimalna liczba symulacji przed sprawdzeniem
-        PRÓG_PEWNEJ_WYGRANEJ = 0.96  
-        PRÓG_PEWNEJ_PRZEGRANEJ = -0.96
+        PRÓG_PEWNEJ_WYGRANEJ = 0.98  
+        PRÓG_PEWNEJ_PRZEGRANEJ = -0.98
         while time.time() < czas_konca:
             self._wykonaj_pojedyncza_iteracje(korzen)
             licznik_symulacji += 1
@@ -778,58 +830,82 @@ class MCTS_Bot:
             if licznik_symulacji >= MIN_SYMULACJI_DO_WCZESNEGO_WYJSCIA and licznik_symulacji % 100 == 0:
                 if not korzen.dzieci: continue
 
+                # --- START POPRAWKI: Definicja funkcji wartości ---
+                # Musimy znaleźć najlepszy ruch wg WARTOŚCI, aby sprawdzić jego szansę na wygraną
+                czy_licytacja_wybor = korzen.faza_wezla != silnik_gry.FazaGry.ROZGRYWKA
+                def get_node_value(dziecko: MonteCarloTreeSearchNode) -> float:
+                    """Pobiera średnią wartość nagrody dla węzła (EV dla licytacji, norm. dla rozgrywki)."""
+                    if dziecko._ilosc_wizyt == 0: return -float('inf')
+                    if czy_licytacja_wybor:
+                        return dziecko._sum_raw_ev / dziecko._ilosc_wizyt
+                    else:
+                        return dziecko._wyniki_wygranych / dziecko._ilosc_wizyt # To jest znormalizowane
+                
+                # Znajdź najlepsze dziecko WG WARTOŚCI
+                naj_dziecko_wg_wartosci = max(korzen.dzieci, key=get_node_value)
+                
+                # Znajdź też najczęściej odwiedzane, do logiki progu (żeby upewnić się, że bot coś zbadał)
                 naj_dziecko_wg_wizyt = max(korzen.dzieci, key=lambda d: d._ilosc_wizyt)
-
-                # Sprawdź próg eksploracji (bez zmian)
+                
+                # Sprawdź próg eksploracji (nadal bazuj na wizytach, aby upewnić się, że *jakiś* ruch jest zbadany)
                 if naj_dziecko_wg_wizyt._ilosc_wizyt > MIN_SYMULACJI_DO_WCZESNEGO_WYJSCIA / max(1, len(korzen.dzieci)): # Unikaj dzielenia przez zero
-                    # --- ZMIANA: Oblicz średnią szansę na wygraną (wynik zero-jeden) ---
-                    srednia_szansa_wygranej = naj_dziecko_wg_wizyt._sum_wynik_zero_jeden / naj_dziecko_wg_wizyt._ilosc_wizyt
+                    
+                    # Oblicz szansę wygranej (w skali -1 do 1) dla NAJLEPSZEGO RUCHU (wg wartości)
+                    srednia_szansa_wygranej_minmax = 0.0
+                    if naj_dziecko_wg_wartosci._ilosc_wizyt > 0: # Zabezpieczenie
+                        srednia_szansa_wygranej_minmax = naj_dziecko_wg_wartosci._sum_wynik_zero_jeden / naj_dziecko_wg_wartosci._ilosc_wizyt
 
                     # Porównaj średnią szansę z progami
-                    if srednia_szansa_wygranej >= PRÓG_PEWNEJ_WYGRANEJ:
-                        print(f"BOT MCTS ({nazwa_gracza_bota}): Wczesne wyjście! Pewna wygrana (szansa: {srednia_szansa_wygranej:.3f}). Symulacje: {licznik_symulacji}.")
+                    if srednia_szansa_wygranej_minmax >= PRÓG_PEWNEJ_WYGRANEJ:
+                        # print(f"BOT MCTS ({nazwa_gracza_bota}): Wczesne wyjście! Pewna wygrana (szansa: {srednia_szansa_wygranej_minmax:.3f}). Symulacje: {licznik_symulacji}.")
                         break # Przerwij pętlę MCTS
-                    elif srednia_szansa_wygranej <= PRÓG_PEWNEJ_PRZEGRANEJ:
-                        print(f"BOT MCTS ({nazwa_gracza_bota}): Wczesne wyjście! Pewna przegrana (szansa: {srednia_szansa_wygranej:.3f}). Symulacje: {licznik_symulacji}.")
+                    elif srednia_szansa_wygranej_minmax <= PRÓG_PEWNEJ_PRZEGRANEJ:
+                        # print(f"BOT MCTS ({nazwa_gracza_bota}): Wczesne wyjście! Pewna przegrana (szansa: {srednia_szansa_wygranej_minmax:.3f}). Symulacje: {licznik_symulacji}.")
                         break # Przerwij pętlę MCTS
+                # --- KONIEC POPRAWKI ---
         
 
-        print(f"BOT MCTS ({nazwa_gracza_bota}): Wykonano {licznik_symulacji} symulacji w ~{limit_czasu_s:.2f}s.")
-        print(f"--- EWALUACJA BOTA MCTS ({nazwa_gracza_bota}) --- Faza: {korzen.faza_wezla.name}")
+        # print(f"BOT MCTS ({nazwa_gracza_bota}): Wykonano {licznik_symulacji} symulacji w ~{limit_czasu_s:.2f}s.")
+        # print(f"--- EWALUACJA BOTA MCTS ({nazwa_gracza_bota}) --- Faza: {korzen.faza_wezla.name}")
         try:
             # Ustal, czy jesteśmy w fazie licytacji czy rozgrywki
             czy_licytacja = korzen.faza_wezla != silnik_gry.FazaGry.ROZGRYWKA
-            # Sprawdź, czy to rozgrywka Normalnej (specjalne skalowanie)
+            # Sprawdź, czy to rozgrywka Normalnej
             czy_normalna_rozgrywka = (korzen.faza_wezla == silnik_gry.FazaGry.ROZGRYWKA and
-                                     korzen.kontrakt_wezla == silnik_gry.Kontrakt.NORMALNA and
-                                     isinstance(korzen.stan_gry, silnik_gry.Rozdanie)) # Sprawdź też typ gry (4p)
+                                     korzen.kontrakt_wezla == silnik_gry.Kontrakt.NORMALNA)
 
-            # Ustaw etykiety i jednostki w zależności od fazy
-            etykieta_wartosci = "Oczekiwana wartość:"
-            jednostka = " pkt rozd." # Domyślnie punkty rozdania
-            mnoznik = MAX_PUNKTY_ROZDANIA # Domyślny mnożnik
-
-            if not czy_licytacja: # Jeśli rozgrywka
-                if czy_normalna_rozgrywka: # Rozgrywka Normalnej 4p
-                    etykieta_wartosci = "Oczekiwany wynik:"
-                    mnoznik = MAX_NORMAL_GAME_POINTS # Skaluj do punktów meczowych
-                    jednostka = " pkt mecz."
-                else: # Rozgrywka innych kontraktów (lub 3p)
-                    etykieta_wartosci = "Szansa na wygraną:"
-                    mnoznik = 100.0 # Pokaż jako procent
-                    jednostka = "%"
+            # --- POPRAWKA: Dostosowanie jednostek do nowej logiki ---
+            etykieta_wartosci = ""
+            jednostka = ""
+            mnoznik = 1.0 # Domyślnie nie skalujemy
+            
+            if czy_licytacja:
+                etykieta_wartosci = "Oczekiwana wartość (EV):"
+                jednostka = " pkt mecz."
+                mnoznik = 1.0 # Wartość to już surowe EV
+            elif czy_normalna_rozgrywka:
+                etykieta_wartosci = "Oczekiwany wynik:"
+                jednostka = " pkt mecz."
+                mnoznik = MAX_NORMAL_GAME_POINTS # Skaluj [-1, 1] -> [-3, 3]
+            else: # Rozgrywka Lepszej/Gorszej
+                etykieta_wartosci = "Szansa na wygraną:"
+                jednostka = "%"
+                mnoznik = 100.0 # Skaluj
 
             # Oblicz ogólną wartość korzenia (ocenę stanu przed ruchem)
             ogolna_wartosc = 0.0
             if korzen._ilosc_wizyt > 0:
-                 # Pobierz średnią nagrodę korzenia (już znormalizowaną [-1, 1])
-                 wynik_do_uzycia = korzen._wyniki_wygranych / korzen._ilosc_wizyt
-                 # Przeskaluj do odpowiedniej jednostki
-                 ogolna_wartosc = wynik_do_uzycia * mnoznik
-                 # Dla procentów przesuń zakres [0, 100] zamiast [-100, 100]
-                 if jednostka == "%": ogolna_wartosc = (wynik_do_uzycia + 1.0) / 2.0 * 100.0
+                if czy_licytacja:
+                    # Użyj surowego EV do wyświetlenia
+                    ogolna_wartosc = korzen._sum_raw_ev / korzen._ilosc_wizyt
+                else:
+                    # Użyj znormalizowanej wartości UCT (przeskalowanej) do wyświetlenia
+                    wynik_do_uzycia = korzen._wyniki_wygranych / korzen._ilosc_wizyt
+                    mnoznik_log = MAX_NORMAL_GAME_POINTS if czy_normalna_rozgrywka else 100.0
+                    ogolna_wartosc = wynik_do_uzycia * mnoznik_log
+                    if jednostka == "%": ogolna_wartosc = (wynik_do_uzycia + 1.0) / 2.0 * mnoznik_log
 
-            print(f"STAN OGÓLNY: {korzen._ilosc_wizyt} wizyt, {etykieta_wartosci} {ogolna_wartosc: 6.2f}{jednostka}")
+            # print(f"STAN OGÓLNY: {korzen._ilosc_wizyt} wizyt, {etykieta_wartosci} {ogolna_wartosc: 6.2f}{jednostka}")
 
             # Posortuj dzieci wg liczby wizyt (najczęściej badane ruchy na górze)
             posortowane_dzieci = sorted(korzen.dzieci, key=lambda d: d._ilosc_wizyt, reverse=True)
@@ -852,13 +928,19 @@ class MCTS_Bot:
                 # Oblicz wartość dla tego ruchu
                 wartosc_ruchu = 0.0
                 if dziecko._ilosc_wizyt > 0:
-                    wynik_do_uzycia = dziecko._wyniki_wygranych / dziecko._ilosc_wizyt
-                    wartosc_ruchu = wynik_do_uzycia * mnoznik
-                    if jednostka == "%": wartosc_ruchu = (wynik_do_uzycia + 1.0) / 2.0 * 100.0
+                    if czy_licytacja:
+                        # Pokaż SUROWE EV w logach
+                        wartosc_ruchu = dziecko._sum_raw_ev / dziecko._ilosc_wizyt
+                    else:
+                        # Pokaż znormalizowaną/przeskalowaną wartość dla rozgrywki
+                        wynik_do_uzycia = dziecko._wyniki_wygranych / dziecko._ilosc_wizyt
+                        mnoznik_log = MAX_NORMAL_GAME_POINTS if czy_normalna_rozgrywka else 100.0
+                        wartosc_ruchu = wynik_do_uzycia * mnoznik_log
+                        if jednostka == "%": wartosc_ruchu = (wynik_do_uzycia + 1.0) / 2.0 * mnoznik_log
 
                 # Wydrukuj sformatowany wiersz
-                print(f"  RUCH: {akcja_str:<55} -> {etykieta_wartosci} {wartosc_ruchu: 6.2f}{jednostka} (Wizyty: {dziecko._ilosc_wizyt})")
-            print("--------------------------------------------------")
+                # print(f"  RUCH: {akcja_str:<55} -> {etykieta_wartosci} {wartosc_ruchu: 6.2f}{jednostka} (Wizyty: {dziecko._ilosc_wizyt})")
+            # print("--------------------------------------------------")
         except Exception as e:
             # Złap potencjalne błędy podczas logowania
             print(f"Błąd podczas logowania ewaluacji MCTS: {e}")
@@ -880,8 +962,30 @@ class MCTS_Bot:
                  if akcja_pas: return akcja_pas.copy()
              return {} # Ostateczny fallback
 
-        # Wybierz dziecko z największą liczbą wizyt
-        najlepsze_dziecko = max(korzen.dzieci, key=lambda d: d._ilosc_wizyt)
+        # --- START POPRAWKI: NOWA LOGIKA WYBORU RUCHU ---
+        # Zamiast wybierać po liczbie wizyt, wybierz po NAJWYŻSZEJ ŚREDNIEJ WARTOŚCI,
+        # której bot używał do ewaluacji.
+        
+        # Sprawdź, czy jesteśmy w fazie licytacji (gdzie liczy się surowe EV)
+        czy_licytacja_wybor = korzen.faza_wezla != silnik_gry.FazaGry.ROZGRYWKA
+
+        def get_node_value(dziecko: MonteCarloTreeSearchNode) -> float:
+            """Pobiera średnią wartość nagrody dla węzła."""
+            if dziecko._ilosc_wizyt == 0:
+                # Nieodwiedzone węzły są nieskończenie złe (nie powinny być wybierane)
+                return -float('inf')
+            
+            if czy_licytacja_wybor:
+                # W licytacji wybieramy na podstawie surowego EV
+                return dziecko._sum_raw_ev / dziecko._ilosc_wizyt
+            else:
+                # W rozgrywce wybieramy na podstawie znormalizowanej wartości UCT
+                # (tej samej, której używa `propaguj_wynik_wstecz` dla rozgrywki)
+                return dziecko._wyniki_wygranych / dziecko._ilosc_wizyt
+
+        # Wybierz dziecko z najwyższą obliczoną wartością średnią
+        najlepsze_dziecko = max(korzen.dzieci, key=get_node_value)
+        # --- KONIEC POPRAWKI: NOWA LOGIKA WYBORU RUCHU ---
 
         # Zwróć kopię akcji prowadzącej do najlepszego dziecka
         akcja_do_zwrotu = najlepsze_dziecko.akcja.copy()
@@ -1008,6 +1112,11 @@ class AdvancedHeuristicBot:
         # 1. Jeśli to nie pierwszy ruch w lewie, spróbuj wziąć lewę najwyższą możliwą kartą.
         # 2. Jeśli to pierwszy ruch, zagraj najsilniejszą kartę (prostota).
         # 3. Jeśli nie da się wziąć lewy, zagraj najsłabszą kartę.
+        elif rozdanie.kontrakt == silnik_gry.Kontrakt.GORSZA:
+            # Obrońca w GORSZEJ również gra najsłabszą legalną kartę.
+            return min(grywalne_karty, key=lambda k: self.sila_rang[k.ranga])
+        elif rozdanie.kontrakt == silnik_gry.Kontrakt.LEPSZA:
+            return min(grywalne_karty, key=lambda k: self.sila_rang[k.ranga])
 
         if rozdanie.aktualna_lewa: # Jeśli to nie pierwszy ruch
             naj_karta_na_stole = None
@@ -1147,7 +1256,7 @@ class AdvancedHeuristicBot:
             # Na razie zawsze pasuj (prosta strategia)
             akcja_pas = next((a for a in mozliwe_akcje if a['typ'] == 'pas'), None)
             if akcja_pas:
-                # print(f"BOT HEURYSTYCZNY ({nazwa_gracza_bota}): Wybieram PAS w LICYTACJI")
+                # print(f"BOT HEURYSTYFazaGryCZNY ({nazwa_gracza_bota}): Wybieram PAS w LICYTACJI")
                 return akcja_pas
             else: # Awaryjnie
                  # print(f"BOT HEURYSTYCZNY ({nazwa_gracza_bota}): Brak PAS w LICYTACJI? Wybieram losową.")
@@ -1168,3 +1277,51 @@ class AdvancedHeuristicBot:
         else:
              # print(f"BOT HEURYSTYCZNY ({nazwa_gracza_bota}): Nieznana faza {faza}. Wybieram losową akcję.")
             return random.choice(mozliwe_akcje)
+        
+# ==========================================================================
+# SEKCJA 6: RANDOMBOT
+# ==========================================================================
+class RandomBot:
+    """
+    Bot, który zawsze wybiera losową legalną akcję.
+    Przydatny do testowania i jako punkt odniesienia dla "Elo World".
+    """
+    def __init__(self):
+        """Inicjalizuje bota."""
+        pass # Ten bot nie potrzebuje stanu
+
+    def znajdz_najlepszy_ruch(self,
+                                poczatkowy_stan_gry: Union[silnik_gry.Rozdanie, silnik_gry.RozdanieTrzyOsoby],
+                                nazwa_gracza_bota: str,
+                                limit_czasu_s: float = 0.0) -> dict: # Ignoruje limit czasu
+        """Wybiera losową legalną akcję."""
+
+        gracz_obj = next((g for g in poczatkowy_stan_gry.gracze if g and g.nazwa == nazwa_gracza_bota), None)
+        if not gracz_obj:
+            print(f"BŁĄD BOTA LOSOWEGO: Nie znaleziono obiektu gracza {nazwa_gracza_bota}")
+            return {} 
+
+        faza = poczatkowy_stan_gry.faza
+
+        # --- Logika Rozgrywki ---
+        if faza == silnik_gry.FazaGry.ROZGRYWKA:
+            grywalne_karty = [k for k in gracz_obj.reka if poczatkowy_stan_gry._waliduj_ruch(gracz_obj, k)]
+            if grywalne_karty:
+                wybrana_karta = random.choice(grywalne_karty)
+                return {'typ': 'zagraj_karte', 'karta_obj': wybrana_karta}
+            else:
+                # To nie powinno się zdarzyć, jeśli gra jest poprawna
+                print(f"OSTRZEŻENIE BOTA LOSOWEGO: {nazwa_gracza_bota} nie ma kart do zagrania w fazie {faza}.")
+                return {}
+
+        # --- Logika Faz Licytacyjnych ---
+        else:
+            mozliwe_akcje = poczatkowy_stan_gry.get_mozliwe_akcje(gracz_obj)
+            if mozliwe_akcje:
+                wybrana_akcja = random.choice(mozliwe_akcje)
+                # Musimy zwrócić kopię, aby silnik mógł ją bezpiecznie modyfikować (np. dodając Enumy)
+                return wybrana_akcja.copy()
+            else:
+                # To może się zdarzyć, jeśli gracz nie ma tury (np. czeka na innych)
+                print(f"OSTRZEŻENIE BOTA LOSOWEGO: {nazwa_gracza_bota} nie ma możliwych akcji w fazie {faza}.")
+                return {}

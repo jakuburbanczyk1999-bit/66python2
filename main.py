@@ -12,6 +12,7 @@ import asyncio
 import string
 import traceback
 import time
+import copy
 from typing import Any, Optional, AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -26,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 # --- Moduły lokalne ---
-from database import init_db, async_session_maker, User # Obsługa bazy danych i modelu User
+from database import init_db, async_sessionmaker, User # Obsługa bazy danych i modelu User
 from auth_utils import hash_password, verify_password   # Funkcje do hashowania i weryfikacji haseł
 import silnik_gry                                      # Główny silnik logiki gry 66
 import boty                                            # Implementacja botów (MCTS)
@@ -46,6 +47,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     print("Baza danych jest gotowa (lifespan).")
 
+    # Uruchom menedżera botów "Elo World" w tle
+    asyncio.create_task(elo_world_manager())
+
     yield # Aplikacja działa
 
     print("Serwer się zamyka.")
@@ -59,13 +63,15 @@ app = FastAPI(lifespan=lifespan)
 fair_mcts_bot = boty.MCTS_Bot(perfect_information=False)
 cheating_mcts_bot = boty.MCTS_Bot(perfect_information=True)
 heuristic_bot = boty.AdvancedHeuristicBot()
+random_bot = boty.RandomBot()
 
 bot_instances = {
     "mcts": cheating_mcts_bot,
     "mcts_fair": fair_mcts_bot,
-    "heuristic": heuristic_bot 
+    "heuristic": heuristic_bot,
+    "random": random_bot
 }
-default_bot_name = "mcts"
+default_bot_name = "mcts_fair"
 
 
 
@@ -232,11 +238,6 @@ async def uruchom_timer_dla_tury(id_gry: str):
         partia["timer_task"] = None
         return
 
-    # Sprawdź, czy gracz w turze to człowiek (boty nie mają timera)
-    slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == gracz_w_turze.nazwa), None)
-    if not slot_gracza or slot_gracza.get("typ") != "czlowiek":
-        partia["timer_task"] = None # To tura bota, nie uruchamiaj timera
-        return
 
     # Inkrementuj licznik ruchów (służy do walidacji timera w `czekaj_na_ruch`)
     partia["numer_ruchu_timer"] = partia.get("numer_ruchu_timer", 0) + 1
@@ -283,7 +284,7 @@ async def zaktualizuj_elo_po_meczu(partia: dict):
 
     try:
         # Otwórz sesję bazy danych
-        async with async_session_maker() as session:
+        async with async_sessionmaker() as session:
             if partia.get("max_graczy", 4) == 4: # Logika dla gry 4-osobowej
                 # Znajdź obiekty drużyn z silnika gry
                 druzyna_my = next((d for d in partia["druzyny_engine"] if d.nazwa == partia["nazwy_druzyn"]["My"]), None)
@@ -473,7 +474,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     Zależność (dependency) FastAPI do uzyskiwania sesji bazy danych.
     Automatycznie zarządza otwieraniem i zamykaniem sesji dla każdego żądania.
     """
-    async with async_session_maker() as session:
+    async with async_sessionmaker() as session:
         try:
             yield session # Udostępnij sesję endpointowi
         finally:
@@ -864,6 +865,7 @@ def stworz_gre(request: CreateGameRequest):
         # --- Inne ---
         'aktualna_ocena': None, # Ostatnia ocena stanu przez MCTS (dla paska ewaluacji)
         "pelna_historia": [],   # Czy to jest używane? Potencjalnie do usunięcia.
+        "bot_loop_lock": asyncio.Lock(), # Lock do synchronizacji pętli botów
     }
     # Usunięto log opcji (już niepotrzebny)
     # print(f"Utworzono grę {id_gry}, opcje: {partia.get('opcje')}")
@@ -946,6 +948,24 @@ def stworz_gre(request: CreateGameRequest):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Błąd serwera podczas inicjalizacji gry lokalnej: {e}"
             )
+    elif request.tryb_lobby == 'online':
+            # Sprawdź, czy host (nazwa_gracza) to jeden z naszych botów Elo World
+            bot_data = next((bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] == nazwa_gracza), None)
+            
+            if bot_data:
+                # Hostem jest bot
+                bot_algorytm = bot_data[1]
+                partia["slots"][0].update({
+                    "nazwa": nazwa_gracza, 
+                    "typ": "bot", # Ustawiamy typ 'bot' dla logiki serwera
+                    "bot_algorithm": bot_algorytm
+                })
+            else:
+                # Hostem jest człowiek
+                partia["slots"][0].update({
+                    "nazwa": nazwa_gracza, 
+                    "typ": "czlowiek"
+                })
 
     # Dodaj nowo utworzoną grę do globalnego słownika gier
     gry[id_gry] = partia
@@ -971,13 +991,23 @@ def pobierz_stan_gry(id_gry: str) -> dict:
     partia = gry.get(id_gry)
     if not partia:
         return {"error": "Gra nie istnieje"} # Zwróć błąd, jeśli gra nie istnieje
+    slots_dla_klienta = copy.deepcopy(partia["slots"])
+
+    # Pobieramy nazwy naszych aktywnych botów (te z bazy danych)
+    aktywne_boty_nazwy = {bot[0] for bot in AKTYWNE_BOTY_ELO_WORLD}
+
+    for slot in slots_dla_klienta:
+        # Jeśli slot to 'bot' I jest to jeden z naszych botów Elo World
+        if slot.get("typ") == "bot" and slot.get("nazwa") in aktywne_boty_nazwy:
+            slot["typ"] = "czlowiek" # Zmień typ na "czlowiek" dla klienta
+            slot.pop("bot_algorithm", None) # Usuń informację o algorytmie
 
     # --- Stwórz podstawowy słownik stanu (wspólny dla wszystkich faz) ---
     stan_podstawowy = {
         "status_partii": partia["status_partii"], # "LOBBY", "W_TRAKCIE", "ZAKONCZONA"
         "tryb_lobby": partia.get("tryb_lobby", "online"), # 'online' lub 'lokalna'
         "max_graczy": partia.get("max_graczy", 4), # 4 lub 3
-        "slots": partia["slots"],           # Lista slotów z informacjami o graczach
+        "slots": slots_dla_klienta,           # Lista slotów z informacjami o graczach
         "host": partia["host"],             # Nazwa hosta gry
         "gracze_gotowi": partia.get("gracze_gotowi", []), # Gracze gotowi na nast. rozdanie
         "nazwy_druzyn": partia.get("nazwy_druzyn", {}), # Nazwy drużyn (dla 4p)
@@ -1115,10 +1145,9 @@ async def przetworz_akcje_gracza(data: dict, partia: dict):
                 if slot and slot["nazwa"] != partia["host"]:
                     # Sprawdź blokadę dodawania botów w grach rankingowych
                     if (nowy_typ == "bot" and partia.get("opcje", {}).get("rankingowa", False)):
-                         # Zezwalamy na boty do testów - zakomentowane:
-                         # print(f"[{id_gry}] Odrzucono próbę dodania bota do gry rankingowej.")
-                         # return # Zignoruj akcję
-                         pass # Ignorujemy blokadę na czas testów
+                         print(f"[{id_gry}] Odrzucono próbę dodania bota do gry rankingowej.")
+                         return # Zignoruj akcję
+
 
                     if nowy_typ == "pusty": # Wyrzucenie gracza/bota
                         # Jeśli wyrzucamy człowieka, dodaj go do listy wyrzuconych
@@ -1232,11 +1261,23 @@ async def przetworz_akcje_gracza(data: dict, partia: dict):
                 # Dodaj gracza do listy gotowych
                 if gracz_akcji_nazwa not in partia.get("gracze_gotowi", []):
                     partia.setdefault("gracze_gotowi", []).append(gracz_akcji_nazwa)
-                # Sprawdź, czy wszyscy LUDZCY gracze są gotowi
+                
+                # Sprawdź, ilu ludzi jest w grze
                 liczba_ludzi = sum(1 for s in partia["slots"] if s["typ"] == "czlowiek")
-                gotowi_ludzie = [nazwa for nazwa in partia.get("gracze_gotowi", []) if any(s["nazwa"] == nazwa and s["typ"] == "czlowiek" for s in partia["slots"])]
+                
+                wszyscy_gotowi = False
+                if liczba_ludzi > 0:
+                    # TRYB Z LUDŹMI: Czekaj na wszystkich ludzi
+                    gotowi_ludzie = [nazwa for nazwa in partia.get("gracze_gotowi", []) if any(s["nazwa"] == nazwa and s["typ"] == "czlowiek" for s in partia["slots"])]
+                    if len(gotowi_ludzie) >= liczba_ludzi:
+                        wszyscy_gotowi = True
+                else:
+                    # TRYB 0 LUDZI (np. 4 boty): Czekaj na wszystkich graczy
+                    liczba_graczy_w_partii = len(partia.get("slots", []))
+                    if len(partia.get("gracze_gotowi", [])) >= liczba_graczy_w_partii:
+                        wszyscy_gotowi = True
 
-                if len(gotowi_ludzie) >= liczba_ludzi: # Wszyscy gotowi
+                if wszyscy_gotowi: # Wszyscy gotowi
                     partia["gracze_gotowi"] = [] # Wyczyść listę gotowych
                     # Jeśli było podsumowanie, zapisz je w historii partii
                     if rozdanie.podsumowanie:
@@ -1253,6 +1294,8 @@ async def przetworz_akcje_gracza(data: dict, partia: dict):
                                 f"W:{wygrani} | P:{punkty} pkt")
                         partia["historia_partii"].append(wpis)
                         partia["numer_rozdania"] = nr + 1 # Zwiększ numer następnego rozdania
+                        partia.pop("czas_konca_rundy", None)
+                        partia.pop("wymuszono_nastepna_runde", None)
 
                         # --- Dodaj 15 sekund do timerów na koniec rozdania (jeśli rankingowa) ---
                         if partia.get("opcje", {}).get("rankingowa", False):
@@ -1387,7 +1430,7 @@ async def replacement_timer(id_gry: str, slot_id: int):
         # Wyślij zaktualizowany stan (z botem)
         await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
         # Uruchom pętlę botów (może to teraz tura nowego bota)
-        await uruchom_petle_botow(id_gry)
+        asyncio.create_task(uruchom_petle_botow(id_gry))
     else:
         # Gracz wrócił na czas lub slot został zmieniony
         print(f"[{id_gry}] Timer zastępujący bota dla slotu {slot_id} anulowany (gracz wrócił lub slot zmieniony).")
@@ -1399,133 +1442,438 @@ async def replacement_timer(id_gry: str, slot_id: int):
 async def uruchom_petle_botow(id_gry: str):
     """
     Asynchroniczna pętla, która cyklicznie sprawdza, czy aktualnie jest tura bota.
-    Jeśli tak, wywołuje logikę bota (MCTS), aby wybrać i wykonać ruch.
-    Pętla przerywa działanie, gdy tura przechodzi na człowieka.
+    Uruchamia się TYLKO RAZ dzięki blokadzie i działa, dopóki nie nadejdzie
+    tura człowieka lub gra się nie zakończy.
     """
-    while True: # Pętla działa dopóki jest tura bota (lub wystąpi błąd)
-        partia = gry.get(id_gry)
-        # Sprawdź warunki kontynuacji pętli
-        if not partia or partia["status_partii"] != "W_TRAKCIE": break # Gra nie istnieje lub nie jest w trakcie
-        rozdanie = partia.get("aktualne_rozdanie")
-        if not rozdanie or not rozdanie.gracze or rozdanie.kolej_gracza_idx is None: break # Błąd stanu rozdania
-        if not (0 <= rozdanie.kolej_gracza_idx < len(rozdanie.gracze)): break # Błąd indeksu gracza
+    partia = gry.get(id_gry)
+    if not partia: return
 
-        gracz_w_turze = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-        if not gracz_w_turze: break # Błąd obiektu gracza
+    lock = partia.get("bot_loop_lock")
+    if not lock: # Awaryjny fallback, jeśli gra została stworzona przed tą zmianą
+        lock = asyncio.Lock()
+        partia["bot_loop_lock"] = lock
+    
+    # Spróbuj zdobyć blokadę BEZ CZEKANIA
+    if not lock.locked():
+        async with lock:
+            # print(f"[{id_gry}] ZDOBYTO BLOKADĘ. Uruchamiam pętlę botów.") # Opcjonalny log
+            while True: 
+                # Sprawdź stan partii *wewnątrz* pętli
+                partia_w_petli = gry.get(id_gry)
+                if not partia_w_petli or partia_w_petli["status_partii"] != "W_TRAKCIE": 
+                    # print(f"[{id_gry}] Gra zakończona lub nie istnieje. ZWALNIAM BLOKADĘ.") # Opcjonalny log
+                    break # Zakończ pętlę, zwolnij blokadę
+                
+                rozdanie = partia_w_petli.get("aktualne_rozdanie")
+                if not rozdanie or not rozdanie.gracze: 
+                    # print(f"[{id_gry}] Błąd rozdania. ZWALNIAM BLOKADĘ.") # Opcjonalny log
+                    break
+                
+                # --- BLOK: AUTOMATYCZNA FINALIZACJA LEWY ---
+                if rozdanie.lewa_do_zamkniecia:
+                    try:
+                        # print(f"[{id_gry}] Pętla botów finalizuje lewę...")
+                        rozdanie.finalizuj_lewe()
+                        await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
+                        await uruchom_timer_dla_tury(id_gry) 
+                        await asyncio.sleep(0.5) 
+                        continue # Wróć na początek pętli
+                    except Exception as e_fin:
+                        print(f"BŁĄD KRYTYCZNY: Pętla botów nie mogła sfinalizować lewy w {id_gry}: {e_fin}")
+                        traceback.print_exc()
+                        break # Zakończ pętlę, zwolnij blokadę
+                
+                if rozdanie.kolej_gracza_idx is None: 
+                    # print(f"[{id_gry}] Brak gracza w turze (podsumowanie?). ZWALNIAM BLOKADĘ.") # Opcjonalny log
+                    break
+                if not (0 <= rozdanie.kolej_gracza_idx < len(rozdanie.gracze)): 
+                    # print(f"[{id_gry}] Błędny indeks gracza. ZWALNIAM BLOKADĘ.") # Opcjonalny log
+                    break 
+                
+                gracz_w_turze = rozdanie.gracze[rozdanie.kolej_gracza_idx]
+                if not gracz_w_turze: 
+                    # print(f"[{id_gry}] Błąd obiektu gracza. ZWALNIAM BLOKADĘ.") # Opcjonalny log
+                    break 
 
-        # Znajdź slot gracza w turze
-        slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == gracz_w_turze.nazwa), None)
+                slot_gracza = next((s for s in partia_w_petli["slots"] if s["nazwa"] == gracz_w_turze.nazwa), None)
 
-        # Jeśli to nie jest tura bota, przerwij pętlę
-        if not slot_gracza or slot_gracza["typ"] == "czlowiek":
+                # Jeśli to nie jest tura bota, przerwij pętlę
+                if not slot_gracza or slot_gracza["typ"] == "czlowiek":
+                    # print(f"[{id_gry}] Tura człowieka ({gracz_w_turze.nazwa}). ZWALNIAM BLOKADĘ.") # Opcjonalny log
+                    break # Zakończ pętlę, zwolnij blokadę
+
+                # --- TURA BOTA ---
+                # (Reszta kodu... od 'print(f"[{id_gry}] Tura bota..." do końca)
+                print(f"[{id_gry}] Tura bota: {gracz_w_turze.nazwa}")
+
+                # Anuluj timer poprzedniego gracza (jeśli istniał - boty nie mają timerów)
+                if partia_w_petli.get("timer_task") and not partia_w_petli["timer_task"].done():
+                    partia_w_petli["timer_task"].cancel()
+
+                # Małe opóźnienie, aby dać UI czas na odświeżenie (opcjonalne)
+                await asyncio.sleep(0.1)
+                #Logika wyboru ruchu bota 
+                bot_algorithm_name = slot_gracza.get("bot_algorithm", default_bot_name)
+                bot_instance = bot_instances.get(bot_algorithm_name, bot_instances[default_bot_name]) # Pobierz instancję
+                if not bot_instance: # Fallback do domyślnego, jeśli nazwa jest nieprawidłowa
+                    print(f"OSTRZEŻENIE: Nieznany algorytm bota '{bot_algorithm_name}', używam domyślnego '{default_bot_name}'.")
+                    bot_instance = bot_instances[default_bot_name]
+                # --- Wywołaj logikę bota ---
+                akcja_bota = None
+                try:
+                    # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
+                    start_time = time.time()
+                    # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
+                    # Wywołaj metodę bota, aby znaleźć najlepszy ruch
+                    akcja_bota = await asyncio.to_thread(
+                        bot_instance.znajdz_najlepszy_ruch,
+                        poczatkowy_stan_gry=rozdanie,
+                        nazwa_gracza_bota=gracz_w_turze.nazwa
+                    )
+                    end_time = time.time()
+                    # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Wybrana akcja: {akcja_bota} (Czas: {end_time - start_time:.3f}s)")
+                except Exception as e:
+                    # Złap błędy z logiki bota
+                    print(f"!!! KRYTYCZNY BŁĄD BOTA MCTS dla {gracz_w_turze.nazwa} w grze {id_gry}: {e}")
+                    traceback.print_exc()
+                    break # Przerwij pętlę w razie błędu bota
+
+                # --- Obsługa przypadku, gdy bot nie zwrócił akcji ---
+                if not akcja_bota or 'typ' not in akcja_bota:
+                    print(f"INFO: Bot {gracz_w_turze.nazwa} nie miał ruchu (MCTS zwrócił pustą akcję). Faza: {rozdanie.faza}")
+                    # Spróbuj wymusić PAS w fazach licytacyjnych jako fallback
+                    if rozdanie.faza not in [silnik_gry.FazaGry.ROZGRYWKA, silnik_gry.FazaGry.PODSUMOWANIE_ROZDANIA]:
+                        mozliwe_akcje_bota = rozdanie.get_mozliwe_akcje(gracz_w_turze)
+                        akcja_pas_bota = next((a for a in mozliwe_akcje_bota if 'pas' in a.get('typ','')), None)
+                        if akcja_pas_bota:
+                            print(f"INFO: Bot {gracz_w_turze.nazwa} wymusza PAS.")
+                            akcja_bota = akcja_pas_bota # Użyj akcji PAS
+                        else:
+                            break # Jeśli even PAS nie jest możliwy, przerwij
+                    else: # W rozgrywce brak ruchu oznacza błąd
+                         break
+
+                # --- Odejmowanie Czasu dla Bota (jeśli rankingowa) ---
+                if (partia_w_petli.get("opcje", {}).get("rankingowa", False) and
+                    partia_w_petli.get("tura_start_czas") is not None and
+                    gracz_w_turze.nazwa in partia_w_petli.get("timery", {})):
+
+                    czas_teraz = time.time()
+                    czas_zuzyty = czas_teraz - partia_w_petli["tura_start_czas"]
+                    partia_w_petli["timery"][gracz_w_turze.nazwa] -= czas_zuzyty # Odejmij zużyty czas
+                    partia_w_petli["tura_start_czas"] = None # Zresetuj czas startu tury
+                    # print(f"[{id_gry}] Bot {gracz_w_turze.nazwa} zużył {czas_zuzyty:.2f}s.") # Opcjonalny log
+
+                # Anuluj zadanie timera bota (jeśli istniało)
+                if partia_w_petli.get("timer_task") and not partia_w_petli["timer_task"].done():
+                    partia_w_petli["timer_task"].cancel()
+
+                # --- Wykonaj akcję bota w silniku gry ---
+                try:
+                    if akcja_bota['typ'] == 'zagraj_karte':
+                        # Znajdź obiekt karty w ręce bota
+                        karta_do_zagrania = next((k for k in gracz_w_turze.reka if k == akcja_bota.get('karta_obj')), None)
+                        # Sprawdź legalność (dodatkowe zabezpieczenie)
+                        if karta_do_zagrania and rozdanie._waliduj_ruch(gracz_w_turze, karta_do_zagrania):
+                            rozdanie.zagraj_karte(gracz_w_turze, karta_do_zagrania)
+                        else: # Jeśli bot wybrał nielegalną kartę (błąd MCTS?)
+                            print(f"OSTRZEŻENIE: Bot {gracz_w_turze.nazwa} próbował zagrać nielegalną kartę: {akcja_bota.get('karta_obj')}. Wybieram losową legalną.")
+                            # Wybierz losową legalną kartę jako fallback
+                            legalne_karty = [k for k in gracz_w_turze.reka if rozdanie._waliduj_ruch(gracz_w_turze, k)]
+                            if legalne_karty:
+                                losowa_karta = random.choice(legalne_karty)
+                                rozdanie.zagraj_karte(gracz_w_turze, losowa_karta)
+                            else: # Jeśli nie ma legalnych kart (bardzo rzadki błąd)
+                                print(f"BŁĄD KRYTYCZNY: Bot {gracz_w_turze.nazwa} nie ma legalnych kart do zagrania.")
+                                break # Przerwij pętlę
+                    else: # Akcja licytacyjna bota
+                        # Sprawdź legalność akcji (dodatkowe zabezpieczenie)
+                        legalne_akcje = rozdanie.get_mozliwe_akcje(gracz_w_turze)
+                        # Porównaj słowniki akcji (typ, kontrakt, atut)
+                        czy_legalna = any(
+                            a['typ'] == akcja_bota.get('typ') and
+                            a.get('kontrakt') == akcja_bota.get('kontrakt') and
+                            a.get('atut') == akcja_bota.get('atut')
+                            for a in legalne_akcje
+                        )
+                        if czy_legalna:
+                            rozdanie.wykonaj_akcje(gracz_w_turze, akcja_bota)
+                        else: # Jeśli bot wybrał nielegalną akcję
+                            print(f"OSTRZEŻENIE: Bot {gracz_w_turze.nazwa} próbował wykonać nielegalną akcję licytacyjną: {akcja_bota}. Wybieram losową legalną.")
+                            # Wybierz losową legalną akcję jako fallback
+                            if legalne_akcje:
+                                 losowa_akcja = random.choice(legalne_akcje)
+                                 rozdanie.wykonaj_akcje(gracz_w_turze, losowa_akcja)
+                            else: # Jeśli nie ma legalnych akcji (błąd)
+                                print(f"BŁĄD KRYTYCZNY: Bot {gracz_w_turze.nazwa} nie ma legalnych akcji licytacyjnych.")
+                                break # Przerwij pętlę
+                except Exception as e:
+                    # Złap błędy podczas wykonywania akcji przez silnik gry
+                    print(f"BŁĄD podczas wykonywania akcji BOTA {gracz_w_turze.nazwa} w grze {id_gry}: {e}. Akcja: {akcja_bota}")
+                    traceback.print_exc()
+                    break # Przerwij pętlę
+
+                # --- Po ruchu bota ---
+                # Wyślij zaktualizowany stan gry do wszystkich klientów
+                await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
+
+                # Uruchom timer dla następnego gracza (jeśli jest człowiekiem i gra rankingowa)
+                await uruchom_timer_dla_tury(id_gry)
+
+                # Krótka pauza przed następną iteracją (dla płynności i uniknięcia 100% CPU)
+                await asyncio.sleep(0.5) # Zmniejszono pauzę dla szybszej gry botów
+        
+        # Blokada 'async with lock:' została automatycznie zwolniona
+        # print(f"[{id_gry}] Pętla botów zakończona, blokada zwolniona.") # Opcjonalny log
+    
+    else:
+        # print(f"[{id_gry}] Pętla botów już działa (lock zajęty). Pomijam.") # Opcjonalny log
+        pass # Pętla już działa, nic nie rób
+
+
+# ==========================================================================
+# SEKCJA 12.5: MENEDŻER BOTÓW "ELO WORLD"
+# ==========================================================================
+
+# --- KONFIGURACJA MENEDŻERA BOTÓW "ELO WORLD" ---
+# Ta lista będzie zawierać nazwy użytkowników botów, którzy mają aktywnie
+# wyszukiwać i tworzyć gry. Pobierzemy ją z bazy danych przy starcie serwera.
+AKTYWNE_BOTY_ELO_WORLD: list[tuple[str, str]] = [] # Lista krotek (nazwa_bota, algorytm)
+
+# Maksymalna liczba gier, które boty mogą hostować jednocześnie
+MAX_GAMES_HOSTED_BY_BOTS = 5
+# Maksymalna liczba wszystkich gier (ludzkich + botów), zanim boty przestaną tworzyć nowe
+MAX_TOTAL_GAMES_ON_SERVER = 20
+# Co ile sekund menedżer botów ma sprawdzać stan gier
+ELO_WORLD_TICK_RATE = 15.0 # (w sekundach)
+
+
+async def zaladuj_aktywne_boty_z_bazy():
+    """
+    Pobiera listę botów (z ich algorytmami) z bazy danych przy starcie serwera.
+    """
+    global AKTYWNE_BOTY_ELO_WORLD
+    print("[Elo World] Ładowanie kont botów z bazy danych...")
+    AKTYWNE_BOTY_ELO_WORLD.clear()
+    
+    try:
+        # Używamy poprawnej nazwy 'async_sessionmaker'
+        async with async_sessionmaker() as session:
+            # Używamy User.settings do identyfikacji botów i ich algorytmów
+            query = select(User.username, User.settings).where(User.settings.like('%"jest_botem": true%'))
+            result = await session.execute(query)
+            bot_users = result.all()
+            
+            for username, settings_json in bot_users:
+                try:
+                    settings = json.loads(settings_json)
+                    algorytm = settings.get("algorytm")
+                    if algorytm and algorytm in bot_instances: # Sprawdź, czy algorytm jest wspierany
+                        AKTYWNE_BOTY_ELO_WORLD.append((username, algorytm))
+                    else:
+                        print(f"  - Ostrzeżenie: Bot {username} ma nieznany algorytm: {algorytm}")
+                except (json.JSONDecodeError, TypeError):
+                    print(f"  - Błąd: Nie można sparsować ustawień JSON dla bota {username} (Ustawienia: {settings_json})")
+                    
+        print(f"[Elo World] Załadowano {len(AKTYWNE_BOTY_ELO_WORLD)} aktywnych botów.")
+        if not AKTYWNE_BOTY_ELO_WORLD:
+            print("[Elo World] Ostrzeżenie: Nie znaleziono żadnych kont botów w bazie danych.")
+            print("[Elo World] Uruchom skrypt 'create_bots.py', aby je stworzyć.")
+            
+    except Exception as e:
+        print(f"BŁĄD KRYTYCZNY podczas ładowania botów z bazy danych: {e}")
+        traceback.print_exc()
+
+
+async def elo_world_manager():
+    """
+    Główna pętla Menedżera Botów. Działa w tle, tworzy lobby, dołącza do gier
+    i zarządza stanem gotowości botów.
+    """
+    # Poczekaj chwilę na pełny start serwera
+    await asyncio.sleep(5.0) 
+    
+    # Najpierw załaduj boty z bazy
+    await zaladuj_aktywne_boty_z_bazy()
+
+    print("[Elo World] Menedżer botów uruchomiony.")
+    
+    while True:
+        try:
+            # Poczekaj na następny "tick"
+            await asyncio.sleep(ELO_WORLD_TICK_RATE)
+            
+            if not AKTYWNE_BOTY_ELO_WORLD:
+                # Jeśli nie ma botów, nie rób nic
+                continue
+
+            # Użyj kopii listy gier, aby uniknąć problemów z jednoczesną modyfikacją
+            gry_copy = list(gry.values())
+            CZAS_NA_GOTOWOSC_S = 30.0 # Czas w sekundach na kliknięcie "Gotowy"
+            
+            for partia in gry_copy:
+                rozdanie = partia.get("aktualne_rozdanie")
+                # Sprawdź, czy gra jest W_TRAKCIE, ma podsumowanie i nie była już wymuszona
+                if (partia.get("status_partii") == "W_TRAKCIE" and 
+                    rozdanie and rozdanie.podsumowanie and 
+                    not partia.get("wymuszono_nastepna_runde", False)): # Flaga, by zrobić to tylko raz
+                    
+                    if "czas_konca_rundy" not in partia:
+                        # Runda właśnie się zakończyła, ustaw timer
+                        partia["czas_konca_rundy"] = time.time()
+                    else:
+                        # Timer już tyka, sprawdź czy minął
+                        if (time.time() - partia["czas_konca_rundy"]) > CZAS_NA_GOTOWOSC_S:
+                            print(f"[Elo World] Wykryto AFK w lobby {partia['id_gry']}. Wymuszam następną rundę.")
+                            
+                            # Znajdź wszystkich ludzi, którzy NIE są gotowi
+                            ludzie_afk = [
+                                s["nazwa"] for s in partia["slots"] 
+                                if s["typ"] == "czlowiek" and s["nazwa"] not in partia.get("gracze_gotowi", [])
+                            ]
+                            
+                            # "Kliknij" za każdego AFK-era
+                            for afk_player in ludzie_afk:
+                                partia.setdefault("gracze_gotowi", []).append(afk_player)
+                            
+                            # Ustaw flagę, aby nie robić tego wielokrotnie w tej rundzie
+                            partia["wymuszono_nastepna_runde"] = True 
+                            
+                            # Wykonawcą akcji musi być ktoś z gry (np. host)
+                            wykonawca_akcji = partia.get("host")
+                            if not wykonawca_akcji: # Awaryjny fallback
+                                wykonawca_akcji = partia["slots"][0]["nazwa"]
+
+                            # Wywołaj akcję (teraz warunek gotowości powinien być spełniony)
+                            if wykonawca_akcji:
+                                dane_akcji = {"gracz": wykonawca_akcji, "akcja": {"typ": "nastepne_rozdanie"}}
+                                await przetworz_akcje_gracza(dane_akcji, partia)
+                                await manager.broadcast(partia["id_gry"], pobierz_stan_gry(partia["id_gry"]))
+                                asyncio.create_task(uruchom_petle_botow(partia["id_gry"]))
+            
+            # --- Zidentyfikuj "bezrobotne" boty ---
+            boty_w_grze = set()
+            boty_hostujace_lobby = set()
+            boty_w_podsumowaniu = {} # Mapa {bot_name: partia}
+            boty_w_lobby_goscia = set()
+
+            # Zbierz nazwy wszystkich aktywnych botów (dla szybszego sprawdzania)
+            wszystkie_aktywne_boty = {bot[0] for bot in AKTYWNE_BOTY_ELO_WORLD}
+
+            for partia in gry_copy:
+                status_gry = partia.get("status_partii")
+
+                # Zliczaj boty jako "zajęte" tylko jeśli gra jest aktywna
+                if status_gry == "LOBBY" or status_gry == "W_TRAKCIE":
+
+                    if status_gry == "LOBBY" and partia["host"] in wszystkie_aktywne_boty:
+                        boty_hostujace_lobby.add(partia["host"])
+
+                    for slot in partia.get("slots", []):
+                        bot_name = slot.get("nazwa")
+                        if bot_name in wszystkie_aktywne_boty: 
+                            boty_w_grze.add(bot_name) # Dodaj do ogólnej puli zajętych
+                            if status_gry == "LOBBY" and bot_name != partia.get("host"):
+                                 boty_w_lobby_goscia.add(bot_name)
+                             
+                # Sprawdź boty, które muszą kliknąć "Następne rozdanie"
+                rozdanie = partia.get("aktualne_rozdanie")
+                if partia.get("status_partii") == "W_TRAKCIE" and rozdanie and rozdanie.podsumowanie:
+                    gotowi = partia.get("gracze_gotowi", [])
+                    for slot in partia.get("slots", []):
+                        # Sprawdzamy sloty typu 'bot' LUB sloty naszych aktywnych botów
+                        # (na wypadek, gdyby typ się jeszcze nie zaktualizował)
+                        if slot.get("nazwa") in wszystkie_aktywne_boty and slot.get("nazwa") not in gotowi:
+                            boty_w_podsumowaniu[slot["nazwa"]] = partia
+
+            # Boty bezrobotne = Wszystkie boty - Boty w grze/lobby
+            boty_bezrobotne = [bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] not in boty_w_grze]
+            liczba_lobby_botow = len(boty_hostujace_lobby)
+
+            # --- AKCJE MENEDŻERA ---
+
+            # 1. Obsłuż boty czekające na następne rozdanie
+            for bot_name, partia in boty_w_podsumowaniu.items():
+                if partia.get("id_gry") in gry: # Sprawdź, czy gra nadal istnieje
+                    print(f"[Elo World] Bot {bot_name} klika 'Następne rozdanie' w grze {partia['id_gry']}")
+                    dane_akcji = {"gracz": bot_name, "akcja": {"typ": "nastepne_rozdanie"}}
+                    await przetworz_akcje_gracza(dane_akcji, partia) # Wywołaj akcję
+                    # Po tej akcji może nastąpić broadcast i uruchomienie pętli botów
+                    await manager.broadcast(partia["id_gry"], pobierz_stan_gry(partia["id_gry"]))
+                    asyncio.create_task(uruchom_petle_botow(partia["id_gry"]))
+
+
+            # 2. Sprawdź, czy boty-hosty mogą rozpocząć swoje gry
+            for bot_host_name in boty_hostujace_lobby:
+                partia = next((p for p in gry_copy if p.get("host") == bot_host_name), None)
+                if partia and partia.get("status_partii") == "LOBBY":
+                    # Sprawdź, czy lobby jest pełne
+                    if all(s["typ"] != "pusty" for s in partia["slots"]):
+                        print(f"[Elo World] Bot-host {bot_host_name} uruchamia grę {partia['id_gry']}!")
+                        dane_akcji = {"gracz": bot_host_name, "akcja_lobby": "start_gry"}
+                        await przetworz_akcje_gracza(dane_akcji, partia) # Wywołaj akcję
+                        await manager.broadcast(partia["id_gry"], pobierz_stan_gry(partia["id_gry"]))
+                        asyncio.create_task(uruchom_petle_botow(partia["id_gry"]))
+            
+            # 3. Przydziel "bezrobotne" boty
+            random.shuffle(boty_bezrobotne) # Losowa kolejność
+            for bot_name, bot_algorytm in boty_bezrobotne:
+                
+                # --- A. Spróbuj dołączyć do istniejącego lobby ---
+                lobby_do_dolaczenia = None
+                for partia in gry_copy:
+                    if (partia.get("status_partii") == "LOBBY" and 
+                        partia.get("opcje", {}).get("rankingowa", False) and # Tylko rankingowe
+                        not partia.get("opcje", {}).get("haslo")): # Tylko publiczne
+                        
+                        puste_sloty = [s for s in partia["slots"] if s["typ"] == "pusty"]
+                        if puste_sloty:
+                            lobby_do_dolaczenia = partia
+                            slot_do_zajecia = puste_sloty[0] # Weź pierwszy wolny
+                            break
+                            
+                if lobby_do_dolaczenia:
+                    print(f"[Elo World] Bot {bot_name} dołącza do lobby {lobby_do_dolaczenia['id_gry']} (slot {slot_do_zajecia['slot_id']})")
+                    # Ręcznie zaktualizuj slot, bo bot nie ma Websocketa
+                    slot_do_zajecia.update({
+                        "nazwa": bot_name, 
+                        "typ": "bot", # Ważne: oznaczamy jako 'bot'
+                        "bot_algorithm": bot_algorytm
+                    })
+                    # Poinformuj wszystkich o zmianie w lobby
+                    await manager.broadcast(lobby_do_dolaczenia["id_gry"], pobierz_stan_gry(lobby_do_dolaczenia["id_gry"]))
+                    continue # Przejdź do następnego bezrobotnego bota
+
+                # --- B. Jeśli nie dołączył, spróbuj stworzyć nowe lobby ---
+                if (liczba_lobby_botow < MAX_GAMES_HOSTED_BY_BOTS and 
+                    len(gry) < MAX_TOTAL_GAMES_ON_SERVER):
+                    
+                    print(f"[Elo World] Bot {bot_name} tworzy nowe lobby rankingowe...")
+                    try:
+                        # Użyj logiki z endpointu /gra/stworz
+                        request_bota = CreateGameRequest(
+                            nazwa_gracza=bot_name,
+                            tryb_gry='4p', # Boty domyślnie grają 4p
+                            tryb_lobby='online',
+                            publiczna=True,
+                            haslo=None,
+                            czy_rankingowa=True
+                        )
+                        # Wywołaj funkcję synchroniczną bezpośrednio
+                        stworz_gre(request_bota) 
+                        liczba_lobby_botow += 1
+                    except Exception as e:
+                        print(f"BŁĄD KRYTYCZNY: Bot {bot_name} nie mógł stworzyć gry: {e}")
+                        traceback.print_exc()
+
+        except asyncio.CancelledError:
+            print("[Elo World] Menedżer botów zatrzymany (CancelledError).")
             break
-
-        # --- TURA BOTA ---
-        print(f"[{id_gry}] Tura bota: {gracz_w_turze.nazwa}")
-
-        # Anuluj timer poprzedniego gracza (jeśli istniał - boty nie mają timerów)
-        if partia.get("timer_task") and not partia["timer_task"].done():
-            partia["timer_task"].cancel()
-
-        # Małe opóźnienie, aby dać UI czas na odświeżenie (opcjonalne)
-        await asyncio.sleep(0.1)
-        #Logika wyboru ruchu bota 
-        bot_algorithm_name = slot_gracza.get("bot_algorithm", default_bot_name)
-        bot_instance = bot_instances.get(bot_algorithm_name, bot_instances[default_bot_name]) # Pobierz instancję
-        if not bot_instance: # Fallback do domyślnego, jeśli nazwa jest nieprawidłowa
-            print(f"OSTRZEŻENIE: Nieznany algorytm bota '{bot_algorithm_name}', używam domyślnego '{default_bot_name}'.")
-            bot_instance = bot_instances[default_bot_name]
-        # --- Wywołaj logikę bota ---
-        akcja_bota = None
-        try:
-            # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
-            start_time = time.time()
-            # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
-            # Wywołaj metodę bota, aby znaleźć najlepszy ruch
-            akcja_bota = await asyncio.to_thread(
-                bot_instance.znajdz_najlepszy_ruch,
-                poczatkowy_stan_gry=rozdanie,
-                nazwa_gracza_bota=gracz_w_turze.nazwa
-            )
-            end_time = time.time()
-            # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Wybrana akcja: {akcja_bota} (Czas: {end_time - start_time:.3f}s)")
         except Exception as e:
-            # Złap błędy z logiki bota
-            print(f"!!! KRYTYCZNY BŁĄD BOTA MCTS dla {gracz_w_turze.nazwa} w grze {id_gry}: {e}")
+            print(f"BŁĄD KRYTYCZNY w pętli Menedżera Botów: {e}")
             traceback.print_exc()
-            break # Przerwij pętlę w razie błędu bota
-
-        # --- Obsługa przypadku, gdy bot nie zwrócił akcji ---
-        if not akcja_bota or 'typ' not in akcja_bota:
-            print(f"INFO: Bot {gracz_w_turze.nazwa} nie miał ruchu (MCTS zwrócił pustą akcję). Faza: {rozdanie.faza}")
-            # Spróbuj wymusić PAS w fazach licytacyjnych jako fallback
-            if rozdanie.faza not in [silnik_gry.FazaGry.ROZGRYWKA, silnik_gry.FazaGry.PODSUMOWANIE_ROZDANIA]:
-                mozliwe_akcje_bota = rozdanie.get_mozliwe_akcje(gracz_w_turze)
-                akcja_pas_bota = next((a for a in mozliwe_akcje_bota if 'pas' in a.get('typ','')), None)
-                if akcja_pas_bota:
-                    print(f"INFO: Bot {gracz_w_turze.nazwa} wymusza PAS.")
-                    akcja_bota = akcja_pas_bota # Użyj akcji PAS
-                else:
-                    break # Jeśli nawet PAS nie jest możliwy, przerwij
-            else: # W rozgrywce brak ruchu oznacza błąd
-                 break
-
-        # --- Wykonaj akcję bota w silniku gry ---
-        try:
-            if akcja_bota['typ'] == 'zagraj_karte':
-                # Znajdź obiekt karty w ręce bota
-                karta_do_zagrania = next((k for k in gracz_w_turze.reka if k == akcja_bota.get('karta_obj')), None)
-                # Sprawdź legalność (dodatkowe zabezpieczenie)
-                if karta_do_zagrania and rozdanie._waliduj_ruch(gracz_w_turze, karta_do_zagrania):
-                    rozdanie.zagraj_karte(gracz_w_turze, karta_do_zagrania)
-                else: # Jeśli bot wybrał nielegalną kartę (błąd MCTS?)
-                    print(f"OSTRZEŻENIE: Bot {gracz_w_turze.nazwa} próbował zagrać nielegalną kartę: {akcja_bota.get('karta_obj')}. Wybieram losową legalną.")
-                    # Wybierz losową legalną kartę jako fallback
-                    legalne_karty = [k for k in gracz_w_turze.reka if rozdanie._waliduj_ruch(gracz_w_turze, k)]
-                    if legalne_karty:
-                        losowa_karta = random.choice(legalne_karty)
-                        rozdanie.zagraj_karte(gracz_w_turze, losowa_karta)
-                    else: # Jeśli nie ma legalnych kart (bardzo rzadki błąd)
-                        print(f"BŁĄD KRYTYCZNY: Bot {gracz_w_turze.nazwa} nie ma legalnych kart do zagrania.")
-                        break # Przerwij pętlę
-            else: # Akcja licytacyjna bota
-                # Sprawdź legalność akcji (dodatkowe zabezpieczenie)
-                legalne_akcje = rozdanie.get_mozliwe_akcje(gracz_w_turze)
-                # Porównaj słowniki akcji (typ, kontrakt, atut)
-                czy_legalna = any(
-                    a['typ'] == akcja_bota.get('typ') and
-                    a.get('kontrakt') == akcja_bota.get('kontrakt') and
-                    a.get('atut') == akcja_bota.get('atut')
-                    for a in legalne_akcje
-                )
-                if czy_legalna:
-                    rozdanie.wykonaj_akcje(gracz_w_turze, akcja_bota)
-                else: # Jeśli bot wybrał nielegalną akcję
-                    print(f"OSTRZEŻENIE: Bot {gracz_w_turze.nazwa} próbował wykonać nielegalną akcję licytacyjną: {akcja_bota}. Wybieram losową legalną.")
-                    # Wybierz losową legalną akcję jako fallback
-                    if legalne_akcje:
-                         losowa_akcja = random.choice(legalne_akcje)
-                         rozdanie.wykonaj_akcje(gracz_w_turze, losowa_akcja)
-                    else: # Jeśli nie ma legalnych akcji (błąd)
-                        print(f"BŁĄD KRYTYCZNY: Bot {gracz_w_turze.nazwa} nie ma legalnych akcji licytacyjnych.")
-                        break # Przerwij pętlę
-        except Exception as e:
-            # Złap błędy podczas wykonywania akcji przez silnik gry
-            print(f"BŁĄD podczas wykonywania akcji BOTA {gracz_w_turze.nazwa} w grze {id_gry}: {e}. Akcja: {akcja_bota}")
-            traceback.print_exc()
-            break # Przerwij pętlę
-
-        # --- Po ruchu bota ---
-        # Wyślij zaktualizowany stan gry do wszystkich klientów
-        await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
-
-        # Uruchom timer dla następnego gracza (jeśli jest człowiekiem i gra rankingowa)
-        await uruchom_timer_dla_tury(id_gry)
-
-        # Krótka pauza przed następną iteracją (dla płynności i uniknięcia 100% CPU)
-        await asyncio.sleep(0.5) # Zmniejszono pauzę dla szybszej gry botów
-
-        # Pętla `while` kontynuuje sprawdzanie, czy nadal jest tura bota
+            # Poczekaj dłużej po błędzie, aby uniknąć pętli błędów
+            await asyncio.sleep(60.0)
 
 # ==========================================================================
 # SEKCJA 13: GŁÓWNY ENDPOINT WEBSOCKET
@@ -1619,7 +1967,7 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
              await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
 
         # Uruchom pętlę botów (jeśli jest tura bota)
-        await uruchom_petle_botow(id_gry)
+        asyncio.create_task(uruchom_petle_botow(id_gry))
 
         # --- Główna Pętla Odbierania Wiadomości od Klienta ---
         while True:
@@ -1659,7 +2007,7 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
                 await manager.broadcast(id_gry, nowy_stan)
 
                 # 4. Uruchom pętlę botów (jeśli teraz jest tura bota)
-                await uruchom_petle_botow(id_gry)
+                asyncio.create_task(uruchom_petle_botow(id_gry))
             else:
                  # Odrzuć akcję, jeśli nie spełnia warunków
                  print(f"[{id_gry}] Odrzucono akcję od {data.get('gracz')}. Tura: {gracz_w_turze_nazwa}")
@@ -1689,16 +2037,24 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
                  if partia.get("tryb_lobby") == "online":
                      brak_ludzkich_graczy = not any(s.get("typ") == "czlowiek" for s in partia.get("slots", []))
                      if brak_ludzkich_graczy:
-                         print(f"Lobby {id_gry} nie ma już ludzkich graczy. Usuwanie...")
-                         try:
-                             del gry[id_gry] # Usuń grę ze słownika `gry`
-                             lobby_usunięte = True
-                             stan_zmieniony = False # Nie ma sensu wysyłać broadcastu
-                             # Usuń wpis z ConnectionManagera (jeśli istnieje)
-                             if id_gry in manager.active_connections:
-                                  del manager.active_connections[id_gry]
-                         except KeyError:
-                             print(f"[{id_gry}] Nie można było usunąć lobby (może już usunięte).")
+                         # SPRAWDŹ, CZY HOST JEST BOTEM!
+                         host_jest_aktywnym_botem = partia.get("host") in {bot[0] for bot in AKTYWNE_BOTY_ELO_WORLD}
+
+                         if not host_jest_aktywnym_botem:
+                             # Host nie jest botem (jest człowiekiem lub None), a lobby jest puste
+                             print(f"Lobby {id_gry} (host: {partia.get('host')}) nie ma już ludzkich graczy. Usuwanie...")
+                             try:
+                                 del gry[id_gry] # Usuń grę ze słownika `gry`
+                                 lobby_usunięte = True
+                                 stan_zmieniony = False 
+                                 if id_gry in manager.active_connections:
+                                      del manager.active_connections[id_gry]
+                             except KeyError:
+                                 print(f"[{id_gry}] Nie można było usunąć lobby (może już usunięte).")
+                         else:
+                             # Host jest botem. Nie usuwaj lobby.
+                             # Menedżer botów się nim zajmie (np. wypełni pusty slot).
+                             print(f"[Elo World] Lobby {id_gry} (hostowane przez bota) zostaje aktywne, mimo braku ludzi.")
 
             elif partia["status_partii"] == "W_TRAKCIE": # Rozłączenie w trakcie gry
                 print(f"Gracz {nazwa_gracza} rozłączył się w trakcie gry {id_gry}.")
@@ -1729,7 +2085,7 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
                  # Wyślij zaktualizowany stan do pozostałych graczy
                  await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
                  # Uruchom pętlę botów (może to teraz tura bota zastępującego)
-                 await uruchom_petle_botow(id_gry)
+                 asyncio.create_task(uruchom_petle_botow(id_gry))
              except Exception as broadcast_error:
                  # Błąd broadcastu może wystąpić, jeśli wszyscy się rozłączyli
                  print(f"INFO: Nie udało się wysłać broadcastu po rozłączeniu gracza {nazwa_gracza} w grze {id_gry}: {broadcast_error}")
