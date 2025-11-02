@@ -36,8 +36,8 @@ BOTY_DO_STWORZENIA = [
     ("GG NOOBS XD", "mcts"),
     ("SzescSzescMojeZycie", "mcts"),
     ("Franek_Cipien", "mcts"),
-    ("Klopsztang76", "mcts_fair"),
-    ("66_66", "mcts_fair"),
+    ("Klopsztang76", "mcts"),
+    ("66_66", "mcts"),
     
     # Boty MCTS Fair (silne, ale "uczciwe")
     ("Szefuncio", "mcts_fair"),

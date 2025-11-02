@@ -326,10 +326,17 @@ async def zaktualizuj_elo_po_meczu(partia: dict):
                 for user in users_my:
                     stare_elo = user.elo_rating
                     user.elo_rating += zmiana_my
+                    user.games_played += 1 # Inkrementuj liczbę gier
+                    if wynik_my == 1.0: # Jeśli drużyna "My" wygrała
+                        user.games_won += 1 # Inkrementuj wygrane
                     wynik_elo_dla_klienta[user.username] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_my:+.0f})"
+                
                 for user in users_oni:
                     stare_elo = user.elo_rating
                     user.elo_rating += zmiana_oni
+                    user.games_played += 1 # Inkrementuj liczbę gier
+                    if wynik_my == 0.0: # Jeśli drużyna "Oni" wygrała
+                        user.games_won += 1 # Inkrementuj wygrane
                     wynik_elo_dla_klienta[user.username] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_oni:+.0f})"
 
             else: # Logika dla gry 3-osobowej
@@ -381,13 +388,19 @@ async def zaktualizuj_elo_po_meczu(partia: dict):
                         zmiany_elo[nazwa_b] += zmiana_b
 
                 # --- Zastosuj sumaryczne zmiany Elo i przygotuj podsumowanie ---
-                for nazwa, (user, _) in gracze_data.items():
+                najwyzszy_wynik = max(punkty for _, punkty in gracze_data.values())
+                
+                for nazwa, (user, punkty_gracza) in gracze_data.items():
                     stare_elo = user.elo_rating
-                    # Uśrednij zmianę Elo (każdy grał 2 pojedynki, więc dzielimy sumę zmian przez 2)
-                    # Można też pominąć dzielenie dla szybszych zmian rankingu
-                    zmiana_finalna = zmiany_elo[nazwa] # / 2.0 <- Opcjonalne uśrednianie
+                    zmiana_finalna = zmiany_elo[nazwa] 
 
                     user.elo_rating += zmiana_finalna
+                    user.games_played += 1 # Zawsze inkrementuj liczbę gier
+                    
+                    # Przyznaj wygraną graczowi(om) z najwyższym wynikiem
+                    if punkty_gracza == najwyzszy_wynik and najwyzszy_wynik >= 66:
+                        user.games_won += 1
+                        
                     wynik_elo_dla_klienta[nazwa] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_finalna:+.0f})"
 
             # Zapisz zmiany w bazie danych
@@ -606,9 +619,67 @@ async def read_rules_page():
     """Zwraca stronę z zasadami gry."""
     return FileResponse('static/zasady.html')
 
+@app.get("/ranking.html")
+async def read_ranking_page():
+    """Zwraca stronę rankingu graczy."""
+    return FileResponse('static/ranking.html')
+
 # ==========================================================================
 # SEKCJA 9: ENDPOINTY UŻYTKOWNIKÓW I USTAWIEŃ (Rejestracja, Logowanie)
 # ==========================================================================
+
+@app.get("/ranking/lista")
+async def pobierz_ranking_graczy(db: AsyncSession = Depends(get_db)):
+    """
+    Pobiera listę wszystkich graczy (ludzi i botów) posortowaną według Elo
+    wraz z ich statystykami gier.
+    """
+    try:
+        # Zapytanie do bazy o potrzebne kolumny, sortowanie malejąco wg Elo
+        query = (
+            select(
+                User.username,
+                User.elo_rating,
+                User.games_played,
+                User.games_won,
+                User.settings # Pobieramy ustawienia, by oznaczyć boty
+            )
+            .order_by(User.elo_rating.desc())
+        )
+        
+        result = await db.execute(query)
+        gracze_raw = result.all()
+        
+        # Przetwórz dane do formatu JSON
+        lista_rankingu = []
+        for row in gracze_raw:
+            # Sprawdź, czy to bot
+            jest_botem = False
+            if row.settings:
+                try:
+                    settings = json.loads(row.settings)
+                    if settings.get("jest_botem") is True:
+                        jest_botem = True
+                except (json.JSONDecodeError, TypeError):
+                    pass # Ignoruj błędy parsowania
+            
+            lista_rankingu.append({
+                "username": row.username,
+                "elo_rating": row.elo_rating,
+                "games_played": row.games_played,
+                "games_won": row.games_won,
+                "is_bot": jest_botem # Dodaj flagę dla frontendu
+            })
+            
+        return JSONResponse(content=lista_rankingu)
+        
+    except Exception as e:
+        print(f"BŁĄD KRYTYCZNY podczas pobierania rankingu: {e}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Nie udało się pobrać listy rankingu."
+        )
 
 @app.post("/register", response_model=Token)
 async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
@@ -828,6 +899,7 @@ def stworz_gre(request: CreateGameRequest):
     partia = {
         # --- Podstawowe informacje ---
         "id_gry": id_gry,
+        "czas_stworzenia": time.time(),
         "status_partii": "LOBBY", # Gra zaczyna w lobby
         "host": nazwa_gracza,
         "tryb_lobby": request.tryb_lobby, # 'online' lub 'lokalna'
@@ -1468,6 +1540,9 @@ async def uruchom_petle_botow(id_gry: str):
                 if not rozdanie or not rozdanie.gracze: 
                     # print(f"[{id_gry}] Błąd rozdania. ZWALNIAM BLOKADĘ.") # Opcjonalny log
                     break
+                if rozdanie.podsumowanie:
+                    # print(f"[{id_gry}] Wykryto podsumowanie. Zatrzymuję pętlę botów.") # Opcjonalny log
+                    break # Zakończ pętlę i zwolnij blokadę
                 
                 # --- BLOK: AUTOMATYCZNA FINALIZACJA LEWY ---
                 if rozdanie.lewa_do_zamkniecia:
@@ -1504,7 +1579,7 @@ async def uruchom_petle_botow(id_gry: str):
 
                 # --- TURA BOTA ---
                 # (Reszta kodu... od 'print(f"[{id_gry}] Tura bota..." do końca)
-                print(f"[{id_gry}] Tura bota: {gracz_w_turze.nazwa}")
+                print(f"[{id_gry}] Tura gracza: {gracz_w_turze.nazwa}")
 
                 # Anuluj timer poprzedniego gracza (jeśli istniał - boty nie mają timerów)
                 if partia_w_petli.get("timer_task") and not partia_w_petli["timer_task"].done():
@@ -1702,6 +1777,28 @@ async def elo_world_manager():
         try:
             # Poczekaj na następny "tick"
             await asyncio.sleep(ELO_WORLD_TICK_RATE)
+            CZAS_ZYCIA_ZAKONCZONEJ_GRY_S = 10 # 10 se kund
+            
+            # Użyj list(gry.items()), aby bezpiecznie modyfikować słownik gry podczas iteracji
+            for id_gry, partia in list(gry.items()):
+                if partia.get("status_partii") == "ZAKONCZONA":
+                    
+                    if "czas_zakonczenia_gry" not in partia:
+                        # Gra właśnie się zakończyła, ustaw jej timestamp
+                        partia["czas_zakonczenia_gry"] = time.time()
+                    else:
+                        # Gra ma timestamp, sprawdź, czy jest wystarczająco stara
+                        if (time.time() - partia["czas_zakonczenia_gry"]) > CZAS_ZYCIA_ZAKONCZONEJ_GRY_S:
+                            print(f"[Garbage Collector] Usuwam starą zakończoną grę: {id_gry}")
+                            try:
+                                # Usuń z globalnego słownika gier
+                                del gry[id_gry] 
+                                
+                                # Usuń również z menedżera połączeń (jeśli istnieją wiszące)
+                                if id_gry in manager.active_connections:
+                                    del manager.active_connections[id_gry]
+                            except KeyError:
+                                pass # Bez problemu, jeśli już usunięto
             
             if not AKTYWNE_BOTY_ELO_WORLD:
                 # Jeśli nie ma botów, nie rób nic
@@ -1796,6 +1893,7 @@ async def elo_world_manager():
             for bot_name, partia in boty_w_podsumowaniu.items():
                 if partia.get("id_gry") in gry: # Sprawdź, czy gra nadal istnieje
                     print(f"[Elo World] Bot {bot_name} klika 'Następne rozdanie' w grze {partia['id_gry']}")
+                    await asyncio.sleep(random.uniform(1.0, 5.0))
                     dane_akcji = {"gracz": bot_name, "akcja": {"typ": "nastepne_rozdanie"}}
                     await przetworz_akcje_gracza(dane_akcji, partia) # Wywołaj akcję
                     # Po tej akcji może nastąpić broadcast i uruchomienie pętli botów
@@ -1805,10 +1903,10 @@ async def elo_world_manager():
 
             # 2. Sprawdź, czy boty-hosty mogą rozpocząć swoje gry
             for bot_host_name in boty_hostujace_lobby:
-                partia = next((p for p in gry_copy if p.get("host") == bot_host_name), None)
-                if partia and partia.get("status_partii") == "LOBBY":
-                    # Sprawdź, czy lobby jest pełne
-                    if all(s["typ"] != "pusty" for s in partia["slots"]):
+                partia = next((p for p in gry_copy if p.get("host") == bot_host_name and p.get("status_partii") == "LOBBY"), None)
+            
+                # Teraz sprawdzamy już tylko, czy lobby jest pełne
+                if partia and all(s["typ"] != "pusty" for s in partia["slots"]):
                         print(f"[Elo World] Bot-host {bot_host_name} uruchamia grę {partia['id_gry']}!")
                         dane_akcji = {"gracz": bot_host_name, "akcja_lobby": "start_gry"}
                         await przetworz_akcje_gracza(dane_akcji, partia) # Wywołaj akcję
@@ -1833,7 +1931,7 @@ async def elo_world_manager():
                             break
                             
                 if lobby_do_dolaczenia:
-                    print(f"[Elo World] Bot {bot_name} dołącza do lobby {lobby_do_dolaczenia['id_gry']} (slot {slot_do_zajecia['slot_id']})")
+                    print(f"[Elo World] Gracz {bot_name} dołącza do lobby {lobby_do_dolaczenia['id_gry']} (slot {slot_do_zajecia['slot_id']})")
                     # Ręcznie zaktualizuj slot, bo bot nie ma Websocketa
                     slot_do_zajecia.update({
                         "nazwa": bot_name, 
@@ -1842,18 +1940,20 @@ async def elo_world_manager():
                     })
                     # Poinformuj wszystkich o zmianie w lobby
                     await manager.broadcast(lobby_do_dolaczenia["id_gry"], pobierz_stan_gry(lobby_do_dolaczenia["id_gry"]))
+                    await asyncio.sleep(random.uniform(2.0, 7.0)) # Losowe opóźnienie 2-7 sekund
                     continue # Przejdź do następnego bezrobotnego bota
 
                 # --- B. Jeśli nie dołączył, spróbuj stworzyć nowe lobby ---
                 if (liczba_lobby_botow < MAX_GAMES_HOSTED_BY_BOTS and 
                     len(gry) < MAX_TOTAL_GAMES_ON_SERVER):
                     
-                    print(f"[Elo World] Bot {bot_name} tworzy nowe lobby rankingowe...")
+                    print(f"[Elo World] Gracz {bot_name} tworzy nowe lobby rankingowe...")
                     try:
                         # Użyj logiki z endpointu /gra/stworz
+                        tryb_gry_bota = '3p' if random.random() < 0.33 else '4p' # 33% szansy na 3p
                         request_bota = CreateGameRequest(
                             nazwa_gracza=bot_name,
-                            tryb_gry='4p', # Boty domyślnie grają 4p
+                            tryb_gry=tryb_gry_bota, # Boty domyślnie grają 4p
                             tryb_lobby='online',
                             publiczna=True,
                             haslo=None,
@@ -1862,6 +1962,7 @@ async def elo_world_manager():
                         # Wywołaj funkcję synchroniczną bezpośrednio
                         stworz_gre(request_bota) 
                         liczba_lobby_botow += 1
+                        await asyncio.sleep(random.uniform(2.0, 15.0)) # Opóźnienie stworzenia lobby
                     except Exception as e:
                         print(f"BŁĄD KRYTYCZNY: Bot {bot_name} nie mógł stworzyć gry: {e}")
                         traceback.print_exc()
@@ -1963,8 +2064,7 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
         # --- Wysyłanie Stanu Początkowego / Uruchomienie Pętli Botów ---
         # Wyślij aktualny stan gry do nowo podłączonego gracza (i pozostałych)
         # (W lobby stan jest wysyłany przy dołączaniu do slotu)
-        if partia["status_partii"] != "LOBBY":
-             await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
+        await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
 
         # Uruchom pętlę botów (jeśli jest tura bota)
         asyncio.create_task(uruchom_petle_botow(id_gry))
@@ -1995,8 +2095,9 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
             akcja_systemowa = data.get('akcja', {}).get('typ') in ['nastepne_rozdanie', 'finalizuj_lewe']
             akcja_lobby = 'akcja_lobby' in data
             czyj_ruch = data.get("gracz") == gracz_w_turze_nazwa
+            akcja_po_grze = partia["status_partii"] == "ZAKONCZONA"
 
-            if czyj_ruch or akcja_systemowa or akcja_lobby or partia["status_partii"] == "LOBBY":
+            if czyj_ruch or akcja_systemowa or akcja_lobby or partia["status_partii"] == "LOBBY" or akcja_po_grze:
                 # 1. Przetwórz akcję gracza (wywołuje logikę silnika gry)
                 await przetworz_akcje_gracza(data, partia)
 
@@ -2024,38 +2125,47 @@ async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: st
         if partia: # Sprawdź, czy gra nadal istnieje
             if partia["status_partii"] == "LOBBY": # Rozłączenie w lobby
                  slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
+                 
                  if slot_gracza: # Jeśli gracz zajmował slot
                      # Opróżnij slot
-                     slot_gracza["typ"], slot_gracza["nazwa"] = "pusty", None
-                     # Jeśli host się rozłączył, przekaż hosta następnemu człowiekowi
+                     slot_gracza.update({"typ": "pusty", "nazwa": None, "bot_algorithm": None})
+                     
+                     # Logika przekazywania hosta
                      if partia["host"] == nazwa_gracza:
+                         # 1. Spróbuj przekazać innemu człowiekowi
                          nowy_host = next((s["nazwa"] for s in partia["slots"] if s["typ"] == "czlowiek"), None)
-                         partia["host"] = nowy_host # Może być None, jeśli nie ma innych ludzi
+                         
+                         if not nowy_host:
+                             # 2. Jeśli nie ma ludzi, przekaż botowi (naszemu 'elo world' LUB zwykłemu)
+                             nowy_host = next((s["nazwa"] for s in partia["slots"] if s["typ"] == "bot"), None)
+                         
+                         partia["host"] = nowy_host # Może być None, jeśli lobby jest puste
+                         
                      stan_zmieniony = True
 
-                 # Sprawdź, czy lobby online jest teraz puste (bez ludzi)
+                 # Sprawdź, czy lobby jest teraz CAŁKOWICIE puste
                  if partia.get("tryb_lobby") == "online":
-                     brak_ludzkich_graczy = not any(s.get("typ") == "czlowiek" for s in partia.get("slots", []))
-                     if brak_ludzkich_graczy:
-                         # SPRAWDŹ, CZY HOST JEST BOTEM!
-                         host_jest_aktywnym_botem = partia.get("host") in {bot[0] for bot in AKTYWNE_BOTY_ELO_WORLD}
-
-                         if not host_jest_aktywnym_botem:
-                             # Host nie jest botem (jest człowiekiem lub None), a lobby jest puste
-                             print(f"Lobby {id_gry} (host: {partia.get('host')}) nie ma już ludzkich graczy. Usuwanie...")
+                     # Sprawdzamy, czy WSZYSTKIE sloty są "pusty"
+                     czy_lobby_puste = all(s.get("typ") == "pusty" for s in partia.get("slots", []))
+                     
+                     if czy_lobby_puste:
+                         OKRES_OCHRONNY_S = 10 # 10 sekund
+                         czas_stworzenia = partia.get("czas_stworzenia", 0)
+                         
+                         if (time.time() - czas_stworzenia) < OKRES_OCHRONNY_S:
+                             # Lobby jest w okresie ochronnym, nie usuwaj go
+                             print(f"[{id_gry}] Lobby jest w 10s okresie ochronnym. Ignorowanie rozłączenia (prawdopodobnie hosta).")
+                         else:
+                             # Lobby jest stare i puste, usuń je
+                             print(f"Lobby {id_gry} (host: {partia.get('host')}) jest teraz całkowicie puste. Usuwanie...")
                              try:
-                                 del gry[id_gry] # Usuń grę ze słownika `gry`
+                                 del gry[id_gry] # Usuń grę
                                  lobby_usunięte = True
                                  stan_zmieniony = False 
                                  if id_gry in manager.active_connections:
                                       del manager.active_connections[id_gry]
                              except KeyError:
                                  print(f"[{id_gry}] Nie można było usunąć lobby (może już usunięte).")
-                         else:
-                             # Host jest botem. Nie usuwaj lobby.
-                             # Menedżer botów się nim zajmie (np. wypełni pusty slot).
-                             print(f"[Elo World] Lobby {id_gry} (hostowane przez bota) zostaje aktywne, mimo braku ludzi.")
-
             elif partia["status_partii"] == "W_TRAKCIE": # Rozłączenie w trakcie gry
                 print(f"Gracz {nazwa_gracza} rozłączył się w trakcie gry {id_gry}.")
                 slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)

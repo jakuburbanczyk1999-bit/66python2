@@ -17,7 +17,7 @@ DATABASE_URL = "sqlite+aiosqlite:///./gra66.db"
 # Silnik (engine) SQLAlchemy do zarządzania połączeniami z bazą danych.
 # 'create_async_engine' tworzy silnik obsługujący operacje asynchroniczne.
 # 'echo=True' włącza logowanie zapytań SQL (przydatne do debugowania).
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(DATABASE_URL)
 
 # Fabryka sesji (session maker) do tworzenia asynchronicznych sesji bazy danych.
 # Sesja jest używana do wykonywania zapytań i zarządzania transakcjami.
@@ -47,11 +47,13 @@ class User(Base):
     __tablename__ = "users" # Nazwa tabeli w bazie danych SQL.
 
     # Kolumny tabeli:
-    id = Column(Integer, primary_key=True, index=True) # Unikalny identyfikator użytkownika (klucz główny).
-    username = Column(String, unique=True, index=True, nullable=False) # Nazwa użytkownika (musi być unikalna).
-    hashed_password = Column(String, nullable=False) # Zahashowane hasło użytkownika.
-    settings = Column(Text, nullable=True) # Ustawienia interfejsu użytkownika (zapisane jako JSON w tekście).
-    elo_rating = Column(Float, default=1200.0, nullable=False) # Ranking Elo użytkownika (domyślnie 1200).
+    id = Column(Integer, primary_key=True, index=True) 
+    username = Column(String, unique=True, index=True, nullable=False) 
+    hashed_password = Column(String, nullable=False) 
+    settings = Column(Text, nullable=True) 
+    elo_rating = Column(Float, default=1200.0, nullable=False) 
+    games_played = Column(Integer, default=0, nullable=False) 
+    games_won = Column(Integer, default=0, nullable=False)    
 
 # ==========================================================================
 # SEKCJA 4: FUNKCJA INICJALIZUJĄCA BAZĘ DANYCH

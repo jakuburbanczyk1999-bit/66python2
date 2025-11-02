@@ -483,14 +483,37 @@ function aktualizujWidokGry(stanGry) {
 
     // --- Ustal pozycje graczy na ekranie (dol, gora, lewy, prawy) ---
     let pozycje = {};
-    if (stanGry.max_graczy === 3) {
-        const inniGracze = stanGry.slots.filter(s => s && s.nazwa !== nazwaGracza); // Added check for s
-        pozycje = { dol: slotGracza, lewy: inniGracze[0], prawy: inniGracze[1] };
-    } else {
-        const partner = stanGry.slots.find(s => s && s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza); // Added check for s
-        const przeciwnicy = stanGry.slots.filter(s => s && s.druzyna !== slotGracza.druzyna); // Added check for s
-        pozycje = { dol: slotGracza, gora: partner, lewy: przeciwnicy[0], prawy: przeciwnicy[1] };
-    }
+const mojSlotId = slotGracza.slot_id;
+const maxGraczy = stanGry.max_graczy;
+const wszystkieSloty = stanGry.slots;
+
+// Zawsze ja jestem na dole
+pozycje.dol = slotGracza;
+
+if (maxGraczy === 3) {
+    // Gra 3-osobowa:
+    // Gracz po lewej to (moj_id + 1) % 3
+    const lewySlotId = (mojSlotId + 1) % maxGraczy;
+    // Gracz po prawej to (moj_id + 2) % 3 (lub (moj_id - 1 + 3) % 3)
+    const prawySlotId = (mojSlotId + 2) % maxGraczy;
+
+    pozycje.lewy = wszystkieSloty.find(s => s.slot_id === lewySlotId);
+    pozycje.prawy = wszystkieSloty.find(s => s.slot_id === prawySlotId);
+    // pozycje.gora pozostaje puste (obsługiwane przez klasę CSS .tryb-3-osoby)
+
+} else {
+    // Gra 4-osobowa:
+    // Partner jest (moj_id + 2) % 4
+    const partnerSlotId = (mojSlotId + 2) % maxGraczy;
+    // Gracz po lewej to (moj_id + 1) % 4
+    const lewySlotId = (mojSlotId + 1) % maxGraczy;
+    // Gracz po prawej to (moj_id + 3) % 4
+    const prawySlotId = (mojSlotId + 3) % maxGraczy;
+
+    pozycje.gora = wszystkieSloty.find(s => s.slot_id === partnerSlotId);
+    pozycje.lewy = wszystkieSloty.find(s => s.slot_id === lewySlotId);
+    pozycje.prawy = wszystkieSloty.find(s => s.slot_id === prawySlotId);
+}
     const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]).filter(([nazwa, _]) => nazwa)); // Filter out undefined names
 
     // --- Aktualizacja informacji o graczach (nazwy, podświetlenie tury) ---
@@ -776,23 +799,35 @@ function uruchomEfektyWizualne(nowyStan, staryStan) {
         );
 
         if (nowaKartaZagranie && nowaKartaZagranie.gracz !== nazwaGracza) {
-             let pozycje = {};
-             const slotGracza = nowyStan.slots.find(s => s && s.nazwa === nazwaGracza); // Check s
-            if (!slotGracza) return;
+     let pozycje = {};
+     const slotGracza = nowyStan.slots.find(s => s && s.nazwa === nazwaGracza); // Check s
+    if (!slotGracza) return;
 
-            if (nowyStan.max_graczy === 3) {
-                const inniGracze = nowyStan.slots.filter(s => s && s.nazwa !== nazwaGracza); // Check s
-                pozycje = { dol: slotGracza, lewy: inniGracze[0], prawy: inniGracze[1] };
-            } else {
-                const partner = nowyStan.slots.find(s => s && s.druzyna === slotGracza.druzyna && s.nazwa !== nazwaGracza); // Check s
-                const przeciwnicy = nowyStan.slots.filter(s => s && s.druzyna !== slotGracza.druzyna); // Check s
-                pozycje = { dol: slotGracza, gora: partner, lewy: przeciwnicy[0], prawy: przeciwnicy[1] };
-            }
+    // --- POPRAWIONA LOGIKA POZYCJONOWANIA ---
+    const mojSlotId = slotGracza.slot_id;
+    const maxGraczy = nowyStan.max_graczy;
+    const wszystkieSloty = nowyStan.slots;
+
+    pozycje.dol = slotGracza; // Ja zawsze jestem na dole
+
+    if (maxGraczy === 3) {
+        const lewySlotId = (mojSlotId + 1) % maxGraczy;
+        const prawySlotId = (mojSlotId + 2) % maxGraczy;
+        pozycje.lewy = wszystkieSloty.find(s => s.slot_id === lewySlotId);
+        pozycje.prawy = wszystkieSloty.find(s => s.slot_id === prawySlotId);
+    } else {
+        const partnerSlotId = (mojSlotId + 2) % maxGraczy;
+        const lewySlotId = (mojSlotId + 1) % maxGraczy;
+        const prawySlotId = (mojSlotId + 3) % maxGraczy;
+        pozycje.gora = wszystkieSloty.find(s => s.slot_id === partnerSlotId);
+        pozycje.lewy = wszystkieSloty.find(s => s.slot_id === lewySlotId);
+        pozycje.prawy = wszystkieSloty.find(s => s.slot_id === prawySlotId);
+    }
             const pozycjeWgNazwy = Object.fromEntries(Object.entries(pozycje).map(([pos, slot]) => [slot?.nazwa, pos]).filter(([nazwa, _]) => nazwa)); // Filter undefined names
 
             const pozycjaGracza = pozycjeWgNazwy[nowaKartaZagranie.gracz];
-            if (pozycjaGracza) {
-                const startEl = document.querySelector(`#gracz-${pozycjaGracza} .info-gracza`);
+           if (pozycjaGracza) {
+                const startEl = document.querySelector(`#gracz-${pozycjaGracza} .reka-${pozycjaGracza === 'gora' ? 'gorna' : 'boczna'}`);
                 const celEl = document.getElementById(`slot-karty-${pozycjaGracza}`);
                 if (startEl && celEl) {
                     animujZagranieKarty(startEl, celEl, nowaKartaZagranie.karta);
@@ -809,24 +844,54 @@ function animujZagranieKarty(startEl, celEl, nazwaKarty = null) {
 
     const animowanaKarta = document.createElement('img');
     animowanaKarta.className = 'animowana-karta';
-    animowanaKarta.src = nazwaKarty ? `/static/karty/${nazwaKarty.replace(' ', '')}.png` : (startEl.src || '/static/karty/Rewers.png'); // Added fallback src
-    animowanaKarta.style.left = `${startRect.left}px`;
-    animowanaKarta.style.top = `${startRect.top}px`;
-    animowanaKarta.style.width = startEl.tagName === 'IMG' ? `${startRect.width}px` : '70px'; // Set width based on source
-    animowanaKarta.style.height = 'auto'; // Maintain aspect ratio
+    animowanaKarta.src = nazwaKarty ? `/static/karty/${nazwaKarty.replace(' ', '')}.png` : (startEl.src || '/static/karty/Rewers.png');
+    
+    let startX, startY, startW, startH;
+
+    if (startEl.tagName === 'IMG') {
+        // --- Logika dla gracza-człowieka (startuje z pozycji karty) ---
+        startX = startRect.left;
+        startY = startRect.top;
+        startW = startRect.width;
+        startH = startRect.height;
+        startEl.style.visibility = 'hidden'; // Ukryj oryginalną kartę
+    } else {
+        // --- NOWA LOGIKA dla botów (startuje ze środka kontenera ręki) ---
+        // Użyjmy stałych wymiarów dla karty
+        startW = 70; // px
+        startH = 95; // px (zachowując proporcje)
+        
+        // Oblicz pozycję startową (środek kontenera ręki)
+        startX = startRect.left + (startRect.width / 2) - (startW / 2);
+        startY = startRect.top + (startRect.height / 2) - (startH / 2);
+    }
+
+    // Ustaw pozycję początkową i wymiary animowanej karty
+    animowanaKarta.style.left = `${startX}px`;
+    animowanaKarta.style.top = `${startY}px`;
+    animowanaKarta.style.width = `${startW}px`;
+    animowanaKarta.style.height = `${startH}px`;
 
     if (animationOverlayEl) animationOverlayEl.appendChild(animowanaKarta);
 
-    if (startEl.tagName === 'IMG') {
-        startEl.style.visibility = 'hidden';
-    }
-
+    // Wymuś reflow (przeliczenie stylów przez przeglądarkę)
     void animowanaKarta.offsetWidth;
 
-    const deltaX = celRect.left + (celRect.width / 2) - (startRect.left + (startRect.width / 2)); // Center animation
-    const deltaY = celRect.top + (celRect.height / 2) - (startRect.top + (startRect.height / 2)); // Center animation
-    animowanaKarta.style.transform = `translate(${deltaX}px, ${deltaY}px) scale(1)`; // Ensure scale is 1 initially maybe?
+    // Oblicz delty (przesunięcie)
+    // Przesunięcie = (Środek celu) - (Środek startu)
+    const celSrodekX = celRect.left + (celRect.width / 2);
+    const celSrodekY = celRect.top + (celRect.height / 2);
+    
+    const startSrodekX = startX + (startW / 2);
+    const startSrodekY = startY + (startH / 2);
 
+    const deltaX = celSrodekX - startSrodekX;
+    const deltaY = celSrodekY - startSrodekY;
+
+    // Zastosuj transformację
+    animowanaKarta.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+    // Usuń animowaną kartę i przywróć widoczność oryginalnej po zakończeniu animacji
     setTimeout(() => {
         animowanaKarta.remove();
         if (startEl.style.visibility === 'hidden') {
@@ -1006,20 +1071,20 @@ function pokazPodsumowanieMeczu(stanGry) {
                          ${eloSummaryHtml}`;
 
     const wyjdzBtn = document.createElement('button');
-    wyjdzBtn.textContent = 'Wyjdź do menu';
+    wyjdzBtn.textContent = 'Wyjdź do Przeglądarki Lobby'; // Poprawiony tekst
     wyjdzBtn.onclick = () => {
-        localStorage.removeItem('lobbyHaslo'); // Changed
-        localStorage.removeItem('rejoinGameId'); // Remove rejoin ID on exit
-        window.location.href = '/';
+        localStorage.removeItem('lobbyHaslo'); 
+        localStorage.removeItem('rejoinGameId'); 
+        window.location.href = '/lobby.html'; // Poprawiony link (Bug 2)
     };
     modalPanelEl.appendChild(wyjdzBtn);
 
-    if (stanGry.tryb_gry === 'online' && stanGry.host === nazwaGracza) { // Show only for host in online game
+    if (stanGry.tryb_lobby === 'online' && stanGry.host === nazwaGracza) { 
         const lobbyBtn = document.createElement('button');
-        lobbyBtn.textContent = 'Powrót do lobby';
+        lobbyBtn.textContent = 'Powrót do Poczekalni'; // Poprawiony tekst
         lobbyBtn.onclick = () => { wyslijAkcjeGry({ typ: 'powrot_do_lobby' }); };
         modalPanelEl.appendChild(lobbyBtn);
-    } else if (stanGry.tryb_gry === 'online') { // Show waiting text for non-hosts
+    } else if (stanGry.tryb_lobby === 'online') { // Sprawdzaj 'tryb_lobby'
         const waitingText = document.createElement('p');
         waitingText.textContent = 'Oczekiwanie na hosta...';
         waitingText.style.marginTop = '10px';
@@ -1168,7 +1233,7 @@ function renderujPrzyciskiLicytacji(akcje) {
     const grupy = akcje.reduce((acc, akcja) => {
         const typAkcji = akcja.typ?.name || akcja.typ;
         const kontraktAkcji = akcja.kontrakt?.name || akcja.kontrakt;
-        let klucz = typAkcji === 'deklaracja' || typAkcji === 'przebicie' ? kontraktAkcji : typAkcji;
+        let klucz = (typAkcji === 'deklaracja' || typAkcji === 'przebicie' || typAkcji === 'zmiana_kontraktu') ? kontraktAkcji : typAkcji;
         if (!acc[klucz]) acc[klucz] = [];
         acc[klucz].push(akcja);
         return acc;

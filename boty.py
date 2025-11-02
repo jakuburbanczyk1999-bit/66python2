@@ -430,7 +430,7 @@ class MonteCarloTreeSearchNode:
 
         # 4. Rozdaj nieznane karty przeciwnikom, respektując voidy i POPRAWNĄ liczbę kart
         licznik_prob = 0
-        MAX_PROB_ROZDANIA = 100 # (Tak jak było)
+        MAX_PROB_ROZDANIA = 150 # (Tak jak było)
         przeciwnicy_do_rozdania = [g for g in stan_determinizowany.gracze if g and g.nazwa != self._gracz_startowy_nazwa]
 
         while licznik_prob < MAX_PROB_ROZDANIA:
@@ -497,9 +497,58 @@ class MonteCarloTreeSearchNode:
                 licznik_prob += 1
                 
         # Jeśli pętla 'while' zakończyła się po MAX_PROB_ROZDANIA
-        print(f"BŁĄD KRYTYCZNY Determinizacji: Nie udało się rozdać kart zgodnie z voidami po {MAX_PROB_ROZDANIA} próbach.")
-        # Zwróć stan bazowy, aby przynajmniej symulacja mogła kontynuować
-        return copy.deepcopy(stan_do_determinizacji)
+        # print(f"OSTRZEŻENIE Determinizacji: Nie udało się rozdać kart zgodnie z voidami po {MAX_PROB_ROZDANIA} próbach. Próbuję ponownie IGNORUJĄC VOIDY.")
+
+        # --- FALLBACK: Spróbuj rozdać jeszcze raz, ale ignorując voidy ---
+        # (To jest ten sam kod co powyżej, ale 'voidy' są zawsze puste)
+        random.shuffle(nieznane_karty)
+        kopia_nieznanych_fallback = nieznane_karty[:]
+        rozdanie_udane_fallback = True
+        wszystkie_rece_fallback = {}
+
+        # Użyj tej samej (losowej) kolejności przeciwników
+        for gracz in przeciwnicy_do_rozdania:
+            # JEDYNA RÓŻNICA: 'voidy' są puste, 'karty_do_wziecia' to cała pula
+            karty_do_wziecia = kopia_nieznanych_fallback 
+
+            # Oblicz, ile kart powinien mieć TEN KONKRETNY gracz
+            oczekiwana_liczba_kart_dla_tego_gracza = liczba_kart_startowa_lewy
+            if (stan_determinizowany.aktualna_lewa and
+                any(g.nazwa == gracz.nazwa for g, k in stan_determinizowany.aktualna_lewa)):
+                oczekiwana_liczba_kart_dla_tego_gracza -= 1
+            if oczekiwana_liczba_kart_dla_tego_gracza < 0:
+                oczekiwana_liczba_kart_dla_tego_gracza = 0
+
+            # Sprawdź (ten check powinien teraz zawsze się udać)
+            if len(karty_do_wziecia) < oczekiwana_liczba_kart_dla_tego_gracza:
+                rozdanie_udane_fallback = False
+                break # Jeśli to zawiedzie, to mamy GŁĘBSZY błąd (np. w liczeniu kart)
+
+            try:
+                if oczekiwana_liczba_kart_dla_tego_gracza > 0:
+                    reka_gracza = random.sample(karty_do_wziecia, oczekiwana_liczba_kart_dla_tego_gracza)
+                else:
+                    reka_gracza = [] 
+            except ValueError:
+                rozdanie_udane_fallback = False
+                break
+
+            wszystkie_rece_fallback[gracz.nazwa] = reka_gracza
+            if reka_gracza: 
+                kopia_nieznanych_fallback = [k for k in kopia_nieznanych_fallback if k not in reka_gracza]
+
+        if rozdanie_udane_fallback:
+            # Przypisz ręce (ignorując voidy)
+            for gracz in stan_determinizowany.gracze:
+                if gracz and gracz.nazwa in wszystkie_rece_fallback:
+                    gracz.reka = wszystkie_rece_fallback[gracz.nazwa]
+                    gracz.reka.sort(key=lambda k: (silnik_gry.KOLEJNOSC_KOLOROW_SORT[k.kolor], -k.ranga.value))
+            return stan_determinizowany # Zwróć stan z zignorowanymi voidami
+        else:
+            # Jeśli nawet fallback zawiódł (np. błąd w liczeniu kart)
+            print(f"BŁĄD KRYTYCZNY Determinizacji: Fallback (ignorowanie voidów) również zawiódł.")
+            # Zwróć stan bazowy (przeciwnicy będą mieli puste ręce w symulacji)
+            return copy.deepcopy(stan_do_determinizacji)
 
     def symuluj_rozgrywke(self) -> Tuple[float, float, float]:
         """
