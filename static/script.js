@@ -702,7 +702,21 @@ if (maxGraczy === 3) {
         const rekaEl = document.querySelector(`#gracz-${pos} .reka-${pos === 'gora' ? 'gorna' : 'boczna'}`);
         if (!rekaEl) continue;
         rekaEl.innerHTML = '';
-        const iloscKart = (rozdanie.rece_graczy && rozdanie.rece_graczy[slot.nazwa])?.length || 0; // Check rece_graczy
+        
+        // Sprawdzamy, czy dana to liczba, czy tablica
+        const rekaPrzeciwnika = (rozdanie.rece_graczy && rozdanie.rece_graczy[slot.nazwa]);
+        let iloscKart = 0;
+        
+        if (typeof rekaPrzeciwnika === 'number') {
+            // Jeśli backend wysłał liczbę (poprawnie dla przeciwników)
+            iloscKart = rekaPrzeciwnika;
+        } else if (Array.isArray(rekaPrzeciwnika)) {
+            // Jeśli backend wysłał tablicę (dla gracza 'ja', ale na wszelki wypadek)
+            iloscKart = rekaPrzeciwnika.length;
+        }
+        // Jeśli rekaPrzeciwnika jest 0, null lub undefined, iloscKart pozostanie 0
+
+
         for (let i = 0; i < iloscKart; i++) {
             const img = document.createElement('img');
             img.className = 'karta';
@@ -710,7 +724,6 @@ if (maxGraczy === 3) {
             rekaEl.appendChild(img);
         }
     }
-
     // --- Renderowanie kart zagranych na stół ---
     document.querySelectorAll('.slot-karty').forEach(slot => {
          if(slot) slot.innerHTML = '';
@@ -1048,7 +1061,8 @@ function pokazPodsumowanieMeczu(stanGry) {
         const nazwaTeam2 = nazwyDruzyn.Oni;
         const punkty1 = stanGry.punkty_meczu ? stanGry.punkty_meczu[nazwaTeam1] || 0 : 0;
         const punkty2 = stanGry.punkty_meczu ? stanGry.punkty_meczu[nazwaTeam2] || 0 : 0;
-        zwyciezca = punkty1 >= 66 ? nazwaTeam1 : (punkty2 >= 66 ? nazwaTeam2 : 'Remis/Błąd'); // Handle draw/error
+        const CEL_MECZU = 7; // Użyj tej samej stałej co backend
+        zwyciezca = punkty1 >= CEL_MECZU ? nazwaTeam1 : (punkty2 >= CEL_MECZU ? nazwaTeam2 : 'Remis/Błąd'); // Handle draw/error
         wynikHtml = `${nazwaTeam1} ${punkty1} - ${punkty2} ${nazwaTeam2}`;
     }
     let eloSummaryHtml = '';

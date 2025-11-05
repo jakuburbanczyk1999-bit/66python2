@@ -1,0 +1,1 @@
+export const storage={get:k=>{try{const i=localStorage.getItem(k);return i?JSON.parse(i):null}catch{return null}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}},remove:k=>localStorage.removeItem(k),clear:()=>localStorage.clear()};

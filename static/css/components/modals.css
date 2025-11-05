@@ -1,0 +1,12 @@
+/* MODALS */
+.modal-overlay {position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); padding: var(--space-4);}
+.modal {position: relative; background: var(--bg-surface); border-radius: var(--radius-2xl); box-shadow: var(--shadow-2xl); max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; border: 1px solid var(--neutral-700); animation: modalFadeIn 0.3s ease;}
+@keyframes modalFadeIn {from {opacity: 0; transform: scale(0.9);} to {opacity: 1; transform: scale(1);}}
+.modal-close {position: absolute; top: var(--space-4); right: var(--space-4); width: 32px; height: 32px; border-radius: var(--radius-full); background: var(--neutral-700); color: var(--text-primary); font-size: 24px; line-height: 1; display: flex; align-items: center; justify-content: center; transition: all var(--transition-fast);}
+.modal-close:hover {background: var(--danger); transform: rotate(90deg);}
+.modal-header {padding: var(--space-8) var(--space-8) var(--space-4); border-bottom: 1px solid var(--neutral-700);}
+.modal-header h2 {margin: 0;}
+.modal-header p {margin: var(--space-2) 0 0; color: var(--text-secondary);}
+.modal-body {padding: var(--space-6) var(--space-8);}
+.modal-footer {padding: var(--space-4) var(--space-8) var(--space-8); border-top: 1px solid var(--neutral-700); text-align: center;}
+.modal-footer a {color: var(--primary-500);}

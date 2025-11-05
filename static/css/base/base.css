@@ -1,0 +1,304 @@
+/* ============================================
+   BASE STYLES - Globalne style
+   Miedziowe Karty
+   ============================================ */
+
+/* ========================================
+   HTML & BODY
+   ======================================== */
+
+html {
+    font-size: 16px; /* 1rem = 16px */
+}
+
+body {
+    font-family: var(--font-sans);
+    font-weight: var(--font-normal);
+    font-size: var(--text-base);
+    line-height: var(--leading-normal);
+    color: var(--text-primary);
+    background: var(--bg-app);
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+/* ========================================
+   TYPOGRAPHY
+   ======================================== */
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: var(--font-semibold);
+    line-height: var(--leading-tight);
+    color: var(--text-primary);
+    margin-bottom: var(--space-4);
+}
+
+h1 {
+    font-size: var(--text-4xl);
+    font-weight: var(--font-bold);
+}
+
+h2 {
+    font-size: var(--text-3xl);
+}
+
+h3 {
+    font-size: var(--text-2xl);
+}
+
+h4 {
+    font-size: var(--text-xl);
+}
+
+h5 {
+    font-size: var(--text-lg);
+}
+
+h6 {
+    font-size: var(--text-base);
+}
+
+p {
+    margin-bottom: var(--space-4);
+    color: var(--text-secondary);
+}
+
+strong {
+    font-weight: var(--font-semibold);
+    color: var(--text-primary);
+}
+
+small {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+}
+
+/* Links */
+a {
+    color: var(--primary-500);
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: var(--primary-400);
+}
+
+/* ========================================
+   SCROLLBAR (Webkit)
+   ======================================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--neutral-900);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--neutral-700);
+    border-radius: var(--radius-full);
+    transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-500);
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--neutral-700) var(--neutral-900);
+}
+
+/* ========================================
+   SELECTION
+   ======================================== */
+
+::selection {
+    background-color: var(--primary-500);
+    color: white;
+}
+
+::-moz-selection {
+    background-color: var(--primary-500);
+    color: white;
+}
+
+/* ========================================
+   CONTAINERS
+   ======================================== */
+
+.container {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+}
+
+.container-fluid {
+    width: 100%;
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+}
+
+@media (max-width: 768px) {
+    .container,
+    .container-fluid {
+        padding-left: var(--space-4);
+        padding-right: var(--space-4);
+    }
+}
+
+/* ========================================
+   FOCUS STYLES
+   ======================================== */
+
+/* Remove default focus */
+*:focus {
+    outline: none;
+}
+
+/* Custom focus for interactive elements */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline: 2px solid var(--primary-500);
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
+}
+
+/* ========================================
+   LOADING STATE
+   ======================================== */
+
+.loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-16) var(--space-8);
+    color: var(--text-secondary);
+}
+
+.spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--neutral-700);
+    border-top-color: var(--primary-500);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: var(--space-4);
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ========================================
+   EMPTY STATE
+   ======================================== */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-16) var(--space-8);
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.empty-icon {
+    font-size: var(--text-5xl);
+    margin-bottom: var(--space-4);
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+}
+
+.empty-state p {
+    max-width: 400px;
+    margin-bottom: var(--space-6);
+}
+
+/* ========================================
+   GRADIENT TEXT
+   ======================================== */
+
+.gradient-text {
+    background: linear-gradient(135deg, var(--primary-500), var(--secondary, #3b82f6));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ========================================
+   DIVIDERS
+   ======================================== */
+
+.divider {
+    height: 1px;
+    background: var(--neutral-700);
+    margin: var(--space-6) 0;
+}
+
+.divider-vertical {
+    width: 1px;
+    background: var(--neutral-700);
+    margin: 0 var(--space-4);
+}
+
+/* ========================================
+   DISABLED STATE
+   ======================================== */
+
+.disabled,
+[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+/* ========================================
+   RESPONSIVE UTILITIES
+   ======================================== */
+
+@media (max-width: 768px) {
+    html {
+        font-size: 14px; /* Smaller base font on mobile */
+    }
+    
+    h1 {
+        font-size: var(--text-3xl);
+    }
+    
+    h2 {
+        font-size: var(--text-2xl);
+    }
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .no-print {
+        display: none !important;
+    }
+}

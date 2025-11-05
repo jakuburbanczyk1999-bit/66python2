@@ -1,0 +1,14 @@
+/* FOOTER */
+.footer {background: var(--bg-surface); border-top: 1px solid var(--neutral-700); padding: var(--space-16) 0 var(--space-8);}
+.footer-content {display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: var(--space-12);}
+.footer-brand .logo {margin-bottom: var(--space-4);}
+.footer-description {color: var(--text-secondary); margin: 0;}
+.footer-links {display: flex; gap: var(--space-12);}
+.footer-column h4 {font-size: var(--text-base); margin-bottom: var(--space-4);}
+.footer-column a {display: block; color: var(--text-secondary); margin-bottom: var(--space-2); transition: color var(--transition-fast);}
+.footer-column a:hover {color: var(--primary-500);}
+.footer-column a.disabled {opacity: 0.5; cursor: not-allowed;}
+.footer-bottom {margin-top: var(--space-12); padding-top: var(--space-8); border-top: 1px solid var(--neutral-700); text-align: center; color: var(--text-muted);}
+@media (max-width: 768px) {
+.footer-content {grid-template-columns: 1fr; gap: var(--space-8);}
+}

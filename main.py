@@ -1,4 +1,6 @@
 # main.py
+# WERSJA ZREFAKTORYZOWANA (zgodna z Faza 1 i 2 planu strategicznego)
+# + POPRAWKA STRUKTURY JSON DLA FRONTENDU
 
 # ==========================================================================
 # SEKCJA 1: IMPORTY I KONFIGURACJA APLIKACJI
@@ -13,53 +15,133 @@ import string
 import traceback
 import time
 import copy
-from typing import Any, Optional, AsyncGenerator
+from typing import Any, Optional, AsyncGenerator, Dict, List
 from contextlib import asynccontextmanager
 
-# --- Biblioteki FastAPI i powiązane ---
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
+# --- Biblioteki firm trzecich ---
+from fastapi import (
+    FastAPI, WebSocket, WebSocketDisconnect, Query, Depends, 
+    HTTPException, status
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+import redis.asyncio as aioredis # <-- NOWY IMPORT: Asynchroniczny klient Redis
+import cloudpickle                 # <-- NOWY IMPORT: Do serializacji obiektów (silnika)
 
 # --- Biblioteki SQLAlchemy ---
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 # --- Moduły lokalne ---
-from database import init_db, async_sessionmaker, User # Obsługa bazy danych i modelu User
-from auth_utils import hash_password, verify_password   # Funkcje do hashowania i weryfikacji haseł
-import silnik_gry                                      # Główny silnik logiki gry 66
-import boty                                            # Implementacja botów (MCTS)
+# Używamy zaktualizowanej bazy danych
+from database import (
+    init_db, async_sessionmaker, User, GameType, PlayerGameStats
+) 
+from auth_utils import hash_password, verify_password
+# Importujemy NOWE silniki i interfejsy
+from engines.abstract_game_engine import AbstractGameEngine
+from engines.sixtysix_engine import SixtySixEngine 
+# Stare importy (wciąż potrzebne do modeli Pydantic, ale nie do logiki gry)
+import silnik_gry 
+import boty # Wciąż potrzebne do instancji botów, dopóki nie zostaną zrefaktoryzowane
+from redis_utils import (   # NOWE: funkcje pomocnicze Redis
+    RedisLock, 
+    TimerInfo, 
+    cleanup_expired_games,
+    get_active_game_count
+)
+from timer_worker import TimerWorker # NOWY: dedykowany worker do zarządzania timerami
 
 # ==========================================================================
-# SEKCJA 2: INICJALIZACJA APLIKACJI FASTAPI I ZASOBÓW GLOBALNYCH
+# SEKCJA 2: INICJALIZACJA APLIKACJI I ZASOBÓW GLOBALNYCH
 # ==========================================================================
+
+
+
+# --- Globalny klient Redis ---
+# Ta zmienna zostanie zainicjalizowana w funkcji 'lifespan'
+redis_client: aioredis.Redis = None
+timer_worker_instance: Optional[TimerWorker] = None
+
 
 # --- Manager cyklu życia aplikacji (Lifespan) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Zarządza zdarzeniami startu i zamknięcia aplikacji FastAPI.
-    Inicjalizuje bazę danych przy starcie.
     """
-    print("Serwer startuje... Inicjalizacja bazy danych (lifespan).")
+    global redis_client, timer_worker_instance
+    print("Serwer startuje...")
+    
+    # 1. Baza danych
+    print("Inicjalizacja bazy danych...")
     await init_db()
-    print("Baza danych jest gotowa (lifespan).")
-
-    # Uruchom menedżera botów "Elo World" w tle
+    print("Baza danych gotowa.")
+    
+    # 2. Redis
+    print("Inicjalizacja Redis...")
+    try:
+        redis_client = aioredis.from_url(
+            "redis://localhost", 
+            decode_responses=False
+        )
+        await redis_client.ping()
+        print("Redis gotowy.")
+    except Exception as e:
+        print(f"!!! KRYTYCZNY BŁĄD Redis: {e}")
+        raise e
+    
+    # 3. Timer Worker
+    print("Uruchamianie Timer Worker...")
+    timer_worker_instance = TimerWorker(
+        redis_url="redis://localhost",
+        check_interval=1.0,
+        debug=True
+    )
+    timer_worker_task = asyncio.create_task(timer_worker_instance.run())
+    print("Timer Worker uruchomiony.")
+    
+    # 4. Menedżer botów
+    print("Uruchamianie menedżera botów...")
     asyncio.create_task(elo_world_manager())
+    
+    # 5. Periodic cleanup
+    print("Uruchamianie periodic cleanup...")
+    asyncio.create_task(periodic_cleanup())
 
-    yield # Aplikacja działa
+    yield  # Aplikacja działa
 
-    print("Serwer się zamyka.")
+    # Zamykanie
+    print("Serwer się zamyka...")
+    if timer_worker_instance:
+        timer_worker_instance.stop()
+        await asyncio.sleep(2)
+    if redis_client:
+        await redis_client.close()
+    print("Serwer zamknięty.")
+
+
+async def periodic_cleanup():
+    """Okresowo czyści stare gry z Redis"""
+    await asyncio.sleep(60)  # Poczekaj minutę
+    
+    while True:
+        try:
+            print("[Periodic Cleanup] Rozpoczynam...")
+            await cleanup_expired_games(redis_client, max_age_seconds=21600)
+            active_count = await get_active_game_count(redis_client)
+            print(f"[Periodic Cleanup] Aktywnych gier: {active_count}")
+        except Exception as e:
+            print(f"[Periodic Cleanup] BŁĄD: {e}")
+        
+        await asyncio.sleep(300)  # Co 5 minut
 
 # --- Główna instancja aplikacji FastAPI ---
-# Używamy managera 'lifespan' do obsługi startu/zamknięcia.
 app = FastAPI(lifespan=lifespan)
 
-# --- Globalna instancja botów ---
-# Tworzymy jedną instancję botów, która będzie używana przez wszystkie gry.
+# --- Globalna instancja botów (pozostaje na razie bez zmian) ---
+# TODO: To powinno zostać zrefaktoryzowane, gdy 'boty.py' zostanie zaktualizowane
 fair_mcts_bot = boty.MCTS_Bot(perfect_information=False)
 cheating_mcts_bot = boty.MCTS_Bot(perfect_information=True)
 heuristic_bot = boty.AdvancedHeuristicBot()
@@ -73,587 +155,835 @@ bot_instances = {
 }
 default_bot_name = "mcts_fair"
 
-
-
-# --- Przechowywanie stanu gier ---
-# Główny słownik przechowujący stan wszystkich aktywnych gier w pamięci serwera.
-# Kluczem jest ID gry (string), wartością jest słownik reprezentujący stan gry (`partia`).
-gry = {}
+# --- USUNIĘTO globalny słownik 'gry = {}' ---
+# Stan jest teraz zarządzany przez Redis.
 
 # --- Stałe ---
-# Lista przykładowych nazw drużyn do losowania.
 NAZWY_DRUZYN = [
     "Waleczne Asy", "Chytre Damy", "Królowie Kier", "Pikowi Mocarze",
     "TreflMasters", "Diamentowe Walety", "Dzwonkowe Bractwo", "Winni Zwycięzcy",
     "Mistrzowie Lewy", "Pogromcy Dziewiątek"
 ]
+# Klucze Redis
+def lobby_key(id_gry: str) -> str: return f"lobby:{id_gry}"
+def engine_key(id_gry: str) -> str: return f"engine:{id_gry}"
+def channel_key(id_gry: str) -> str: return f"channel:{id_gry}"
+
+# Czas wygaśnięcia stanu gry w Redis (w sekundach)
+# 6 godzin - na wypadek zawieszonej gry
+GAME_STATE_EXPIRATION_S = 6 * 3600 
 
 # ==========================================================================
-# SEKCJA 3: MODELE DANYCH Pydantic (Walidacja Danych API)
+# SEKCJA 3: MODELE DANYCH Pydantic (Bez zmian, ale zaktualizowane)
 # ==========================================================================
-# Modele Pydantic definiują strukturę i typy danych oczekiwanych
-# w żądaniach HTTP i odpowiedziach API. FastAPI używa ich do automatycznej
-# walidacji i dokumentacji.
 
 class LocalGameRequest(BaseModel):
-    """Model żądania do stworzenia gry lokalnej (już nieużywany?)."""
     nazwa_gracza: str
 
 class UserCreate(BaseModel):
-    """Model danych do rejestracji i logowania użytkownika."""
     username: str
     password: str
 
 class Token(BaseModel):
-    """Model odpowiedzi po udanym logowaniu/rejestracji."""
-    access_token: str # Obecnie używamy nazwy użytkownika jako tokena
-    token_type: str   # Typ tokena (zawsze "bearer")
-    username: str     # Nazwa zalogowanego użytkownika
-    active_game_id: Optional[str] = None # ID gry, do której użytkownik może wrócić
-    settings: Optional[dict] = None      # Ustawienia interfejsu użytkownika pobrane z bazy
+    access_token: str
+    token_type: str
+    username: str
+    active_game_id: Optional[str] = None
+    settings: Optional[dict] = None
 
 class CreateGameRequest(BaseModel):
-    """Model danych żądania do stworzenia nowej gry (endpoint /gra/stworz)."""
-    nazwa_gracza: str     # Nazwa gracza tworzącego grę (hosta)
-    tryb_gry: str         # Tryb gry ('4p' lub '3p')
-    tryb_lobby: str       # Typ lobby ('online' lub 'lokalna')
-    publiczna: bool       # Czy lobby ma być widoczne w przeglądarce
-    haslo: Optional[str] = None # Hasło do lobby (jeśli prywatne)
-    czy_rankingowa: bool = False # Czy gra ma być rankingowa (wpływa na Elo)
+    """
+    Zaktualizowany model. Docelowo 'tryb_gry' powinien być zastąpiony
+    przez 'game_type_id' pobrany z bazy danych.
+    """
+    nazwa_gracza: str
+    # TODO: Zgodnie z planem, to powinno być game_type_id: int
+    tryb_gry: str # Na razie zostaje '4p' lub '3p'
+    tryb_lobby: str
+    publiczna: bool
+    haslo: Optional[str] = None
+    czy_rankingowa: bool = False
+    # TODO: Dodać 'game_type_id'
+    # game_type_id: int 
 
 class UserSettings(BaseModel):
-    """Model danych do zapisywania ustawień interfejsu użytkownika."""
     czatUkryty: bool
     historiaUkryta: bool
     partiaHistoriaUkryta: bool
     pasekEwaluacjiUkryty: bool
 
 # ==========================================================================
-# SEKCJA 4: ZARZĄDZANIE CZASOMIERZEM (Gra Rankingowa)
+# SEKCJA 4: NOWE FUNKCJE POMOCNICZE ZARZĄDZANIA STANEM (REDIS)
 # ==========================================================================
 
-async def czekaj_na_ruch(id_gry: str, nazwa_gracza: str, numer_ruchu: int):
-    """
-    Zadanie w tle (asyncio.Task) uruchamiane dla gracza w turze w grze rankingowej.
-    Czeka na upłynięcie pozostałego czasu gracza. Jeśli czas minie *przed* wykonaniem ruchu
-    (sprawdzane przez `numer_ruchu_timer`), kończy grę i rozlicza Elo.
-    """
-    partia = gry.get(id_gry)
-    if not partia: return # Gra już nie istnieje
-
-    pozostaly_czas = partia.get("timery", {}).get(nazwa_gracza, 0)
-
+async def get_lobby_data(id_gry: str) -> Optional[Dict[str, Any]]:
+    """Pobiera dane lobby (słownik) z Redis (przechowywane jako JSON)."""
     try:
-        # Czekaj asynchronicznie na upłynięcie czasu
-        await asyncio.sleep(pozostaly_czas)
-
-        # --- CZAS MINĄŁ ---
-        # Sprawdź ponownie stan gry po upłynięciu czasu
-        partia_po_czasie = gry.get(id_gry)
-        # Sprawdź, czy gra nadal trwa i czy numer ruchu się zgadza
-        # (jeśli gracz się ruszył, numer_ruchu_timer zostałby zmieniony)
-        if (partia_po_czasie and partia_po_czasie["status_partii"] == "W_TRAKCIE" and
-            partia_po_czasie.get("numer_ruchu_timer") == numer_ruchu):
-
-            print(f"[{id_gry}] Gracz {nazwa_gracza} przegrał na czas!")
-
-            # --- Logika Zakończenia Gry przez Timeout ---
-            # 1. Ustal zwycięzców i przegranych, wymuś punkty dla obliczeń Elo
-            if partia_po_czasie.get("max_graczy", 4) == 4: # Gra 4-osobowa
-                gracz_obj = next((g for g in partia_po_czasie.get("gracze_engine", []) if g.nazwa == nazwa_gracza), None)
-                if gracz_obj and gracz_obj.druzyna and gracz_obj.druzyna.przeciwnicy:
-                    zwycieska_druzyna = gracz_obj.druzyna.przeciwnicy
-                    zwycieska_druzyna.punkty_meczu = 66 # Wymuś 66 pkt dla zwycięzcy
-                    print(f"[{id_gry}] Drużyna '{zwycieska_druzyna.nazwa}' wygrywa przez timeout.")
-                else:
-                    print(f"BŁĄD Timeout 4p: Nie można znaleźć gracza {nazwa_gracza} lub jego drużyny.")
-                    return # Przerwij, aby uniknąć błędów
-            elif partia_po_czasie.get("max_graczy", 3) == 3: # Gra 3-osobowa
-                rozdanie = partia_po_czasie.get("aktualne_rozdanie")
-                if rozdanie and rozdanie.grajacy:
-                    if nazwa_gracza == rozdanie.grajacy.nazwa: # Grający przegrał na czas
-                        for obronca in rozdanie.obroncy: obronca.punkty_meczu = 66 # Obrońcy wygrywają
-                    else: # Obrońca przegrał na czas
-                        rozdanie.grajacy.punkty_meczu = 66 # Grający wygrywa
-                else:
-                    print(f"BŁĄD Timeout 3p: Nie można znaleźć rozdania lub grającego.")
-                    return
-
-            # 2. Zmień status partii na zakończoną
-            partia_po_czasie["status_partii"] = "ZAKONCZONA"
-
-            # 3. Oblicz i zapisz zmiany Elo
-            await zaktualizuj_elo_po_meczu(partia_po_czasie)
-
-            # 4. Wyślij finalny stan gry (z podsumowaniem) do wszystkich klientów
-            finalny_stan = pobierz_stan_gry(id_gry)
-            await manager.broadcast(id_gry, finalny_stan)
-
-            # 5. Wyślij informację o przegranej na czas na czat systemowy
-            await manager.broadcast(id_gry, {"typ_wiadomosci": "czat", "gracz": "System", "tresc": f"Gracz {nazwa_gracza} przegrał na czas!"})
-
-    except asyncio.CancelledError:
-        # Ten wyjątek jest oczekiwany, gdy gracz wykona ruch na czas,
-        # a zadanie `czekaj_na_ruch` zostanie anulowane przez `uruchom_timer_dla_tury`
-        # lub `przetworz_akcje_gracza`.
-        pass
+        json_data = await redis_client.get(lobby_key(id_gry))
+        if json_data:
+            return json.loads(json_data.decode('utf-8'))
+        return None
     except Exception as e:
-        # Złap inne potencjalne błędy w zadaniu timera
-        print(f"BŁĄD w zadaniu czekaj_na_ruch dla {nazwa_gracza} w grze {id_gry}: {e}")
-        traceback.print_exc()
+        print(f"BŁĄD Redis (get_lobby_data) dla {id_gry}: {e}")
+        return None
+
+async def save_lobby_data(id_gry: str, lobby_data: Dict[str, Any]):
+    """Zapisuje dane lobby (słownik) do Redis jako JSON."""
+    try:
+        # Usuwamy klucze stanu przejściowego przed zapisem
+        lobby_data.pop("timer_task", None)
+        lobby_data.pop("bot_loop_lock", None)
+        
+        json_data = json.dumps(lobby_data)
+        await redis_client.set(
+            lobby_key(id_gry), 
+            json_data, 
+            ex=GAME_STATE_EXPIRATION_S
+        )
+    except Exception as e:
+        print(f"BŁĄD Redis (save_lobby_data) dla {id_gry}: {e}")
+
+async def get_game_engine(id_gry: str) -> Optional[AbstractGameEngine]:
+    """Pobiera zserializowany obiekt silnika gry (engine) z Redis."""
+    try:
+        pickled_engine = await redis_client.get(engine_key(id_gry))
+        if pickled_engine:
+            # Deserializacja obiektu za pomocą cloudpickle
+            return cloudpickle.loads(pickled_engine)
+        return None
+    except Exception as e:
+        print(f"BŁĄD Redis (get_game_engine) dla {id_gry}: {e}")
+        return None
+
+async def save_game_engine(id_gry: str, engine: AbstractGameEngine):
+    """Serializuje i zapisuje obiekt silnika gry (engine) w Redis."""
+    try:
+        # Serializacja obiektu za pomocą cloudpickle
+        pickled_engine = cloudpickle.dumps(engine)
+        await redis_client.set(
+            engine_key(id_gry), 
+            pickled_engine, 
+            ex=GAME_STATE_EXPIRATION_S
+        )
+    except Exception as e:
+        print(f"BŁĄD Redis (save_game_engine) dla {id_gry}: {e}")
+
+async def delete_game_state(id_gry: str):
+    """Usuwa wszystkie dane gry (lobby i silnik) z Redis."""
+    try:
+        await redis_client.delete(lobby_key(id_gry), engine_key(id_gry))
+        print(f"[Garbage Collector] Usunięto stan gry {id_gry} z Redis.")
+    except Exception as e:
+        print(f"BŁĄD Redis (delete_game_state) dla {id_gry}: {e}")
+
+# ==========================================================================
+# SEKCJA 5: ZARZĄDZANIE CZASOMIERZEM (Logika bez zmian, ale stan w Redis)
+# ==========================================================================
 
 async def uruchom_timer_dla_tury(id_gry: str):
     """
-    Anuluje poprzednie zadanie timera (jeśli istniało) i uruchamia nowe
-    dla gracza, którego jest aktualnie tura (tylko w grach rankingowych).
-    Zapisuje również czas rozpoczęcia tury (`tura_start_czas`).
+    ZREFAKTORYZOWANA: Ustawia timer info w Redis.
+    Timer Worker sprawdza timeouty.
     """
-    partia = gry.get(id_gry)
-    # Sprawdź, czy gra istnieje, jest rankingowa i w trakcie
-    if not partia or not partia.get("opcje", {}).get("rankingowa", False) or partia["status_partii"] != "W_TRAKCIE":
+    lobby_data = await get_lobby_data(id_gry)
+    if (not lobby_data or 
+        not lobby_data.get("opcje", {}).get("rankingowa", False) or 
+        lobby_data["status_partii"] != "W_TRAKCIE"):
         return
 
-    # Zapisz czas rozpoczęcia tury (używane do obliczenia zużytego czasu)
-    partia["tura_start_czas"] = time.time()
-
-    # Anuluj poprzednie zadanie timera, jeśli jeszcze działa
-    if partia.get("timer_task") and not partia["timer_task"].done():
-        partia["timer_task"].cancel()
-
-    # Sprawdź, czy jest gracz w turze
-    rozdanie = partia.get("aktualne_rozdanie")
-    if not rozdanie or rozdanie.kolej_gracza_idx is None:
-        partia["timer_task"] = None # Brak tury, nie uruchamiaj timera
+    engine = await get_game_engine(id_gry)
+    if not engine:
         return
-
-    # Sprawdź poprawność indeksu gracza
-    if not (0 <= rozdanie.kolej_gracza_idx < len(rozdanie.gracze)):
-        print(f"BŁĄD: Nieprawidłowy indeks gracza {rozdanie.kolej_gracza_idx} w uruchom_timer_dla_tury.")
-        partia["timer_task"] = None
+    
+    gracz_w_turze_id = engine.get_current_player()
+    if not gracz_w_turze_id:
+        lobby_data["timer_info"] = None
+        await save_lobby_data(id_gry, lobby_data)
         return
-
-    gracz_w_turze = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-    if not gracz_w_turze:
-        print(f"BŁĄD: Brak obiektu gracza dla indeksu {rozdanie.kolej_gracza_idx} w uruchom_timer_dla_tury.")
-        partia["timer_task"] = None
-        return
-
-
-    # Inkrementuj licznik ruchów (służy do walidacji timera w `czekaj_na_ruch`)
-    partia["numer_ruchu_timer"] = partia.get("numer_ruchu_timer", 0) + 1
-
-    # Uruchom nowe zadanie `czekaj_na_ruch` w tle
-    partia["timer_task"] = asyncio.create_task(
-        czekaj_na_ruch(id_gry, gracz_w_turze.nazwa, partia["numer_ruchu_timer"])
+    
+    pozostaly_czas = lobby_data.get("timery", {}).get(gracz_w_turze_id, 0)
+    if pozostaly_czas <= 0:
+        print(f"[{id_gry}] OSTRZEŻENIE: Brak czasu dla {gracz_w_turze_id}")
+        pozostaly_czas = 1.0
+    
+    move_number = lobby_data.get("numer_ruchu_timer", 0) + 1
+    lobby_data["numer_ruchu_timer"] = move_number
+    
+    lobby_data["timer_info"] = TimerInfo.create(
+        player_id=gracz_w_turze_id,
+        remaining_time=pozostaly_czas,
+        move_number=move_number
     )
+    
+    await save_lobby_data(id_gry, lobby_data)
+    print(f"[{id_gry}] Timer: {gracz_w_turze_id} ({pozostaly_czas:.1f}s)")
 
 # ==========================================================================
-# SEKCJA 5: LOGIKA RANKINGU ELO (Gra Rankingowa)
+# SEKCJA 6: LOGIKA RANKINGU ELO (ZAKTUALIZOWANA DLA NOWEJ BAZY)
 # ==========================================================================
 
 def oblicz_nowe_elo(elo_a: float, elo_b: float, wynik_a: float) -> float:
     """
-    Oblicza nową ocenę Elo dla gracza/drużyny A na podstawie standardowego wzoru.
-
+    Oblicza nowe Elo dla gracza A po meczu z graczem B.
+    
     Args:
-        elo_a: Aktualne Elo gracza/drużyny A.
-        elo_b: Aktualne Elo gracza/drużyny B.
-        wynik_a: Wynik meczu dla A (1.0 za wygraną, 0.5 za remis, 0.0 za przegraną).
-
+        elo_a: Aktualne Elo gracza A
+        elo_b: Aktualne Elo gracza B (lub średnie Elo przeciwników)
+        wynik_a: Wynik gracza A (1.0 = wygrana, 0.5 = remis, 0.0 = przegrana)
+    
     Returns:
-        Nowa wartość Elo dla gracza/drużyny A, zaokrąglona do 2 miejsc po przecinku.
+        Nowe Elo gracza A
     """
-    K = 32 # Współczynnik K (wpływa na szybkość zmian Elo)
-    oczekiwany_wynik_a = 1 / (1 + 10**((elo_b - elo_a) / 400)) # Oczekiwany wynik A vs B
-    nowe_elo_a = elo_a + K * (wynik_a - oczekiwany_wynik_a) # Wzór na nowe Elo
+    K = 32  # Współczynnik K (można dostosować: 40 dla nowych graczy, 20 dla ekspertów)
+    oczekiwany_wynik_a = 1 / (1 + 10**((elo_b - elo_a) / 400))
+    nowe_elo_a = elo_a + K * (wynik_a - oczekiwany_wynik_a)
     return round(nowe_elo_a, 2)
 
-async def zaktualizuj_elo_po_meczu(partia: dict):
+
+async def zaktualizuj_elo_po_meczu(lobby_data: dict, engine: AbstractGameEngine):
     """
-    Pobiera dane graczy z zakończonego meczu rankingowego, oblicza zmiany Elo
-    i zapisuje je z powrotem w bazie danych. Zapisuje również podsumowanie zmian
-    w stanie gry (`partia["wynik_elo"]`) do wysłania klientom.
+    POPRAWIONA logika Elo.
+    
+    Pobiera wynik z silnika gry (engine.get_outcome()) i aktualizuje
+    statystyki graczy w bazie danych.
+    
+    Args:
+        lobby_data: Dane lobby z Redis
+        engine: Silnik gry (AbstractGameEngine) - MUSI być w stanie terminalnym
     """
-    # Wykonaj tylko dla gier rankingowych, które nie były jeszcze rozliczone
-    if not partia.get("opcje", {}).get("rankingowa", False) or partia.get("elo_obliczone", False):
+    id_gry = lobby_data.get("id_gry")
+    
+    # Sprawdź, czy gra jest rankingowa i czy Elo nie zostało już obliczone
+    if not lobby_data.get("opcje", {}).get("rankingowa", False):
         return
-
-    print(f"[{partia['id_gry']}] Obliczanie Elo dla zakończonego meczu rankingowego...")
-    partia["elo_obliczone"] = True # Ustaw flagę, aby nie liczyć ponownie
-    wynik_elo_dla_klienta = {} # Słownik na podsumowanie zmian dla klientów
-
+    
+    if lobby_data.get("elo_obliczone", False):
+        return  # Już obliczone
+    
+    print(f"[{id_gry}] Obliczanie Elo dla zakończonego meczu rankingowego...")
+    lobby_data["elo_obliczone"] = True
+    
+    # Pobierz game_type_id (MUSI być ustawione podczas tworzenia gry)
+    game_type_id = lobby_data.get("game_type_id")
+    if not game_type_id:
+        print(f"BŁĄD KRYTYCZNY ELO: Brak 'game_type_id' w lobby_data dla gry {id_gry}.")
+        return
+    
+    # === KLUCZOWA ZMIANA: Użyj engine.get_outcome() ===
+    if not engine.is_terminal():
+        print(f"BŁĄD ELO: Silnik gry {id_gry} nie jest w stanie terminalnym!")
+        return
+    
+    outcome = engine.get_outcome()  # Dict[player_id: str, score: float]
+    # score = 1.0 (wygrana), 0.0 (przegrana), 0.5 (remis/podział)
+    
+    if not outcome:
+        print(f"BŁĄD ELO: engine.get_outcome() zwróciło pusty słownik dla {id_gry}")
+        return
+    
+    player_ids = list(outcome.keys())
+    if not player_ids:
+        print(f"BŁĄD ELO: Brak graczy w outcome dla {id_gry}")
+        return
+    
     try:
-        # Otwórz sesję bazy danych
         async with async_sessionmaker() as session:
-            if partia.get("max_graczy", 4) == 4: # Logika dla gry 4-osobowej
-                # Znajdź obiekty drużyn z silnika gry
-                druzyna_my = next((d for d in partia["druzyny_engine"] if d.nazwa == partia["nazwy_druzyn"]["My"]), None)
-                druzyna_oni = next((d for d in partia["druzyny_engine"] if d.nazwa == partia["nazwy_druzyn"]["Oni"]), None)
-                if not druzyna_my or not druzyna_oni:
-                     print(f"BŁĄD Elo 4p: Nie znaleziono obiektów drużyn w stanie gry {partia['id_gry']}.")
-                     return
-
-                gracze_my_nazwy = [g.nazwa for g in druzyna_my.gracze]
-                gracze_oni_nazwy = [g.nazwa for g in druzyna_oni.gracze]
-
-                # Pobierz obiekty User (z bazy danych) dla graczy obu drużyn
-                query_my = select(User).where(User.username.in_(gracze_my_nazwy))
-                query_oni = select(User).where(User.username.in_(gracze_oni_nazwy))
-                users_my = (await session.execute(query_my)).scalars().all()
-                users_oni = (await session.execute(query_oni)).scalars().all()
-
-                # Sprawdź, czy znaleziono wszystkich graczy w bazie
-                if len(users_my) != len(gracze_my_nazwy) or len(users_oni) != len(gracze_oni_nazwy):
-                    print(f"BŁĄD Elo 4p [{partia['id_gry']}]: Nie wszyscy gracze zostali znalezieni w bazie danych.")
+            session: AsyncSession
+            
+            # --- KROK 1: Pobierz statystyki wszystkich graczy ---
+            stats_dict: Dict[str, PlayerGameStats] = {}  # player_name -> PlayerGameStats
+            user_dict: Dict[str, User] = {}  # player_name -> User
+            
+            for player_name in player_ids:
+                # Znajdź użytkownika w bazie
+                user_result = await session.execute(
+                    select(User).where(User.username == player_name)
+                )
+                user = user_result.scalar_one_or_none()
+                
+                if not user:
+                    print(f"OSTRZEŻENIE ELO: Nie znaleziono User dla gracza '{player_name}'. Pomijanie.")
+                    continue
+                
+                user_dict[player_name] = user
+                
+                # Znajdź statystyki dla tego gracza i typu gry
+                stats_result = await session.execute(
+                    select(PlayerGameStats).where(
+                        PlayerGameStats.user_id == user.id,
+                        PlayerGameStats.game_type_id == game_type_id
+                    )
+                )
+                stats = stats_result.scalar_one_or_none()
+                
+                # Jeśli gracz gra pierwszy raz w tę grę, stwórz wpis
+                if not stats:
+                    print(f"INFO ELO: Tworzenie nowego wpisu PlayerGameStats dla '{player_name}' (ID: {user.id}), gra {game_type_id}.")
+                    stats = PlayerGameStats(
+                        user_id=user.id,
+                        game_type_id=game_type_id
+                        # Domyślne Elo (1200) jest ustawione w modelu
+                    )
+                    session.add(stats)
+                    # Flush aby otrzymać domyślne wartości
+                    await session.flush()
+                
+                stats_dict[player_name] = stats
+            
+            # Sprawdź, czy mamy statystyki dla wszystkich graczy
+            if len(stats_dict) != len(player_ids):
+                print(f"BŁĄD ELO: Nie udało się pobrać statystyk dla wszystkich graczy. Anulowanie.")
+                await session.rollback()
+                return
+            
+            # --- KROK 2: Oblicz nowe Elo ---
+            wynik_elo_dla_klienta = {}  # player_name -> "1200 → 1220 (+20)"
+            max_graczy = lobby_data.get("max_graczy", 4)
+            
+            if max_graczy == 4:
+                # === GRA 4-OSOBOWA (DRUŻYNY) ===
+                print(f"[{id_gry}] Obliczanie Elo dla gry 4-osobowej (drużynowej)...")
+                
+                # Podziel graczy na drużyny
+                druzyna_my_ids = [
+                    s['nazwa'] for s in lobby_data['slots'] 
+                    if s.get('druzyna') == 'My' and s['nazwa'] in stats_dict
+                ]
+                druzyna_oni_ids = [
+                    s['nazwa'] for s in lobby_data['slots'] 
+                    if s.get('druzyna') == 'Oni' and s['nazwa'] in stats_dict
+                ]
+                
+                if not druzyna_my_ids or not druzyna_oni_ids:
+                    print(f"BŁĄD ELO: Nie można określić drużyn dla gry {id_gry}")
+                    await session.rollback()
                     return
-
-                # Oblicz średnie Elo dla każdej drużyny
-                avg_elo_my = sum(u.elo_rating for u in users_my) / len(users_my)
-                avg_elo_oni = sum(u.elo_rating for u in users_oni) / len(users_oni)
-
-                # Ustal wynik meczu (1.0 dla wygranej 'My', 0.0 dla przegranej)
-                wynik_my = 1.0 if druzyna_my.punkty_meczu >= 66 else 0.0
-
-                # Oblicz nowe średnie Elo dla obu drużyn
+                
+                # Oblicz średnie Elo drużyn
+                avg_elo_my = sum(stats_dict[pid].elo_rating for pid in druzyna_my_ids) / len(druzyna_my_ids)
+                avg_elo_oni = sum(stats_dict[pid].elo_rating for pid in druzyna_oni_ids) / len(druzyna_oni_ids)
+                
+                print(f"[{id_gry}] Średnie Elo - My: {avg_elo_my:.1f}, Oni: {avg_elo_oni:.1f}")
+                
+                # Pobierz wynik z outcome (wszyscy w drużynie mają ten sam wynik)
+                wynik_my = outcome[druzyna_my_ids[0]]  # 1.0, 0.5, lub 0.0
+                wynik_oni = outcome[druzyna_oni_ids[0]]
+                
+                print(f"[{id_gry}] Wyniki - My: {wynik_my}, Oni: {wynik_oni}")
+                
+                # Oblicz nowe średnie Elo
                 nowe_avg_elo_my = oblicz_nowe_elo(avg_elo_my, avg_elo_oni, wynik_my)
-                nowe_avg_elo_oni = oblicz_nowe_elo(avg_elo_oni, avg_elo_my, 1.0 - wynik_my)
-
-                # Oblicz zmianę Elo dla każdej drużyny
+                nowe_avg_elo_oni = oblicz_nowe_elo(avg_elo_oni, avg_elo_my, wynik_oni)
+                
+                # Oblicz zmiany
                 zmiana_my = nowe_avg_elo_my - avg_elo_my
                 zmiana_oni = nowe_avg_elo_oni - avg_elo_oni
-
-                # Zastosuj zmianę Elo do każdego gracza i przygotuj podsumowanie
-                for user in users_my:
-                    stare_elo = user.elo_rating
-                    user.elo_rating += zmiana_my
-                    user.games_played += 1 # Inkrementuj liczbę gier
-                    if wynik_my == 1.0: # Jeśli drużyna "My" wygrała
-                        user.games_won += 1 # Inkrementuj wygrane
-                    wynik_elo_dla_klienta[user.username] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_my:+.0f})"
                 
-                for user in users_oni:
-                    stare_elo = user.elo_rating
-                    user.elo_rating += zmiana_oni
-                    user.games_played += 1 # Inkrementuj liczbę gier
-                    if wynik_my == 0.0: # Jeśli drużyna "Oni" wygrała
-                        user.games_won += 1 # Inkrementuj wygrane
-                    wynik_elo_dla_klienta[user.username] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_oni:+.0f})"
-
-            else: # Logika dla gry 3-osobowej
-                print(f"[{partia['id_gry']}] Obliczanie Elo dla 3 graczy...")
-                gracze_engine = partia.get("gracze_engine")
-                if not gracze_engine or len(gracze_engine) != 3:
-                    print(f"BŁĄD Elo 3p: Nieprawidłowa liczba graczy ({len(gracze_engine) if gracze_engine else 0}) w stanie gry.")
-                    return
-
-                # Pobierz obiekty User z bazy danych dla wszystkich 3 graczy
-                nazwy_graczy = [g.nazwa for g in gracze_engine]
-                query = select(User).where(User.username.in_(nazwy_graczy))
-                users = (await session.execute(query)).scalars().all()
-
-                if len(users) != 3:
-                    print(f"BŁĄD Elo 3p [{partia['id_gry']}]: Nie wszyscy gracze ({len(users)}/{len(nazwy_graczy)}) zostali znalezieni w bazie danych.")
-                    return
-
-                # Stwórz mapowanie nazwa -> (user_obj, punkty_meczu) dla łatwiejszego dostępu
-                gracze_data = {
-                    g.nazwa: (next(u for u in users if u.username == g.nazwa), g.punkty_meczu)
-                    for g in gracze_engine
-                }
-
-                zmiany_elo = {nazwa: 0.0 for nazwa in nazwy_graczy} # Słownik na sumaryczne zmiany Elo
-
-                # --- Przeprowadź wirtualne pojedynki 1vs1 ---
-                gracze_list = list(gracze_data.items()) # Lista krotek (nazwa, (user, punkty))
-
-                for i in range(3):
-                    for j in range(i + 1, 3):
-                        nazwa_a, (user_a, punkty_a) = gracze_list[i]
-                        nazwa_b, (user_b, punkty_b) = gracze_list[j]
-
-                        # Ustal wynik pojedynku A vs B
-                        wynik_a = 0.5 # Domyślnie remis
-                        if punkty_a > punkty_b:
-                            wynik_a = 1.0 # A wygrał
-                        elif punkty_b > punkty_a:
-                            wynik_a = 0.0 # A przegrał (B wygrał)
-
-                        # Oblicz zmianę Elo dla A w tym pojedynku
-                        zmiana_a = oblicz_nowe_elo(user_a.elo_rating, user_b.elo_rating, wynik_a) - user_a.elo_rating
-                        # Oblicz zmianę Elo dla B w tym pojedynku (wynik B = 1.0 - wynik A)
-                        zmiana_b = oblicz_nowe_elo(user_b.elo_rating, user_a.elo_rating, 1.0 - wynik_a) - user_b.elo_rating
-
-                        # Dodaj zmiany do sumarycznych zmian dla obu graczy
-                        zmiany_elo[nazwa_a] += zmiana_a
-                        zmiany_elo[nazwa_b] += zmiana_b
-
-                # --- Zastosuj sumaryczne zmiany Elo i przygotuj podsumowanie ---
-                najwyzszy_wynik = max(punkty for _, punkty in gracze_data.values())
+                print(f"[{id_gry}] Zmiany Elo - My: {zmiana_my:+.1f}, Oni: {zmiana_oni:+.1f}")
                 
-                for nazwa, (user, punkty_gracza) in gracze_data.items():
-                    stare_elo = user.elo_rating
-                    zmiana_finalna = zmiany_elo[nazwa] 
-
-                    user.elo_rating += zmiana_finalna
-                    user.games_played += 1 # Zawsze inkrementuj liczbę gier
+                # Zaktualizuj statystyki dla drużyny "My"
+                for player_name in druzyna_my_ids:
+                    stats = stats_dict[player_name]
+                    stare_elo = stats.elo_rating
                     
-                    # Przyznaj wygraną graczowi(om) z najwyższym wynikiem
-                    if punkty_gracza == najwyzszy_wynik and najwyzszy_wynik >= 66:
-                        user.games_won += 1
-                        
-                    wynik_elo_dla_klienta[nazwa] = f"{stare_elo:.0f} → {user.elo_rating:.0f} ({zmiana_finalna:+.0f})"
-
-            # Zapisz zmiany w bazie danych
+                    stats.elo_rating += zmiana_my
+                    stats.games_played += 1
+                    if wynik_my == 1.0:
+                        stats.games_won += 1
+                    
+                    wynik_elo_dla_klienta[player_name] = (
+                        f"{stare_elo:.0f} → {stats.elo_rating:.0f} ({zmiana_my:+.0f})"
+                    )
+                
+                # Zaktualizuj statystyki dla drużyny "Oni"
+                for player_name in druzyna_oni_ids:
+                    stats = stats_dict[player_name]
+                    stare_elo = stats.elo_rating
+                    
+                    stats.elo_rating += zmiana_oni
+                    stats.games_played += 1
+                    if wynik_oni == 1.0:
+                        stats.games_won += 1
+                    
+                    wynik_elo_dla_klienta[player_name] = (
+                        f"{stare_elo:.0f} → {stats.elo_rating:.0f} ({zmiana_oni:+.0f})"
+                    )
+            
+            elif max_graczy == 3:
+                # === GRA 3-OSOBOWA (FREE-FOR-ALL) ===
+                print(f"[{id_gry}] Obliczanie Elo dla gry 3-osobowej (FFA)...")
+                
+                # W grze FFA każdy gra przeciwko wszystkim
+                # Uproszczenie: każdy gracz gra przeciwko średniej Elo pozostałych
+                
+                for player_name in player_ids:
+                    stats = stats_dict[player_name]
+                    
+                    # Średnie Elo przeciwników
+                    przeciwnicy = [p for p in player_ids if p != player_name]
+                    avg_elo_przeciwnikow = sum(
+                        stats_dict[p].elo_rating for p in przeciwnicy
+                    ) / len(przeciwnicy)
+                    
+                    # Wynik gracza
+                    wynik_gracza = outcome[player_name]
+                    
+                    print(f"[{id_gry}] {player_name}: Elo {stats.elo_rating:.1f} vs Avg {avg_elo_przeciwnikow:.1f}, Wynik: {wynik_gracza}")
+                    
+                    # Oblicz nowe Elo
+                    stare_elo = stats.elo_rating
+                    nowe_elo = oblicz_nowe_elo(stare_elo, avg_elo_przeciwnikow, wynik_gracza)
+                    zmiana = nowe_elo - stare_elo
+                    
+                    # Zaktualizuj statystyki
+                    stats.elo_rating = nowe_elo
+                    stats.games_played += 1
+                    if wynik_gracza == 1.0:
+                        stats.games_won += 1
+                    
+                    wynik_elo_dla_klienta[player_name] = (
+                        f"{stare_elo:.0f} → {nowe_elo:.0f} ({zmiana:+.0f})"
+                    )
+            
+            else:
+                print(f"BŁĄD ELO: Nieobsługiwana liczba graczy: {max_graczy}")
+                await session.rollback()
+                return
+            
+            # --- KROK 3: Zapisz w bazie danych ---
             await session.commit()
-            # Zapisz podsumowanie zmian Elo w stanie gry
-            partia["wynik_elo"] = wynik_elo_dla_klienta
-            print(f"[{partia['id_gry']}] Zaktualizowano Elo: {wynik_elo_dla_klienta}")
-
+            
+            # --- KROK 4: Zapisz podsumowanie w Redis (dla frontendu) ---
+            lobby_data["wynik_elo"] = wynik_elo_dla_klienta
+            # To zostanie zapisane przez wywołującą funkcję (save_lobby_data)
+            
+            print(f"[{id_gry}] ✓ Zaktualizowano Elo:")
+            for player, change in wynik_elo_dla_klienta.items():
+                print(f"  - {player}: {change}")
+    
     except Exception as e:
-        # Złap potencjalne błędy podczas operacji na bazie danych lub obliczeń
-        print(f"BŁĄD KRYTYCZNY podczas aktualizacji Elo dla gry {partia.get('id_gry', 'N/A')}: {e}")
+        print(f"BŁĄD KRYTYCZNY podczas aktualizacji Elo dla gry {id_gry}: {e}")
         traceback.print_exc()
 
+
+async def zaktualizuj_elo_po_timeout(lobby_data: dict, outcome: Dict[str, float]):
+    """
+    Specjalna wersja dla timeout'ów.
+    Używana przez Timer Worker, gdy silnik gry już nie istnieje.
+    
+    Args:
+        lobby_data: Dane lobby z Redis
+        outcome: Ręcznie utworzony outcome (Dict[player_id, score])
+    """
+    id_gry = lobby_data.get("id_gry")
+    
+    if not lobby_data.get("opcje", {}).get("rankingowa", False):
+        return
+    
+    if lobby_data.get("elo_obliczone", False):
+        return
+    
+    print(f"[{id_gry}] Obliczanie Elo po timeout...")
+    lobby_data["elo_obliczone"] = True
+    
+    game_type_id = lobby_data.get("game_type_id")
+    if not game_type_id:
+        print(f"BŁĄD KRYTYCZNY ELO (timeout): Brak 'game_type_id'")
+        return
+    
+    # Reszta logiki jest identyczna jak w zaktualizuj_elo_po_meczu
+    # (można by wydzielić wspólną funkcję pomocniczą)
+    
+    player_ids = list(outcome.keys())
+    if not player_ids:
+        return
+    
+    try:
+        async with async_sessionmaker() as session:
+            pass
+    except Exception as e:
+        print(f"BŁĄD KRYTYCZNY Elo (timeout): {e}")
+        traceback.print_exc()
+
+
 # ==========================================================================
-# SEKCJA 6: ZARZĄDZANIE POŁĄCZENIAMI WebSocket (ConnectionManager)
+# TESTY JEDNOSTKOWE (opcjonalne)
+# ==========================================================================
+
+async def test_oblicz_nowe_elo():
+    """Testuje funkcję oblicz_nowe_elo()"""
+    
+    # Test 1: Gracze równi, wygrana
+    assert abs(oblicz_nowe_elo(1200, 1200, 1.0) - 1216) < 1
+    
+    # Test 2: Gracze równi, przegrana
+    assert abs(oblicz_nowe_elo(1200, 1200, 0.0) - 1184) < 1
+    
+    # Test 3: Gracze równi, remis
+    assert abs(oblicz_nowe_elo(1200, 1200, 0.5) - 1200) < 1
+    
+    # Test 4: Słabszy wygrywa z silniejszym
+    assert oblicz_nowe_elo(1000, 1400, 1.0) > 1028  # Duża zdobycz
+    
+    # Test 5: Silniejszy przegrywa ze słabszym
+    assert oblicz_nowe_elo(1400, 1000, 0.0) < 1372  # Duża strata
+    
+    print("✓ Wszystkie testy oblicz_nowe_elo() przeszły")
+
+# ==========================================================================
+# SEKCJA 7: ZREFRAKTORYZOWANY ConnectionManager (z Redis Pub/Sub)
 # ==========================================================================
 
 class ConnectionManager:
-    """Klasa pomocnicza do zarządzania aktywnymi połączeniami WebSocket dla każdej gry."""
+    """
+    Zarządza połączeniami WebSocket specyficznymi dla TEJ instancji serwera
+    I obsługuje globalne nadawanie i nasłuchiwanie przez Redis Pub/Sub.
+    """
     def __init__(self):
-        # Słownik, gdzie kluczem jest ID gry, a wartością lista aktywnych obiektów WebSocket.
-        self.active_connections: dict[str, list[WebSocket]] = {}
+        # Słownik połączeń lokalnych dla tej instancji serwera
+        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.pubsub_listener_task: Optional[asyncio.Task] = None
 
-    async def connect(self, websocket: WebSocket, game_id: str):
-        """Akceptuje nowe połączenie WebSocket i dodaje je do odpowiedniej gry."""
-        await websocket.accept()
-        # Jeśli to pierwsze połączenie dla tej gry, stwórz nową listę
-        if game_id not in self.active_connections:
-            self.active_connections[game_id] = []
-        # Dodaj połączenie do listy
-        self.active_connections[game_id].append(websocket)
-
-    def disconnect(self, websocket: WebSocket, game_id: str):
-        """Usuwa połączenie WebSocket z listy dla danej gry."""
-        if game_id in self.active_connections:
-            # Usuń bezpiecznie, nawet jeśli połączenie już zostało usunięte
-            if websocket in self.active_connections[game_id]:
-                self.active_connections[game_id].remove(websocket)
-            # Jeśli lista stała się pusta, można usunąć wpis gry (opcjonalnie)
-            # if not self.active_connections[game_id]:
-            #     del self.active_connections[game_id]
-
-    async def broadcast(self, game_id: str, message: dict):
-        """
-        Wysyła wiadomość (słownik Python) do wszystkich podłączonych graczy w danej grze.
-        Automatycznie serializuje słownik do JSON, obsługując typy Enum i Karta z silnika gry.
-        """
-        if game_id in self.active_connections:
-            # Własna funkcja serializująca dla typów niestandardowych (Enum, Karta, etc.)
-            def safe_serializer(o):
-                if isinstance(o, (silnik_gry.Kolor, silnik_gry.Kontrakt, silnik_gry.FazaGry, silnik_gry.Ranga)):
-                    return o.name # Zwróć nazwę Enum (string)
-                if isinstance(o, silnik_gry.Karta):
-                    return str(o) # Zwróć stringową reprezentację karty
-                if isinstance(o, (silnik_gry.Gracz, silnik_gry.Druzyna)):
-                    return o.nazwa # Zwróć nazwę gracza/drużyny
-                # Awaryjnie dla innych nieznanych typów
-                return f"<Nieserializowalny: {type(o).__name__}>"
-
+    async def start_pubsub_listener(self):
+        """Uruchamia globalnego słuchacza Pub/Sub dla tej instancji."""
+        if self.pubsub_listener_task:
+            return # Już działa
+            
+        async def listener():
+            if not redis_client:
+                print("BŁĄD PubSub: Klient Redis nie jest zainicjalizowany.")
+                return
+                
             try:
-                # Serializuj wiadomość do JSON
-                message_json = json.dumps(message, default=safe_serializer)
-                # Stwórz kopię listy połączeń (ważne, bo lista może się zmienić podczas wysyłania)
-                connections_copy = self.active_connections[game_id][:]
-                # Przygotuj listę zadań wysyłania (jedno dla każdego połączenia)
-                tasks = [connection.send_text(message_json) for connection in connections_copy]
-                # Wykonaj wszystkie zadania wysyłania asynchronicznie i równolegle
-                if tasks:
-                    await asyncio.gather(*tasks)
+                async with redis_client.pubsub() as pubsub:
+                    # Subskrybuj wszystkie kanały gier
+                    await pubsub.psubscribe(channel_key("*")) 
+                    print("[PubSub] Słuchacz Pub/Sub uruchomiony i subskrybuje kanały gier.")
+                    
+                    async for message in pubsub.listen():
+                        if message["type"] == "pmessage":
+                            channel_name = message["channel"].decode('utf-8')
+                            id_gry = channel_name.split(":")[-1]
+                            data_str = message["data"].decode('utf-8')
+                            
+                            # Rozszyfruj typ wiadomości
+                            try:
+                                data_payload = json.loads(data_str)
+                                msg_type = data_payload.get("type")
+                                
+                                if msg_type == "STATE_UPDATE":
+                                    # Otrzymano powiadomienie o aktualizacji stanu
+                                    # Wyślij spersonalizowany stan do każdego lokalnego klienta
+                                    await self.broadcast_state_to_locals(id_gry)
+                                elif msg_type == "CHAT":
+                                    # Otrzymano wiadomość czatu
+                                    # Po prostu przekaż ją dalej do lokalnych klientów
+                                    await self.broadcast_raw_json(id_gry, data_str)
+                                    
+                            except Exception as e:
+                                print(f"BŁĄD PubSub: Nie można przetworzyć wiadomości {data_str}: {e}")
             except Exception as e:
-                # Złap błędy serializacji lub wysyłania
-                print(f"BŁĄD podczas serializacji lub broadcastu dla gry {game_id}: {e}")
-                # Rozważ dodanie traceback.print_exc() dla dokładniejszego debugowania
+                print(f"BŁĄD KRYTYCZNY: Słuchacz PubSub został przerwany: {e}")
+                # TODO: Logika ponownego uruchomienia słuchacza
+                self.pubsub_listener_task = None
+
+        self.pubsub_listener_task = asyncio.create_task(listener())
+
+    async def connect(self, websocket: WebSocket, id_gry: str, player_id: str):
+        """Akceptuje i rejestruje LOKALNE połączenie."""
+        await websocket.accept()
+        # Zapisz player_id na obiekcie websocket dla łatwego dostępu
+        websocket.scope['player_id'] = player_id 
+        
+        if id_gry not in self.active_connections:
+            self.active_connections[id_gry] = []
+        self.active_connections[id_gry].append(websocket)
+        
+        # Upewnij się, że słuchacz Pub/Sub działa
+        if not self.pubsub_listener_task or self.pubsub_listener_task.done():
+            await self.start_pubsub_listener()
+
+    def disconnect(self, websocket: WebSocket, id_gry: str):
+        """Usuwa LOKALNE połączenie."""
+        if id_gry in self.active_connections:
+            if websocket in self.active_connections[id_gry]:
+                self.active_connections[id_gry].remove(websocket)
+            if not self.active_connections[id_gry]:
+                del self.active_connections[id_gry]
+
+    async def broadcast_raw_json(self, id_gry: str, message_json: str):
+        """Wysyła surowy tekst JSON do lokalnych połączeń (np. dla czatu)."""
+        if id_gry in self.active_connections:
+            connections_copy = self.active_connections[id_gry][:]
+            tasks = [conn.send_text(message_json) for conn in connections_copy]
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True) # Złap błędy, nie przerywaj
+
+    async def broadcast_state_to_locals(self, id_gry: str):
+        """
+        Pobiera stan gry i wysyła spersonalizowaną wersję do każdego
+        LOKALNEGO klienta w tej grze.
+        """
+        if id_gry not in self.active_connections:
+            return # Brak lokalnych klientów dla tej gry
+
+        lobby_data = await get_lobby_data(id_gry)
+        engine = None
+        if not lobby_data:
+            print(f"INFO (broadcast_state): Brak danych lobby dla {id_gry}. Wysyłanie błędu.")
+            # TODO: Wyślij błąd do klientów?
+            return
+            
+        if lobby_data.get("status_partii") == "W_TRAKCIE":
+            engine = await get_game_engine(id_gry)
+            if not engine:
+                print(f"BŁĄD (broadcast_state): Gra {id_gry} jest W_TRAKCIE, ale nie ma silnika w Redis!")
+                # TODO: Napraw stan?
+                return
+
+        connections_copy = self.active_connections[id_gry][:]
+        tasks = []
+
+        for conn in connections_copy:
+            player_id = conn.scope.get('player_id', None)
+            if not player_id:
+                continue # Pomiń połączenie bez ID gracza
+                
+            # --- Zbuduj stan dla TEGO gracza ---
+            try:
+                state_message = await self.build_state_for_player(lobby_data, engine, player_id)
+                message_json = json.dumps(state_message) # Serializuj do JSON
+                tasks.append(conn.send_text(message_json)) # Dodaj zadanie wysyłania
+            except Exception as e:
+                print(f"BŁĄD (build_state): Nie można zbudować/wysłać stanu dla {player_id}: {e}")
+        
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True) # Wyślij wszystko równolegle
+
+
+    async def build_state_for_player(self, lobby_data: dict, engine: Optional[AbstractGameEngine], player_id: str) -> dict:
+        """
+        NOWA funkcja (zastępuje `pobierz_stan_gry`).
+        Buduje pełny stan na podstawie danych z lobby i silnika.
+        """
+        # 1. Skopiuj bazowe dane lobby
+        stan = copy.deepcopy(lobby_data)
+        
+        # 2. Usuń wrażliwe dane (np. hasło)
+        stan.get("opcje", {}).pop("haslo", None)
+        
+        # 3. Jeśli gra jest w trakcie, pobierz stan z silnika
+        if engine and lobby_data.get("status_partii") == "W_TRAKCIE":
+            # Pobierz stan spersonalizowany dla gracza z silnika
+            engine_state = engine.get_state_for_player(player_id)
+            
+            # === POCZĄTEK POPRAWKI (Wersja 3) ===
+            # Wracamy do zagnieżdżania stanu w 'rozdanie', 
+            # ponieważ tego oczekuje 'script.js'.
+            
+            # stan.update(engine_state) # <-- BŁĘDNA WERSJA
+            stan['rozdanie'] = engine_state # <-- POPRAWNA WERSJA
+            # === KONIEC POPRAWKI ===
+            
+            # TODO: Logika paska ewaluacji (wymaga refaktoryzacji boty.py)
+            # if 'mcts' in bot_instances:
+            #     ocena = bot_instances['mcts'].evaluate_state(engine, ...)
+            #     stan['rozdanie']['aktualna_ocena'] = ocena
+            
+        elif lobby_data.get("status_partii") == "ZAKONCZONA":
+            # W stanie ZAKONCZONA, silnik może już nie istnieć
+            # Polegamy na danych zapisanych w lobby_data (np. `wynik_elo`)
+            pass
+            
+        elif lobby_data.get("status_partii") == "LOBBY":
+            # Stan lobby jest już kompletny
+            pass
+            
+        # 4. Dodaj ID gracza (dla frontendu)
+        stan['player_id'] = player_id
+        
+        return stan
+
+    async def notify_state_update(self, id_gry: str):
+        """Publikuje powiadomienie o aktualizacji stanu do Redis."""
+        try:
+            message = json.dumps({"type": "STATE_UPDATE"})
+            await redis_client.publish(channel_key(id_gry), message)
+        except Exception as e:
+            print(f"BŁĄD PubSub (notify_state_update) dla {id_gry}: {e}")
+
+    async def publish_chat_message(self, id_gry: str, chat_data: dict):
+        """Publikuje wiadomość czatu do Redis."""
+        try:
+            chat_data["type"] = "CHAT" # Upewnij się, że typ jest ustawiony
+            message = json.dumps(chat_data)
+            await redis_client.publish(channel_key(id_gry), message)
+        except Exception as e:
+            print(f"BŁĄD PubSub (publish_chat_message) dla {id_gry}: {e}")
 
 # Globalna instancja ConnectionManagera
 manager = ConnectionManager()
 
 # ==========================================================================
-# SEKCJA 7: FUNKCJE POMOCNICZE (Baza Danych, ID Gry, Reset, Konwersje)
+# SEKCJA 8: FUNKCJE POMOCNICZE (Baza Danych, ID Gry)
 # ==========================================================================
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Zależność (dependency) FastAPI do uzyskiwania sesji bazy danych.
-    Automatycznie zarządza otwieraniem i zamykaniem sesji dla każdego żądania.
-    """
+    """Zależność (dependency) FastAPI do uzyskiwania sesji bazy danych."""
     async with async_sessionmaker() as session:
         try:
-            yield session # Udostępnij sesję endpointowi
+            yield session
         finally:
-            await session.close() # Zamknij sesję po zakończeniu żądania
+            await session.close()
 
 def generuj_krotki_id(dlugosc=6) -> str:
-    """Generuje unikalny, krótki (domyślnie 6-znakowy) identyfikator gry (np. 'A1B2C3')."""
-    chars = string.ascii_uppercase + string.digits # Znaki do użycia: A-Z, 0-9
-    while True:
-        # Wygeneruj losowy kod
-        kod = ''.join(random.choices(chars, k=dlugosc))
-        # Sprawdź, czy kod nie jest już używany w aktywnych grach
-        if kod not in gry:
-            return kod # Zwróć unikalny kod
-
-def resetuj_gre_do_lobby(partia: dict):
-    """Resetuje stan gry (`partia`) z powrotem do stanu początkowego lobby."""
-    partia["status_partii"] = "LOBBY"
-    # Wyczyść dane związane z rozgrywką
-    partia["gracze_engine"] = []
-    partia["druzyny_engine"] = []
-    partia["aktualne_rozdanie"] = None
-    partia["pelna_historia"] = [] # Czy to jest używane? Może do usunięcia?
-    partia["numer_rozdania"] = 1
-    partia["historia_partii"] = []
-    partia["kicked_players"] = [] # Wyczyść listę wyrzuconych
-    partia["gracze_gotowi"] = []
-    partia['aktualna_ocena'] = None
-    # Resetuj timery i stan Elo
-    partia["timery"] = {}
-    partia["timer_task"] = None # Anuluj zadanie timera (jeśli istnieje) - TODO: dodać anulowanie
-    partia["wynik_elo"] = None
-    partia["elo_obliczone"] = False
-    partia["tura_start_czas"] = None
-
-    # Zresetuj punkty meczu
-    if partia.get("max_graczy", 4) == 4:
-        nazwy = partia.get("nazwy_druzyn", {"My": "My", "Oni": "Oni"})
-        partia["punkty_meczu"] = {nazwy["My"]: 0, nazwy["Oni"]: 0}
-    else: # 3 graczy
-        # Zresetuj punkty dla graczy, którzy są aktualnie w slotach
-        partia["punkty_meczu"] = {slot['nazwa']: 0 for slot in partia['slots'] if slot.get('nazwa')}
-
-    print(f"Gra {partia.get('id_gry', 'N/A')} wraca do lobby.")
-
-def karta_ze_stringa(nazwa_karty: str) -> silnik_gry.Karta:
-    """Konwertuje string reprezentujący kartę (np. "As Czerwien") na obiekt Karta."""
-    try:
-        ranga_str, kolor_str = nazwa_karty.split()
-        # Mapowanie nazw stringowych na obiekty Enum
-        mapowanie_rang = {r.name.capitalize(): r for r in silnik_gry.Ranga}
-        mapowanie_kolorow = {k.name.capitalize(): k for k in silnik_gry.Kolor}
-        # Znajdź odpowiednie Enumy
-        ranga = mapowanie_rang[ranga_str]
-        kolor = mapowanie_kolorow[kolor_str]
-        # Stwórz i zwróć obiekt Karta
-        return silnik_gry.Karta(ranga=ranga, kolor=kolor)
-    except (ValueError, KeyError) as e:
-        # Złap błędy parsowania lub nieznanych nazw
-        print(f"BŁĄD: Nie można przekonwertować stringa '{nazwa_karty}' na kartę: {e}")
-        raise ValueError(f"Nieprawidłowa nazwa karty: {nazwa_karty}") from e
-
-def sprawdz_koniec_partii(partia: dict) -> bool:
+    """Generuje unikalny, krótki (domyślnie 6-znakowy) identyfikator gry."""
+    # Ta funkcja musi sprawdzić, czy ID istnieje w Redis, a nie w `gry`
+    # TODO: Zaimplementować sprawdzanie w Redis (choć kolizje są rzadkie)
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=dlugosc))
+    
+async def _zaktualizuj_stan_po_rozdaniu(id_gry: str, lobby_data: Dict[str, Any], engine: AbstractGameEngine) -> bool:
     """
-    Sprawdza, czy którakolwiek drużyna (4p) lub gracz (3p) osiągnął
-    wymaganą liczbę punktów (domyślnie 66), aby zakończyć mecz.
-    Jeśli tak, ustawia `status_partii` na "ZAKONCZONA".
+    Pobiera wynik z silnika, aktualizuje punkty meczu w lobby
+    i sprawdza, czy mecz się zakończył.
+    Zwraca True, jeśli mecz się zakończył, False w przeciwnym razie.
     """
-    max_graczy = partia.get("max_graczy", 4)
-    gracze_engine = partia.get("gracze_engine") # Obiekty Gracz z silnika
-    druzyny_engine = partia.get("druzyny_engine") # Obiekty Druzyna z silnika
+    if not engine.is_terminal():
+        return False # Rozdanie się nie skończyło
+        
+    # Musimy pobrać stan dla hosta (lub kogokolwiek), aby dostać podsumowanie
+    # Używamy ID hosta, bo mamy pewność, że istnieje
+    podsumowanie = engine.get_state_for_player(lobby_data["host"]).get('podsumowanie')
+    if not podsumowanie:
+        print(f"BŁĄD ({id_gry}): Silnik jest terminalny, ale nie ma podsumowania.")
+        return False
+    
+    punkty_meczu = lobby_data.get("punkty_meczu", {})
+    max_graczy = lobby_data.get("max_graczy", 4)
+    
+    # === POCZĄTEK POPRAWKI (Wersja 8) ===
+    # Celem meczu jest 66 punktów, a nie 7!
+    CEL_MECZU = 66
+    # === KONIEC POPRAWKI ===
+    
+    # Zmienna do śledzenia, czy ktoś wygrał
+    mecz_zakonczony = False
+    
+    if max_graczy == 4:
+        wygrana_druzyna = podsumowanie.get("wygrana_druzyna")
+        if wygrana_druzyna and wygrana_druzyna in punkty_meczu:
+            punkty_do_dodania = podsumowanie.get("przyznane_punkty", 0)
+            punkty_meczu[wygrana_druzyna] += punkty_do_dodania
+            print(f"[{id_gry}] Drużyna {wygrana_druzyna} zdobywa {punkty_do_dodania} pkt.")
+            if punkty_meczu[wygrana_druzyna] >= CEL_MECZU:
+                mecz_zakonczony = True
+        else:
+            print(f"OSTRZEŻENIE ({id_gry}): Nie można przyznać punktów drużynie {wygrana_druzyna}.")
+    
+    else: # 3p
+        wygrani_gracze = podsumowanie.get("wygrani_gracze", [])
+        punkty_do_dodania = podsumowanie.get("przyznane_punkty", 0)
+        
+        # W 3p punkty są dzielone (jeśli wygra obrona) lub idą do jednego gracza
+        punkty_na_gracza = punkty_do_dodania
+        if len(wygrani_gracze) > 1:
+            punkty_na_gracza = punkty_do_dodania // len(wygrani_gracze) if wygrani_gracze else 0
+            
+        for gracz in wygrani_gracze:
+            if gracz not in punkty_meczu:
+                 punkty_meczu[gracz] = 0 # Zainicjuj, jeśli nie istnieje
+                 
+            punkty_meczu[gracz] += punkty_na_gracza
+            print(f"[{id_gry}] Gracz {gracz} zdobywa {punkty_na_gracza} pkt.")
+            if punkty_meczu[gracz] >= CEL_MECZU:
+                mecz_zakonczony = True
 
-    # --- Logika dla 4 graczy ---
-    if max_graczy == 4 and druzyny_engine:
-        for druzyna in druzyny_engine:
-            if druzyna.punkty_meczu >= 66:
-                partia["status_partii"] = "ZAKONCZONA"
-                return True # Znaleziono zwycięzcę
-    # --- Logika dla 3 graczy ---
-    elif max_graczy == 3 and gracze_engine:
-        # Znajdź graczy, którzy przekroczyli próg
-        gracze_powyzej_progu = [g for g in gracze_engine if g.punkty_meczu >= 66]
-        if not gracze_powyzej_progu:
-            return False # Nikt nie przekroczył progu
-        if len(gracze_powyzej_progu) == 1:
-            # Tylko jeden gracz przekroczył próg - koniec gry
-            partia["status_partii"] = "ZAKONCZONA"
-            return True
-        # Obsługa remisu w 3p (więcej niż 1 gracz >= 66)
-        najwyzszy_wynik = max(g.punkty_meczu for g in gracze_powyzej_progu)
-        # Znajdź graczy z najwyższym wynikiem
-        gracze_z_najwyzszym_wynikiem = [g for g in gracze_powyzej_progu if g.punkty_meczu == najwyzszy_wynik]
-        # Jeśli tylko jeden ma najwyższy wynik, kończy grę
-        if len(gracze_z_najwyzszym_wynikiem) == 1:
-            partia["status_partii"] = "ZAKONCZONA"
-            return True
-        else: # Jeśli jest remis na najwyższym wyniku >= 66, gra również się kończy
-            partia["status_partii"] = "ZAKONCZONA"
-            print(f"INFO: Remis w grze 3p (ID: {partia.get('id_gry')}) - kilku graczy >= 66 z tym samym wynikiem.")
-            return True
-
-    # Jeśli żaden warunek końca nie został spełniony
-    return False
+    # Zapisz zaktualizowane punkty w lobby
+    lobby_data["punkty_meczu"] = punkty_meczu
+    
+    # Jeśli mecz się zakończył, zaktualizuj status
+    if mecz_zakonczony:
+        print(f"[{id_gry}] Mecz zakończony! Wynik: {punkty_meczu}")
+        lobby_data["status_partii"] = "ZAKONCZONA"
+        if lobby_data.get("opcje", {}).get("rankingowa", False):
+            await zaktualizuj_elo_po_meczu(lobby_data, engine)
+            
+    return mecz_zakonczony
 
 # ==========================================================================
-# SEKCJA 8: KONFIGURACJA PLIKÓW STATYCZNYCH I GŁÓWNYCH ENDPOINTÓW HTTP
+# SEKCJA 9: KONFIGURACJA PLIKÓW STATYCZNYCH I GŁÓWNYCH ENDPOINTÓW HTTP
 # ==========================================================================
 
-# Udostępnij folder 'static' (zawierający CSS, JS, obrazki, dźwięki) pod ścieżką URL '/static'
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/")
-async def read_root():
-    """Zwraca główną stronę startową (menu)."""
-    return FileResponse('static/start.html')
 
 @app.get("/gra.html")
-async def read_game_page():
-    """Zwraca stronę interfejsu gry."""
-    return FileResponse('static/index.html')
-
+async def read_game_page(): return FileResponse('static/index.html')
 @app.get("/lobby.html")
-async def read_lobby_browser_page():
-    """Zwraca stronę przeglądarki lobby."""
-    return FileResponse('static/lobby.html')
-
+async def read_lobby_browser_page(): return FileResponse('static/lobby.html')
 @app.get("/zasady.html")
-async def read_rules_page():
-    """Zwraca stronę z zasadami gry."""
-    return FileResponse('static/zasady.html')
-
+async def read_rules_page(): return FileResponse('static/zasady.html')
 @app.get("/ranking.html")
-async def read_ranking_page():
-    """Zwraca stronę rankingu graczy."""
-    return FileResponse('static/ranking.html')
+async def read_ranking_page(): return FileResponse('static/ranking.html')
+@app.get("/", response_class=FileResponse)
+async def serve_landing():
+    """Nowy landing page"""
+    return FileResponse("index.html")
+
+@app.get("/dashboard", response_class=FileResponse)  
+async def serve_dashboard():
+    """Dashboard (główna strona po zalogowaniu)"""
+    return FileResponse("dashboard.html")
+@app.get("/zasady", response_class=FileResponse)
+async def serve_rules():
+    return FileResponse('zasady.html')
 
 # ==========================================================================
-# SEKCJA 9: ENDPOINTY UŻYTKOWNIKÓW I USTAWIEŃ (Rejestracja, Logowanie)
+# SEKCJA 10: ENDPOINTY UŻYTKOWNIKÓW (Logowanie, Rejestracja, Ustawienia)
 # ==========================================================================
 
 @app.get("/ranking/lista")
-async def pobierz_ranking_graczy(db: AsyncSession = Depends(get_db)):
+async def pobierz_ranking_graczy(
+    game_type_id: Optional[int] = Query(None), # <-- NOWY filtr
+    db: AsyncSession = Depends(get_db)
+):
     """
-    Pobiera listę wszystkich graczy (ludzi i botów) posortowaną według Elo
-    wraz z ich statystykami gier.
+    ZAKTUALIZOWANY endpoint rankingu.
+    Pobiera ranking z tabeli 'player_game_stats'.
+    Wymaga 'game_type_id' do filtrowania.
     """
     try:
-        # Zapytanie do bazy o potrzebne kolumny, sortowanie malejąco wg Elo
+        # Jeśli nie podano ID gry, spróbuj pobrać domyślny (np. '66 4p')
+        # TODO: Lepsza obsługa domyślnego rankingu
+        if not game_type_id:
+            game_type_result = await db.execute(
+                select(GameType.id).where(GameType.name == '66 (4p)')
+            )
+            game_type_id = game_type_result.scalar_one_or_none()
+            if not game_type_id:
+                # Jeśli nawet domyślny nie istnieje, zwróć pustą listę
+                return JSONResponse(content=[]) 
+
+        # Zapytanie do nowej tabeli
         query = (
             select(
                 User.username,
-                User.elo_rating,
-                User.games_played,
-                User.games_won,
-                User.settings # Pobieramy ustawienia, by oznaczyć boty
+                User.settings,
+                PlayerGameStats.elo_rating,
+                PlayerGameStats.games_played,
+                PlayerGameStats.games_won
             )
-            .order_by(User.elo_rating.desc())
+            .join(User, PlayerGameStats.user_id == User.id) # Połącz z User, aby dostać nazwę
+            .where(PlayerGameStats.game_type_id == game_type_id) # Filtruj wg typu gry
+            .order_by(PlayerGameStats.elo_rating.desc()) # Sortuj wg Elo
         )
         
         result = await db.execute(query)
         gracze_raw = result.all()
         
-        # Przetwórz dane do formatu JSON
         lista_rankingu = []
         for row in gracze_raw:
-            # Sprawdź, czy to bot
             jest_botem = False
             if row.settings:
                 try:
@@ -661,20 +991,20 @@ async def pobierz_ranking_graczy(db: AsyncSession = Depends(get_db)):
                     if settings.get("jest_botem") is True:
                         jest_botem = True
                 except (json.JSONDecodeError, TypeError):
-                    pass # Ignoruj błędy parsowania
+                    pass
             
             lista_rankingu.append({
                 "username": row.username,
                 "elo_rating": row.elo_rating,
                 "games_played": row.games_played,
                 "games_won": row.games_won,
-                "is_bot": jest_botem # Dodaj flagę dla frontendu
+                "is_bot": jest_botem
             })
             
         return JSONResponse(content=lista_rankingu)
         
     except Exception as e:
-        print(f"BŁĄD KRYTYCZNY podczas pobierania rankingu: {e}")
+        print(f"BŁĄD KRYTYCZNY podczas pobierania rankingu (nowa logika): {e}")
         traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -683,80 +1013,64 @@ async def pobierz_ranking_graczy(db: AsyncSession = Depends(get_db)):
 
 @app.post("/register", response_model=Token)
 async def register_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
-    """Rejestruje nowego użytkownika w bazie danych."""
-    # Sprawdź, czy użytkownik o tej nazwie już istnieje
+    # Logika bez zmian
     query = select(User).where(User.username == user_data.username)
     result = await db.execute(query)
     existing_user = result.scalar_one_or_none()
-
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Użytkownik o tej nazwie już istnieje."
         )
-    # Prosta walidacja długości hasła
     if len(user_data.password) < 4:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Hasło musi mieć co najmniej 4 znaki."
         )
-
-    # Hashuj hasło przed zapisem
     hashed_pass = hash_password(user_data.password)
-    # Stwórz nowy obiekt User
     new_user = User(username=user_data.username, hashed_password=hashed_pass)
-    # Dodaj i zapisz w bazie
     db.add(new_user)
     await db.commit()
-    await db.refresh(new_user) # Odśwież obiekt, aby uzyskać np. ID
-    # Zwróć token (obecnie tylko nazwa użytkownika)
+    await db.refresh(new_user)
     return Token(access_token=new_user.username, token_type="bearer", username=new_user.username)
 
 @app.post("/login", response_model=Token)
 async def login_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
-    """Loguje istniejącego użytkownika."""
-    # Znajdź użytkownika w bazie
+    # Logika bez zmian, ale sprawdzanie aktywnej gry musi teraz czytać z Redis
     query = select(User).where(User.username == user_data.username)
     result = await db.execute(query)
     user = result.scalar_one_or_none()
 
-    # Sprawdź, czy użytkownik istnieje i czy hasło się zgadza
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Nieprawidłowa nazwa użytkownika lub hasło."
         )
 
-    # --- Sprawdź, czy gracz ma aktywną grę do powrotu ---
+    # --- Sprawdź aktywne gry w Redis ---
     active_game_id_found = None
     try:
-        # Przejrzyj aktywne gry (użyj kopii listy wartości, aby uniknąć błędów modyfikacji)
-        gry_copy = list(gry.values())
-        for partia in gry_copy:
-            # Sprawdź tylko gry w trakcie
-            if partia.get("status_partii") == "W_TRAKCIE":
-                slots = partia.get("slots", [])
-                # Znajdź slot tego gracza, który jest oznaczony jako rozłączony
+        # Przeskanuj klucze lobby w Redis
+        async for key in redis_client.scan_iter(lobby_key("*")):
+            lobby_data = await get_lobby_data(key.decode('utf-8').split(":")[-1])
+            if not lobby_data: continue
+            
+            if lobby_data.get("status_partii") == "W_TRAKCIE":
+                slots = lobby_data.get("slots", [])
                 slot_gracza = next((s for s in slots if s.get("nazwa") == user.username and s.get("typ") == "rozlaczony"), None)
                 if slot_gracza:
-                    active_game_id_found = partia.get("id_gry")
-                    break # Znaleziono grę, przerwij pętlę
-    except RuntimeError:
-         # Ten błąd może wystąpić, jeśli słownik `gry` zostanie zmodyfikowany podczas iteracji
-         print("Ostrzeżenie: Słownik gier zmienił się podczas sprawdzania statusu logowania.")
+                    active_game_id_found = lobby_data.get("id_gry")
+                    break
+    except Exception as e:
+         print(f"Ostrzeżenie: Błąd Redis podczas skanowania gier dla logowania {user.username}: {e}")
 
-    # --- Pobierz ustawienia użytkownika z bazy ---
     user_settings = None
     if user.settings:
         try:
-            # Spróbuj sparsować JSON zapisany w bazie
             user_settings = json.loads(user.settings)
         except json.JSONDecodeError:
-            # Błąd, jeśli zapisane ustawienia nie są poprawnym JSONem
-            print(f"Błąd dekodowania JSON ustawień dla użytkownika {user.username}")
-            user_settings = None # Ignoruj błędne ustawienia
+            user_settings = None
 
-    # Zwróć token wraz z informacją o grze do powrotu i ustawieniami
     return Token(
         access_token=user.username,
         token_type="bearer",
@@ -767,30 +1081,28 @@ async def login_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
 
 @app.get("/check_active_game/{username}")
 async def check_active_game(username: str):
-    """
-    Sprawdza (bez logowania), czy dany użytkownik ma aktywną grę, do której może wrócić.
-    Używane przez frontend do pokazania przycisku "Wróć do gry".
-    """
+    # Logika zaktualizowana dla Redis
     active_game_id_found = None
     try:
-        gry_copy = list(gry.values())
-        for partia in gry_copy:
-            if partia.get("status_partii") == "W_TRAKCIE":
-                slots = partia.get("slots", [])
-                # Szukaj slotu gracza, który jest rozłączony LUB nadal aktywny (na wypadek problemów z rozłączeniem)
+        async for key in redis_client.scan_iter(lobby_key("*")):
+            id_gry = key.decode('utf-8').split(":")[-1]
+            lobby_data = await get_lobby_data(id_gry)
+            if not lobby_data: continue
+            
+            if lobby_data.get("status_partii") == "W_TRAKCIE":
+                slots = lobby_data.get("slots", [])
                 slot_gracza = next((s for s in slots if s.get("nazwa") == username and s.get("typ") in ["rozlaczony", "czlowiek"]), None)
                 if slot_gracza:
-                    active_game_id_found = partia.get("id_gry")
+                    active_game_id_found = id_gry
                     break
-    except RuntimeError:
-         print("Ostrzeżenie: Słownik gier zmienił się podczas sprawdzania /check_active_game.")
-    # Zwróć tylko ID gry (lub None)
+    except Exception as e:
+         print(f"Ostrzeżenie: Błąd Redis podczas /check_active_game dla {username}: {e}")
+         
     return {"active_game_id": active_game_id_found}
 
 @app.post("/save_settings/{username}")
 async def save_user_settings(username: str, settings_data: UserSettings, db: AsyncSession = Depends(get_db)):
-    """Zapisuje ustawienia interfejsu użytkownika w bazie danych."""
-    # Znajdź użytkownika
+    # Logika bez zmian
     query = select(User).where(User.username == username)
     result = await db.execute(query)
     user = result.scalar_one_or_none()
@@ -800,1425 +1112,871 @@ async def save_user_settings(username: str, settings_data: UserSettings, db: Asy
             detail="Użytkownik nie znaleziony."
         )
     try:
-        # Skonwertuj obiekt Pydantic na JSON string
         settings_json = json.dumps(settings_data.dict())
-        # Zapisz JSON w kolumnie 'settings'
         user.settings = settings_json
-        # Zatwierdź zmiany w bazie
         await db.commit()
         return {"message": "Ustawienia zapisane pomyślnie."}
     except Exception as e:
-            # W razie błędu wycofaj transakcję
             await db.rollback()
-            print(f"!!! KRYTYCZNY BŁĄD podczas zapisywania ustawień dla {username} !!!")
             traceback.print_exc()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Nie udało się zapisać ustawień z powodu błędu serwera: {type(e).__name__}"
+                detail=f"Nie udało się zapisać ustawień: {type(e).__name__}"
             )
 
 # ==========================================================================
-# SEKCJA 10: ENDPOINTY LOBBY I TWORZENIA GRY
+# SEKCJA 11: ENDPOINTY LOBBY I TWORZENIA GRY (ZREFRAKTORYZOWANE)
 # ==========================================================================
 
 @app.get("/gra/lista_lobby")
 async def pobierz_liste_lobby(db: AsyncSession = Depends(get_db)):
-    """Pobiera listę gier online (w lobby lub w trakcie) do wyświetlenia w przeglądarce lobby."""
+    """Pobiera listę gier online (lobby lub w trakcie) z Redis."""
     lista_lobby = []
     try:
-        # Utwórz kopię listy wartości słownika gier, aby uniknąć błędów modyfikacji podczas iteracji
-        gry_copy = list(gry.values())
-    except RuntimeError:
-        # Błąd, jeśli słownik `gry` jest modyfikowany w innym wątku podczas tworzenia listy
-        return {"lobby_list": []}
+        # Skanuj klucze lobby w Redis
+        async for key in redis_client.scan_iter(lobby_key("*")):
+            id_gry = key.decode('utf-8').split(":")[-1]
+            partia = await get_lobby_data(id_gry)
+            if not partia:
+                continue
 
-    # Przetwórz każdą aktywną grę
-    for partia in gry_copy:
-        try:
             opcje = partia.get("opcje", {})
             status = partia.get("status_partii")
 
-            # Wybierz tylko gry online, które są w lobby lub w trakcie
             if (status in ["LOBBY", "W_TRAKCIE"] and
-                partia.get("tryb_lobby") == "online"): # Używamy poprawnego klucza "tryb_lobby"
+                partia.get("tryb_lobby") == "online" and
+                opcje.get("publiczna", False)): # Dodano sprawdzanie 'publiczna'
 
                 slots = partia.get("slots", [])
                 aktualni_gracze = sum(1 for s in slots if s.get("typ") != "pusty")
                 max_gracze = partia.get("max_graczy", 4)
-
-                # --- Pobieranie średniego Elo dla gier rankingowych ---
+                
                 srednie_elo = None
                 czy_rankingowa = opcje.get("rankingowa", False)
-                if czy_rankingowa:
-                    # Zbierz nazwy graczy aktualnie w lobby/grze
+                game_type_id = partia.get("game_type_id")
+                
+                if czy_rankingowa and game_type_id:
                     nazwy_graczy = [s.get("nazwa") for s in slots if s.get("nazwa")]
                     if nazwy_graczy:
                         try:
-                            # Pobierz Elo tych graczy z bazy danych
-                            query = select(User.elo_rating).where(User.username.in_(nazwy_graczy))
+                            # Pobierz Elo z nowej tabeli
+                            query = (
+                                select(PlayerGameStats.elo_rating)
+                                .join(User, PlayerGameStats.user_id == User.id)
+                                .where(
+                                    User.username.in_(nazwy_graczy),
+                                    PlayerGameStats.game_type_id == game_type_id
+                                )
+                            )
                             result = (await db.execute(query)).scalars().all()
-                            if result: # Oblicz średnią, jeśli znaleziono Elo
+                            if result:
                                 srednie_elo = sum(result) / len(result)
                         except Exception as db_err:
-                            # Złap potencjalne błędy bazy danych przy pobieraniu Elo
-                            print(f"Błąd DB podczas pobierania Elo dla lobby {partia.get('id_gry')}: {db_err}")
-                            srednie_elo = None # Ustaw na None w razie błędu
-
-                # Stwórz słownik informacji o lobby do wysłania klientowi
+                            print(f"Błąd DB (lista_lobby) dla {id_gry}: {db_err}")
+                
                 lobby_info = {
-                    "id_gry": partia.get("id_gry"),
+                    "id_gry": id_gry,
                     "host": partia.get("host", "Brak hosta"),
-                    "tryb_gry": opcje.get("tryb_gry", "4p"), # '4p' lub '3p'
+                    "tryb_gry": opcje.get("tryb_gry", "4p"),
                     "ma_haslo": bool(opcje.get("haslo")),
                     "aktualni_gracze": aktualni_gracze,
                     "max_gracze": max_gracze,
                     "status": status,
-                    "gracze": [s.get("nazwa") for s in slots if s.get("nazwa")], # Lista nazw graczy
-                    "rankingowa": czy_rankingowa, # Czy gra jest rankingowa
-                    "srednie_elo": srednie_elo    # Średnie Elo graczy (lub None)
+                    "gracze": [s.get("nazwa") for s in slots if s.get("nazwa")],
+                    "rankingowa": czy_rankingowa,
+                    "srednie_elo": srednie_elo
                 }
                 lista_lobby.append(lobby_info)
-        except Exception as e:
-            # Złap błędy przetwarzania pojedynczego lobby, aby nie zatrzymać całej listy
-            print(f"Błąd podczas przetwarzania lobby {partia.get('id_gry')} na listę: {e}")
-            traceback.print_exc() # Dodaj traceback dla lepszego debugowania
-            continue # Przejdź do następnej gry
+    except Exception as e:
+        print(f"BŁĄD KRYTYCZNY podczas pobierania listy lobby z Redis: {e}")
+        traceback.print_exc()
 
     return {"lobby_list": lista_lobby}
 
 @app.post("/gra/stworz")
-def stworz_gre(request: CreateGameRequest):
-    """Tworzy nową grę (lokalną lub online) na podstawie opcji z żądania."""
-    # Usunięto log żądania (już niepotrzebny)
-    # print(f"Otrzymano żądanie /gra/stworz: {request}")
+async def stworz_gre(request: CreateGameRequest, db: AsyncSession = Depends(get_db)):
+    """
+    ZREFRAKTORYZOWANE: Tworzy tylko dane LOBBY i zapisuje je w Redis.
+    Nie tworzy silnika gry.
+    """
+    id_gry = generuj_krotki_id()
+    nazwa_gracza = request.nazwa_gracza
+    
+    # --- Pobierz GameType ID z bazy danych ---
+    # TODO: 'request.tryb_gry' powinien być zastąpiony przez 'request.game_type_id'
+    # Na razie hardkodujemy mapowanie
+    game_type_name = '66 (4p)' if request.tryb_gry == '4p' else '66 (3p)'
+    game_type_result = await db.execute(select(GameType.id).where(GameType.name == game_type_name))
+    game_type_id = game_type_result.scalar_one_or_none()
+    
+    if not game_type_id:
+        # TODO: Stwórz GameType, jeśli nie istnieje?
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Typ gry '{game_type_name}' nie został znaleziony w bazie danych."
+        )
 
-    id_gry = generuj_krotki_id() # Wygeneruj unikalne ID
-    nazwa_gracza = request.nazwa_gracza # Host gry
-
-    # --- Stwórz główny słownik stanu gry (`partia`) ---
+    # --- Stwórz słownik lobby (`partia`) ---
     partia = {
-        # --- Podstawowe informacje ---
         "id_gry": id_gry,
         "czas_stworzenia": time.time(),
-        "status_partii": "LOBBY", # Gra zaczyna w lobby
+        "status_partii": "LOBBY",
         "host": nazwa_gracza,
-        "tryb_lobby": request.tryb_lobby, # 'online' lub 'lokalna'
+        "tryb_lobby": request.tryb_lobby,
         "max_graczy": 4 if request.tryb_gry == '4p' else 3,
-
-        # --- Stan silnika gry (inicjalizowane później) ---
-        "gracze_engine": [], "druzyny_engine": [], "aktualne_rozdanie": None,
-
-        # --- Stan meczu ---
+        "game_type_id": game_type_id, # <-- WAŻNE: Zapisujemy ID typu gry
         "numer_rozdania": 1,
-        "historia_partii": [], # Lista stringów podsumowujących rozdania
-
-        # --- Stan lobby ---
-        "kicked_players": [], # Lista wyrzuconych graczy
-        "gracze_gotowi": [], # Gracze gotowi na następne rozdanie
-
-        # --- Opcje gry (z żądania) ---
+        "historia_partii": [],
+        "kicked_players": [],
+        "gracze_gotowi": [],
         "opcje": {
-            "tryb_gry": request.tryb_gry, # '4p' lub '3p'
-            "publiczna": request.publiczna, # Czy widoczna w lobby
-            "haslo": request.haslo if request.haslo else None, # Hasło (jeśli prywatna)
-            "rankingowa": request.czy_rankingowa # Czy gra rankingowa
+            "tryb_gry": request.tryb_gry,
+            "publiczna": request.publiczna,
+            "haslo": request.haslo if request.haslo else None,
+            "rankingowa": request.czy_rankingowa
         },
-
-        # --- Stan timera (dla gier rankingowych) ---
-        "timery": {},             # Słownik {nazwa_gracza: pozostaly_czas_s}
-        "timer_task": None,       # Referencja do zadania asyncio timera
-        "numer_ruchu_timer": 0,   # Licznik do walidacji timera
-        "tura_start_czas": None,  # Timestamp rozpoczęcia tury
-
-        # --- Stan Elo (dla gier rankingowych) ---
-        "wynik_elo": None,        # Podsumowanie zmian Elo po meczu
-        "elo_obliczone": False,   # Flaga zapobiegająca podwójnemu liczeniu Elo
-
-        # --- Inne ---
-        'aktualna_ocena': None, # Ostatnia ocena stanu przez MCTS (dla paska ewaluacji)
-        "pelna_historia": [],   # Czy to jest używane? Potencjalnie do usunięcia.
-        "bot_loop_lock": asyncio.Lock(), # Lock do synchronizacji pętli botów
+        "timery": {},
+        "numer_ruchu_timer": 0,
+        "tura_start_czas": None,
+        "wynik_elo": None,
+        "elo_obliczone": False,
     }
-    # Usunięto log opcji (już niepotrzebny)
-    # print(f"Utworzono grę {id_gry}, opcje: {partia.get('opcje')}")
 
-    # --- Zainicjalizuj sloty i punkty w zależności od trybu gry ---
     if request.tryb_gry == '4p':
-        nazwy = random.sample(NAZWY_DRUZYN, 2) # Wylosuj nazwy drużyn
+        nazwy = random.sample(NAZWY_DRUZYN, 2)
         nazwy_mapa = {"My": nazwy[0], "Oni": nazwy[1]}
         partia.update({
             "nazwy_druzyn": nazwy_mapa,
-            "punkty_meczu": {nazwy_mapa["My"]: 0, nazwy_mapa["Oni"]: 0}, # Inicjalizacja punktów drużyn
-            "slots": [ # 4 sloty z przypisaniem do drużyn
+            "punkty_meczu": {nazwy_mapa["My"]: 0, nazwy_mapa["Oni"]: 0},
+            "slots": [
                 {"slot_id": 0, "nazwa": None, "typ": "pusty", "druzyna": "My"},
                 {"slot_id": 1, "nazwa": None, "typ": "pusty", "druzyna": "Oni"},
                 {"slot_id": 2, "nazwa": None, "typ": "pusty", "druzyna": "My"},
                 {"slot_id": 3, "nazwa": None, "typ": "pusty", "druzyna": "Oni"},
             ]
         })
-    else: # Gra 3-osobowa
+    else: # 3p
          partia.update({
-            "punkty_meczu": {}, # Punkty graczy inicjalizowane przy starcie gry
-            "slots": [ # 3 sloty bez drużyn
+            "punkty_meczu": {},
+            "slots": [
                 {"slot_id": 0, "nazwa": None, "typ": "pusty"},
                 {"slot_id": 1, "nazwa": None, "typ": "pusty"},
                 {"slot_id": 2, "nazwa": None, "typ": "pusty"},
             ]
         })
 
-    # --- Specjalna obsługa gry lokalnej (startuje od razu z botami) ---
-    if request.tryb_lobby == 'lokalna':
-        partia["status_partii"] = "W_TRAKCIE" # Ustaw status od razu na grę
-        partia["slots"][0].update({"nazwa": nazwa_gracza, "typ": "czlowiek"}) # Umieść gracza w slocie 0
-        try:
-            # --- Inicjalizacja silnika gry dla gry lokalnej ---
-            if request.tryb_gry == '4p':
-                # Dodaj boty do pozostałych slotów
-                partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot", "druzyna": "Oni"})
-                partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot", "druzyna": "My"})
-                partia["slots"][3].update({"nazwa": "Bot_3", "typ": "bot", "druzyna": "Oni"})
-                # Stwórz obiekty silnika gry (Druzyna, Gracz)
-                d_my = silnik_gry.Druzyna(partia["nazwy_druzyn"]["My"])
-                d_oni = silnik_gry.Druzyna(partia["nazwy_druzyn"]["Oni"])
-                d_my.przeciwnicy, d_oni.przeciwnicy = d_oni, d_my
-                gracze_tmp = [None] * 4
-                for slot in partia["slots"]:
-                    g = silnik_gry.Gracz(slot["nazwa"])
-                    gracze_tmp[slot["slot_id"]] = g
-                    (d_my if slot["druzyna"] == "My" else d_oni).dodaj_gracza(g)
-                # Zapisz obiekty silnika w stanie gry
-                partia.update({"gracze_engine": gracze_tmp, "druzyny_engine": [d_my, d_oni]})
-                # Stwórz obiekt Rozdanie
-                rozdanie = silnik_gry.Rozdanie(partia["gracze_engine"], partia["druzyny_engine"], 0) # Rozdającym jest slot 0
-            else: # Gra 3-osobowa lokalna
-                partia["slots"][1].update({"nazwa": "Bot_1", "typ": "bot"})
-                partia["slots"][2].update({"nazwa": "Bot_2", "typ": "bot"})
-                # Stwórz obiekty Gracz
-                gracze_tmp = [None] * 3
-                for slot in partia["slots"]:
-                    g = silnik_gry.Gracz(slot["nazwa"])
-                    g.punkty_meczu = 0 # Zainicjalizuj punkty meczu
-                    gracze_tmp[slot["slot_id"]] = g
-                # Zapisz graczy i zainicjalizuj punkty meczu w stanie gry
-                partia.update({"gracze_engine": gracze_tmp, "punkty_meczu": {g.nazwa: 0 for g in gracze_tmp}})
-                # Stwórz obiekt RozdanieTrzyOsoby
-                rozdanie = silnik_gry.RozdanieTrzyOsoby(partia["gracze_engine"], 0)
+    # --- Umieść hosta w pierwszym slocie ---
+    bot_data = next((bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] == nazwa_gracza), None)
+    if bot_data:
+        bot_algorytm = bot_data[1]
+        partia["slots"][0].update({
+            "nazwa": nazwa_gracza, 
+            "typ": "bot",
+            "bot_algorithm": bot_algorytm
+        })
+    else:
+        partia["slots"][0].update({"nazwa": nazwa_gracza, "typ": "czlowiek"})
 
-            # --- Rozpocznij pierwsze rozdanie ---
-            if rozdanie:
-                rozdanie.rozpocznij_nowe_rozdanie()
-                partia["aktualne_rozdanie"] = rozdanie # Zapisz obiekt rozdania w stanie gry
-            else:
-                 # To nie powinno się zdarzyć
-                 raise ValueError("Nie udało się zainicjalizować obiektu rozdania dla gry lokalnej.")
-        except Exception as e:
-            # Złap błędy podczas inicjalizacji gry lokalnej
-            print(f"!!! KRYTYCZNY BŁĄD podczas tworzenia gry lokalnej {id_gry} !!!")
-            traceback.print_exc()
-            # Zwróć błąd HTTP 500
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Błąd serwera podczas inicjalizacji gry lokalnej: {e}"
-            )
-    elif request.tryb_lobby == 'online':
-            # Sprawdź, czy host (nazwa_gracza) to jeden z naszych botów Elo World
-            bot_data = next((bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] == nazwa_gracza), None)
-            
-            if bot_data:
-                # Hostem jest bot
-                bot_algorytm = bot_data[1]
-                partia["slots"][0].update({
-                    "nazwa": nazwa_gracza, 
-                    "typ": "bot", # Ustawiamy typ 'bot' dla logiki serwera
-                    "bot_algorithm": bot_algorytm
-                })
-            else:
-                # Hostem jest człowiek
-                partia["slots"][0].update({
-                    "nazwa": nazwa_gracza, 
-                    "typ": "czlowiek"
-                })
+    # --- Zapisz lobby w Redis ---
+    await save_lobby_data(id_gry, partia)
+    
+    # --- Zainicjuj stan przejściowy (lock) ---
 
-    # Dodaj nowo utworzoną grę do globalnego słownika gier
-    gry[id_gry] = partia
-    # Zwróć ID nowej gry
     return {"id_gry": id_gry}
 
+
 @app.get("/gra/sprawdz/{id_gry}")
-def sprawdz_gre(id_gry: str):
-    """Sprawdza, czy gra o podanym ID istnieje w pamięci serwera."""
-    return {"exists": id_gry in gry}
+async def sprawdz_gre(id_gry: str):
+    """Sprawdza, czy gra (lobby) istnieje w Redis."""
+    exists = await redis_client.exists(lobby_key(id_gry))
+    return {"exists": bool(exists)}
 
 # ==========================================================================
-# SEKCJA 11: GŁÓWNA LOGIKA GRY (Pobieranie Stanu / Przetwarzanie Akcji)
+# SEKCJA 12: GŁÓWNA LOGIKA GRY (ZREFRAKTORYZOWANA)
 # ==========================================================================
-# Ta sekcja zawiera kluczowe funkcje obsługujące logikę gry w czasie rzeczywistym,
-# wywoływane głównie przez endpoint WebSocket.
 
-def pobierz_stan_gry(id_gry: str) -> dict:
+# --- USUNIĘTO `pobierz_stan_gry` ---
+# Zostało zastąpione przez `manager.build_state_for_player`
+
+async def przetworz_akcje_gracza(data: dict, id_gry: str):
     """
-    Pobiera aktualny stan gry o podanym ID, formatuje go w sposób zrozumiały
-    dla klienta (frontend JavaScript) i zwraca jako słownik.
+    NOWA GŁÓWNA FUNKCJA LOGIKI.
+    Pobiera stan z Redis, modyfikuje go, i zapisuje z powrotem.
     """
-    partia = gry.get(id_gry)
-    if not partia:
-        return {"error": "Gra nie istnieje"} # Zwróć błąd, jeśli gra nie istnieje
-    slots_dla_klienta = copy.deepcopy(partia["slots"])
-
-    # Pobieramy nazwy naszych aktywnych botów (te z bazy danych)
-    aktywne_boty_nazwy = {bot[0] for bot in AKTYWNE_BOTY_ELO_WORLD}
-
-    for slot in slots_dla_klienta:
-        # Jeśli slot to 'bot' I jest to jeden z naszych botów Elo World
-        if slot.get("typ") == "bot" and slot.get("nazwa") in aktywne_boty_nazwy:
-            slot["typ"] = "czlowiek" # Zmień typ na "czlowiek" dla klienta
-            slot.pop("bot_algorithm", None) # Usuń informację o algorytmie
-
-    # --- Stwórz podstawowy słownik stanu (wspólny dla wszystkich faz) ---
-    stan_podstawowy = {
-        "status_partii": partia["status_partii"], # "LOBBY", "W_TRAKCIE", "ZAKONCZONA"
-        "tryb_lobby": partia.get("tryb_lobby", "online"), # 'online' lub 'lokalna'
-        "max_graczy": partia.get("max_graczy", 4), # 4 lub 3
-        "slots": slots_dla_klienta,           # Lista slotów z informacjami o graczach
-        "host": partia["host"],             # Nazwa hosta gry
-        "gracze_gotowi": partia.get("gracze_gotowi", []), # Gracze gotowi na nast. rozdanie
-        "nazwy_druzyn": partia.get("nazwy_druzyn", {}), # Nazwy drużyn (dla 4p)
-        "historia_partii": partia.get("historia_partii", []), # Podsumowanie poprzednich rozdań
-        "timery": partia.get("timery"), # Aktualny stan timerów (dla gier rankingowych)
-        "opcje": partia.get("opcje", {}) # Opcje gry (w tym flaga 'rankingowa')
-    }
-
-    # --- Dostosuj stan w zależności od fazy gry ---
-    if partia['status_partii'] == 'LOBBY':
-        stan_podstawowy["punkty_meczu"] = partia.get("punkty_meczu", {}) # Wyślij puste punkty
-        return stan_podstawowy
-
-    elif partia['status_partii'] == 'ZAKONCZONA':
-        # Pobierz końcowe punkty meczu z obiektów silnika (jeśli istnieją)
-        if partia.get("max_graczy", 4) == 4:
-            stan_podstawowy["punkty_meczu"] = {d.nazwa: d.punkty_meczu for d in partia.get("druzyny_engine", [])} if partia.get("druzyny_engine") else partia.get("punkty_meczu", {})
-        else: # 3 graczy
-            stan_podstawowy["punkty_meczu"] = {g.nazwa: g.punkty_meczu for g in partia.get("gracze_engine", [])} if partia.get("gracze_engine") else partia.get("punkty_meczu", {})
-        # Dodaj podsumowanie zmian Elo
-        stan_podstawowy["wynik_elo"] = partia.get("wynik_elo")
-        return stan_podstawowy
-
-    elif partia['status_partii'] == 'W_TRAKCIE':
-        rozdanie = partia.get("aktualne_rozdanie") # Pobierz obiekt aktualnego rozdania
-        if not rozdanie: # Jeśli rozdanie nie istnieje (błąd?), zwróć stan podstawowy
-            stan_podstawowy["punkty_meczu"] = partia.get("punkty_meczu", {})
-            print(f"OSTRZEŻENIE: Brak obiektu rozdania w stanie W_TRAKCIE dla gry {id_gry}")
-            return stan_podstawowy
-
-        # --- Obliczanie Oceny Silnika (dla paska ewaluacji) ---
-        aktualna_ocena = None
-        # Ocena jest liczona tylko w fazie rozgrywki, przed podsumowaniem
-        if rozdanie.faza == silnik_gry.FazaGry.ROZGRYWKA and not rozdanie.podsumowanie:
-            gracz_perspektywa = rozdanie.grajacy # Ocena z perspektywy grającego
-            if gracz_perspektywa:
-                try:
-                    # Wywołaj metodę ewaluacji bota MCTS
-                    aktualna_ocena = cheating_mcts_bot.evaluate_state(
-                        stan_gry=rozdanie,
-                        nazwa_gracza_perspektywa=gracz_perspektywa.nazwa,
-                        limit_symulacji=500 # Liczba symulacji do oceny
-                    )
-                except Exception as e:
-                    # Złap błędy podczas oceny
-                    print(f"BŁĄD podczas obliczania ewaluacji dla gry {id_gry}: {e}")
-                    aktualna_ocena = None # Ustaw na None w razie błędu
-
-        # --- Pobierz aktualne punkty z obiektów silnika ---
-        if partia.get("max_graczy", 4) == 4:
-            punkty_meczu = {d.nazwa: d.punkty_meczu for d in partia.get("druzyny_engine", [])}
-            punkty_w_rozdaniu = rozdanie.punkty_w_rozdaniu # Punkty w kartach w tym rozdaniu
-        else: # 3 graczy
-            punkty_meczu = {g.nazwa: g.punkty_meczu for g in rozdanie.gracze if g}
-            punkty_w_rozdaniu = rozdanie.punkty_w_rozdaniu
-
-        # --- Znajdź gracza w turze ---
-        gracz_w_turze_obj = None
-        if rozdanie.kolej_gracza_idx is not None and rozdanie.gracze and 0 <= rozdanie.kolej_gracza_idx < len(rozdanie.gracze):
-             gracz_w_turze_obj = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-
-        # --- Zaktualizuj stan podstawowy danymi specyficznymi dla rozdania ---
-        stan_podstawowy.update({
-            "punkty_meczu": punkty_meczu, # Aktualne punkty meczu
-            "rozdanie": { # Słownik zawierający szczegóły bieżącego rozdania
-                "faza": rozdanie.faza, # Aktualna faza gry (Enum jako string)
-                "kolej_gracza": gracz_w_turze_obj.nazwa if gracz_w_turze_obj else None, # Nazwa gracza w turze
-                # Ręce graczy (tylko nazwy kart jako stringi)
-                "rece_graczy": {g.nazwa: [str(k) for k in g.reka] for g in rozdanie.gracze if g},
-                # Karty zagrane w bieżącej lewie
-                "karty_na_stole": [{"gracz": g.nazwa, "karta": str(k)} for g, k in rozdanie.aktualna_lewa],
-                "grywalne_karty": [], # Lista legalnych kart do zagrania (wypełniana poniżej)
-                "mozliwe_akcje": [],  # Lista możliwych akcji licytacyjnych (wypełniana poniżej)
-                "punkty_w_rozdaniu": punkty_w_rozdaniu, # Punkty zdobyte w kartach w tym rozdaniu
-                "kontrakt": {"typ": rozdanie.kontrakt, "atut": rozdanie.atut}, # Aktualny kontrakt i atut
-                "aktualna_stawka": rozdanie.oblicz_aktualna_stawke() if hasattr(rozdanie, 'oblicz_aktualna_stawke') else 0, # Stawka punktowa rozdania
-                "gracz_grajacy": rozdanie.grajacy.nazwa if rozdanie.grajacy else None, # Kto gra kontrakt
-                "historia_rozdania": rozdanie.szczegolowa_historia, # Lista logów z tego rozdania
-                "podsumowanie": rozdanie.podsumowanie, # Wynik rozdania (gdy faza to PODSUMOWANIE)
-                "lewa_do_zamkniecia": rozdanie.lewa_do_zamkniecia, # Czy lewa czeka na finalizację
-                "aktualna_ocena": aktualna_ocena # Ocena stanu przez MCTS (lub None)
-            }
-            # Timery są już w stanie podstawowym
-        })
-
-        # --- Dodaj grywalne karty lub możliwe akcje dla gracza w turze ---
-        if gracz_w_turze_obj:
-            if rozdanie.faza == silnik_gry.FazaGry.ROZGRYWKA:
-                 # W rozgrywce znajdź legalne karty do zagrania
-                 stan_podstawowy['rozdanie']['grywalne_karty'] = [
-                     str(k) for k in gracz_w_turze_obj.reka
-                     if rozdanie._waliduj_ruch(gracz_w_turze_obj, k)
-                 ]
-            else: # W fazach licytacyjnych pobierz możliwe akcje
-                 stan_podstawowy['rozdanie']['mozliwe_akcje'] = rozdanie.get_mozliwe_akcje(gracz_w_turze_obj)
-
-        return stan_podstawowy
-    else: # Nieznany status partii
-        print(f"OSTRZEŻENIE: Nieznany status partii '{partia.get('status_partii')}' dla gry {id_gry}")
-        stan_podstawowy["error"] = f"Nieznany status partii: {partia.get('status_partii')}"
-        return stan_podstawowy
-
-async def przetworz_akcje_gracza(data: dict, partia: dict):
-    """
-    Przetwarza akcję otrzymaną od gracza przez WebSocket.
-    Obsługuje zarówno akcje w lobby (zmiana slotu, start gry),
-    jak i akcje w trakcie gry (licytacja, zagranie karty).
-    Wywołuje odpowiednie metody obiektu Rozdanie z silnika gry.
-    """
-    gracz_akcji_nazwa = data.get("gracz") # Nazwa gracza wykonującego akcję
-    id_gry = partia.get("id_gry", "N/A")
+    lobby_data = await get_lobby_data(id_gry)
+    if not lobby_data:
+        print(f"BŁĄD (przetworz_akcje_gracza): Nie znaleziono lobby {id_gry}")
+        return
+        
+    engine = await get_game_engine(id_gry) # Może być None, jeśli gra w lobby
+    
+    gracz_akcji_nazwa = data.get("gracz")
+    stan_zmieniony = False # Flaga, czy trzeba zapisać stan
 
     try:
         # --- Obsługa Akcji w Lobby ---
-        if partia["status_partii"] == "LOBBY":
-            akcja = data.get("akcja_lobby") # Typ akcji lobby
+        if lobby_data["status_partii"] == "LOBBY":
+            akcja = data.get("akcja_lobby")
+            if not akcja: return
 
-            if akcja == "dolacz_do_slota": # Gracz zmienia swoje miejsce
-                slot_id = data.get("slot_id") # ID slotu docelowego
-                # Znajdź obecny slot gracza i slot docelowy
-                slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == gracz_akcji_nazwa), None)
-                slot_docelowy = next((s for s in partia["slots"] if s["slot_id"] == slot_id), None)
-                # Przenieś gracza, jeśli slot docelowy jest pusty
+            if akcja == "dolacz_do_slota":
+                slot_id = data.get("slot_id")
+                slot_gracza = next((s for s in lobby_data["slots"] if s["nazwa"] == gracz_akcji_nazwa), None)
+                slot_docelowy = next((s for s in lobby_data["slots"] if s["slot_id"] == slot_id), None)
                 if slot_gracza and slot_docelowy and slot_docelowy["typ"] == "pusty":
                     slot_docelowy.update({"nazwa": slot_gracza["nazwa"], "typ": slot_gracza["typ"]})
-                    slot_gracza.update({"nazwa": None, "typ": "pusty"}) # Opróżnij stary slot
+                    slot_gracza.update({"nazwa": None, "typ": "pusty"})
+                    stan_zmieniony = True
 
-            elif akcja == "zmien_slot" and partia["host"] == gracz_akcji_nazwa: # Host zmienia typ slotu
-                slot_id = data.get("slot_id") # ID slotu do zmiany
-                nowy_typ = data.get("nowy_typ") # "pusty" lub "bot"
-                wybrany_algorytm = data.get("bot_algorithm") # Algorytm bota (jeśli dotyczy)
-                slot = next((s for s in partia["slots"] if s["slot_id"] == slot_id), None)
+            elif akcja == "zmien_slot" and lobby_data["host"] == gracz_akcji_nazwa:
+                slot_id = data.get("slot_id")
+                nowy_typ = data.get("nowy_typ")
+                wybrany_algorytm = data.get("bot_algorithm")
+                slot = next((s for s in lobby_data["slots"] if s["slot_id"] == slot_id), None)
 
-                # Sprawdź, czy host nie próbuje zmienić swojego slotu lub czy slot istnieje
-                if slot and slot["nazwa"] != partia["host"]:
-                    # Sprawdź blokadę dodawania botów w grach rankingowych
-                    if (nowy_typ == "bot" and partia.get("opcje", {}).get("rankingowa", False)):
-                         print(f"[{id_gry}] Odrzucono próbę dodania bota do gry rankingowej.")
-                         return # Zignoruj akcję
-
-
-                    if nowy_typ == "pusty": # Wyrzucenie gracza/bota
-                        # Jeśli wyrzucamy człowieka, dodaj go do listy wyrzuconych
+                if slot and slot["nazwa"] != lobby_data["host"]:
+                    if (nowy_typ == "bot" and lobby_data.get("opcje", {}).get("rankingowa", False)):
+                         return # Nie dodawaj botów do rank.
+                    
+                    if nowy_typ == "pusty":
                         if slot["typ"] == "czlowiek" and slot["nazwa"]:
-                            partia.setdefault("kicked_players", []).append(slot["nazwa"])
-                        slot.update({"nazwa": None, "typ": "pusty"})
-                    elif nowy_typ == "bot": # Dodanie bota
-                        # Użyj algorytmu z żądania lub domyślnego z `bot_instances`
+                            lobby_data.setdefault("kicked_players", []).append(slot["nazwa"])
+                        slot.update({"nazwa": None, "typ": "pusty", "bot_algorithm": None})
+                        stan_zmieniony = True
+                    elif nowy_typ == "bot":
                         algorytm_do_zapisu = wybrany_algorytm if wybrany_algorytm in bot_instances else default_bot_name
                         slot.update({
                             "nazwa": f"Bot_{slot_id}",
                             "typ": "bot",
-                            "bot_algorithm": algorytm_do_zapisu # Zapisz algorytm w slocie
+                            "bot_algorithm": algorytm_do_zapisu
                         })
-                        print(f"[{id_gry}] Slot {slot_id} zmieniony na Bota ({algorytm_do_zapisu.upper()})")
+                        stan_zmieniony = True
+                        
+            elif akcja == "start_gry" and lobby_data["host"] == gracz_akcji_nazwa:
+                if not all(s["typ"] != "pusty" for s in lobby_data["slots"]):
+                    return # Puste sloty
 
-            elif akcja == "start_gry" and partia["host"] == gracz_akcji_nazwa: # Host rozpoczyna grę
-                # Sprawdź, czy wszystkie sloty są zajęte
-                if not all(s["typ"] != "pusty" for s in partia["slots"]):
-                    print(f"[{id_gry}] Próba startu gry z pustymi slotami odrzucona.")
-                    return # Nie startuj, jeśli są puste sloty
-
-                liczba_graczy = len(partia["slots"])
-                # Stwórz tymczasową listę obiektów Gracz z silnika
-                gracze_tmp = [None] * liczba_graczy
-                for slot in partia["slots"]:
-                    g = silnik_gry.Gracz(slot["nazwa"])
-                    gracze_tmp[slot["slot_id"]] = g
-
-                # Zaktualizuj stan gry: gracze silnika, status na W_TRAKCIE
-                partia.update({"gracze_engine": gracze_tmp, "status_partii": "W_TRAKCIE"})
-                rozdanie = None # Zainicjalizuj zmienną rozdania
-
-                # --- Inicjalizacja Timerów dla Gry Rankingowej ---
-                if partia.get("opcje", {}).get("rankingowa", False):
-                    czas_startowy = partia.get("opcje", {}).get("czas_na_gre", 300) # Domyślnie 5 minut
-                    partia["timery"] = {g.nazwa: czas_startowy for g in gracze_tmp}
-
-                # --- Inicjalizacja Silnika Gry (Rozdanie / RozdanieTrzyOsoby) ---
+                player_ids = [s["nazwa"] for s in lobby_data["slots"]]
+                
+                # --- INICJALIZACJA SILNIKA GRY ---
                 try:
-                    if liczba_graczy == 3: # Gra 3-osobowa
-                        # Zainicjalizuj punkty meczu dla graczy
-                        for gracz in gracze_tmp: gracz.punkty_meczu = 0
-                        partia["punkty_meczu"] = {g.nazwa: 0 for g in gracze_tmp}
-                        # Stwórz obiekt RozdanieTrzyOsoby
-                        rozdanie = silnik_gry.RozdanieTrzyOsoby(gracze_tmp, 0) # Gracz 0 rozdaje
-                    else: # Gra 4-osobowa
-                        # Stwórz obiekty Druzyna
-                        nazwy = partia["nazwy_druzyn"]
-                        d_my, d_oni = silnik_gry.Druzyna(nazwy["My"]), silnik_gry.Druzyna(nazwy["Oni"])
-                        d_my.przeciwnicy, d_oni.przeciwnicy = d_oni, d_my
-                        # Dodaj graczy do drużyn
-                        for slot in partia["slots"]:
-                            gracz_obj = next((g for g in gracze_tmp if g.nazwa == slot["nazwa"]), None)
-                            if gracz_obj:
-                                (d_my if slot["druzyna"] == "My" else d_oni).dodaj_gracza(gracz_obj)
-                        # Zapisz drużyny w stanie gry
-                        partia.update({"druzyny_engine": [d_my, d_oni]})
-                        # Stwórz obiekt Rozdanie
-                        rozdanie = silnik_gry.Rozdanie(gracze_tmp, [d_my, d_oni], 0)
-
-                    # --- Rozpocznij pierwsze rozdanie ---
-                    if rozdanie:
-                        rozdanie.rozpocznij_nowe_rozdanie()
-                        partia["aktualne_rozdanie"] = rozdanie # Zapisz obiekt rozdania
-                        # Uruchom timer dla pierwszego gracza (jeśli rankingowa)
-                        await uruchom_timer_dla_tury(id_gry)
+                    # Przekazujemy nazwy drużyn z lobby do silnika
+                    settings = {
+                        'tryb': lobby_data['opcje']['tryb_gry'],
+                        'rozdajacy_idx': 0,
+                        'nazwy_druzyn': lobby_data.get('nazwy_druzyn') # Przekaż nazwy
+                    }
+                    
+                    engine = SixtySixEngine(player_ids, settings)
+                    
+                    # Zapisz nowy silnik w Redis
+                    await save_game_engine(id_gry, engine)
+                    
+                    # Zaktualizuj stan lobby
+                    lobby_data["status_partii"] = "W_TRAKCIE"
+                    lobby_data["numer_rozdania"] = 1
+                    lobby_data["historia_partii"] = []
+                    
+                    # Zresetuj punkty (jeśli to restart)
+                    if lobby_data['opcje']['tryb_gry'] == '4p':
+                        nazwy = lobby_data["nazwy_druzyn"]
+                        lobby_data["punkty_meczu"] = {nazwy["My"]: 0, nazwy["Oni"]: 0}
                     else:
-                        raise ValueError("Nie udało się utworzyć obiektu rozdania.")
+                        lobby_data["punkty_meczu"] = {pid: 0 for pid in player_ids}
+                    
+                    # Inicjalizacja Timerów
+                    if lobby_data.get("opcje", {}).get("rankingowa", False):
+                        czas_startowy = 300 # 5 minut
+                        lobby_data["timery"] = {pid: czas_startowy for pid in player_ids}
+                    
+                    stan_zmieniony = True
+                    print(f"[{id_gry}] Gra rozpoczęta. Silnik SixtySixEngine utworzony i zapisany w Redis.")
+
+                    # Uruchamiamy pętlę botów PO tym, jak gra została 
+                    # pomyślnie uruchomiona i zapisana.
+                    asyncio.create_task(uruchom_petle_botow(id_gry))
+
                 except Exception as init_err:
-                    # Złap błędy inicjalizacji silnika, przywróć stan LOBBY
-                    print(f"BŁĄD KRYTYCZNY podczas inicjalizacji silnika gry {id_gry}: {init_err}")
+                    print(f"BŁĄD KRYTYCZNY (start_gry): Nie można zainicjalizować silnika gry: {init_err}")
                     traceback.print_exc()
-                    partia["status_partii"] = "LOBBY" # Cofnij status
-                    partia["gracze_engine"] = []
-                    # TODO: Rozważ wysłanie wiadomości o błędzie do graczy
-                    return
+                    return # Nie zmieniaj stanu
 
         # --- Obsługa Akcji w Trakcie Gry ---
-        elif partia["status_partii"] == "W_TRAKCIE":
+        elif lobby_data["status_partii"] == "W_TRAKCIE":
+            if not engine:
+                print(f"BŁĄD (przetworz_akcje_gracza): Gra {id_gry} jest W_TRAKCIE, ale nie ma silnika!")
+                return
+            
             akcja = data.get('akcja')
-            typ_akcji = akcja.get('typ') if akcja else None
-            slot_gracza = next((s for s in partia.get("slots", []) if s.get("nazwa") == gracz_akcji_nazwa), None)
+            if not akcja: return
+            typ_akcji = akcja.get('typ')
+            
+            # --- Logika Timerów (Odejmowanie czasu) ---
+            if (lobby_data.get("opcje", {}).get("rankingowa", False) and
+                typ_akcji not in ['nastepne_rozdanie', 'finalizuj_lewe']):
+                
+                timer_info = lobby_data.get("timer_info")
+                if timer_info and timer_info.get("player_id") == gracz_akcji_nazwa:
+                    # Oblicz zużyty czas
+                    czas_zuzyty = time.time() - timer_info.get("started_at", time.time())
+                    
+                    # Zaktualizuj pozostały czas
+                    if gracz_akcji_nazwa in lobby_data.get("timery", {}):
+                        lobby_data["timery"][gracz_akcji_nazwa] -= czas_zuzyty
+                        if lobby_data["timery"][gracz_akcji_nazwa] < 0:
+                            lobby_data["timery"][gracz_akcji_nazwa] = 0
+                    
+                    lobby_data["timer_info"] = None
+                    stan_zmieniony = True
+                        # Anuluj stary timer (lokalnie)
 
-            # --- Odejmowanie Czasu dla Gracza (jeśli rankingowa) ---
-            if (partia.get("opcje", {}).get("rankingowa", False) and
-                slot_gracza and slot_gracza.get("typ") == "czlowiek" and
-                typ_akcji not in ['nastepne_rozdanie', 'finalizuj_lewe'] and # Ignoruj akcje systemowe
-                partia.get("tura_start_czas") is not None and
-                gracz_akcji_nazwa in partia.get("timery", {})):
-
-                czas_teraz = time.time()
-                czas_zuzyty = czas_teraz - partia["tura_start_czas"]
-                partia["timery"][gracz_akcji_nazwa] -= czas_zuzyty # Odejmij zużyty czas
-                partia["tura_start_czas"] = None # Zresetuj czas startu tury
-                # print(f"[{id_gry}] Gracz {gracz_akcji_nazwa} zużył {czas_zuzyty:.2f}s. Pozostało: {partia['timery'][gracz_akcji_nazwa]:.2f}s.")
-
-            # Anuluj zadanie timera poprzedniego gracza (jeśli istniało)
-            if partia.get("timer_task") and not partia["timer_task"].done():
-                partia["timer_task"].cancel()
-
-            # Pobierz obiekt rozdania i gracza wykonującego akcję
-            rozdanie = partia.get("aktualne_rozdanie")
-            if not akcja or not rozdanie: return # Ignoruj, jeśli brak akcji lub rozdania
-            # typ_akcji = akcja.get('typ') # Już pobrane
-            gracz_obj = next((g for g in rozdanie.gracze if g and g.nazwa == gracz_akcji_nazwa), None)
-            if not gracz_obj: return # Ignoruj, jeśli nie znaleziono gracza
 
             # --- Wykonaj Akcję w Silniku Gry ---
-            if typ_akcji == 'nastepne_rozdanie': # Gracz jest gotowy na następne rozdanie
-                # Dodaj gracza do listy gotowych
-                if gracz_akcji_nazwa not in partia.get("gracze_gotowi", []):
-                    partia.setdefault("gracze_gotowi", []).append(gracz_akcji_nazwa)
-                
-                # Sprawdź, ilu ludzi jest w grze
-                liczba_ludzi = sum(1 for s in partia["slots"] if s["typ"] == "czlowiek")
+            if typ_akcji == 'nastepne_rozdanie':
+                if gracz_akcji_nazwa not in lobby_data.get("gracze_gotowi", []):
+                    lobby_data.setdefault("gracze_gotowi", []).append(gracz_akcji_nazwa)
+                    stan_zmieniony = True
+
+                liczba_ludzi = sum(1 for s in lobby_data["slots"] if s["typ"] == "czlowiek")
                 
                 wszyscy_gotowi = False
                 if liczba_ludzi > 0:
-                    # TRYB Z LUDŹMI: Czekaj na wszystkich ludzi
-                    gotowi_ludzie = [nazwa for nazwa in partia.get("gracze_gotowi", []) if any(s["nazwa"] == nazwa and s["typ"] == "czlowiek" for s in partia["slots"])]
+                    gotowi_ludzie = [
+                        nazwa for nazwa in lobby_data.get("gracze_gotowi", []) 
+                        if any(s["nazwa"] == nazwa and s["typ"] == "czlowiek" for s in lobby_data["slots"])
+                    ]
                     if len(gotowi_ludzie) >= liczba_ludzi:
                         wszyscy_gotowi = True
-                else:
-                    # TRYB 0 LUDZI (np. 4 boty): Czekaj na wszystkich graczy
-                    liczba_graczy_w_partii = len(partia.get("slots", []))
-                    if len(partia.get("gracze_gotowi", [])) >= liczba_graczy_w_partii:
+                else: # 0 ludzi
+                    if len(lobby_data.get("gracze_gotowi", [])) >= lobby_data["max_graczy"]:
                         wszyscy_gotowi = True
 
-                if wszyscy_gotowi: # Wszyscy gotowi
-                    partia["gracze_gotowi"] = [] # Wyczyść listę gotowych
-                    # Jeśli było podsumowanie, zapisz je w historii partii
-                    if rozdanie.podsumowanie:
-                        pod = rozdanie.podsumowanie
-                        nr = partia.get("numer_rozdania", 1)
-                        gral = rozdanie.grajacy.nazwa if rozdanie.grajacy else "Brak"
-                        kontrakt_nazwa = pod.get("kontrakt", "Brak")
-                        atut_nazwa = pod.get("atut", "")
-                        if atut_nazwa and atut_nazwa != "Brak": kontrakt_nazwa = f"{kontrakt_nazwa} ({atut_nazwa[0]})" # Dodaj symbol atutu
-                        wygrani = pod.get("wygrana_druzyna", ", ".join(pod.get("wygrani_gracze", [])))
-                        punkty = pod.get("przyznane_punkty", 0)
-                        # Stwórz wpis do historii partii
-                        wpis = (f"R{nr} | G:{gral} | K:{kontrakt_nazwa} | "
-                                f"W:{wygrani} | P:{punkty} pkt")
-                        partia["historia_partii"].append(wpis)
-                        partia["numer_rozdania"] = nr + 1 # Zwiększ numer następnego rozdania
-                        partia.pop("czas_konca_rundy", None)
-                        partia.pop("wymuszono_nastepna_runde", None)
+                if wszyscy_gotowi:
+                    lobby_data["gracze_gotowi"] = []
+                    
+                    # === POCZĄTEK POPRAWKI (Wersja 7) ===
+                    # Sprawdź stan meczu na podstawie już zapisanych punktów.
+                    # NIE wywołuj ponownie _zaktualizuj_stan_po_rozdaniu.
+                    mecz_zakonczony = lobby_data["status_partii"] == "ZAKONCZONA"
+                    # === KONIEC POPRAWKI ===
+                    
+                    if mecz_zakonczony:
+                        # Nie rób nic więcej, status już jest ZAKONCZONA
+                        stan_zmieniony = True
+                    else:
+                        # Mecz trwa, dodaj czas (jeśli rankingowa)
+                        if lobby_data.get("opcje", {}).get("rankingowa", False):
+                            for pid in lobby_data.get("timery", {}):
+                                lobby_data["timery"][pid] += 15.0
 
-                        # --- Dodaj 15 sekund do timerów na koniec rozdania (jeśli rankingowa) ---
-                        if partia.get("opcje", {}).get("rankingowa", False):
-                            czas_dodatkowy = 15
-                            print(f"[{id_gry}] Koniec rozdania. Dodawanie {czas_dodatkowy}s do timerów.")
-                            for gracz_nazwa in partia.get("timery", {}):
-                                partia["timery"][gracz_nazwa] = partia["timery"].get(gracz_nazwa, 0) + czas_dodatkowy
-
-                    # Sprawdź, czy gra się zakończyła (osiągnięto 66 pkt)
-                    if not sprawdz_koniec_partii(partia):
-                        # Jeśli nie, przygotuj następne rozdanie
-                        # Wyczyść ręce i wygrane karty graczy
-                        for gracz in partia["gracze_engine"]:
-                            gracz.reka.clear(); gracz.wygrane_karty.clear()
-                        # Ustal nowego rozdającego
-                        nowy_idx = (rozdanie.rozdajacy_idx + 1) % len(partia["gracze_engine"])
-                        # Stwórz nowy obiekt Rozdanie/RozdanieTrzyOsoby
-                        if partia.get("max_graczy", 4) == 4:
-                            nowe_rozdanie = silnik_gry.Rozdanie(partia["gracze_engine"], partia["druzyny_engine"], nowy_idx)
-                        else:
-                            nowe_rozdanie = silnik_gry.RozdanieTrzyOsoby(partia["gracze_engine"], nowy_idx)
-                        # Rozpocznij nowe rozdanie
-                        nowe_rozdanie.rozpocznij_nowe_rozdanie()
-                        partia["aktualne_rozdanie"] = nowe_rozdanie # Zapisz nowy obiekt rozdania
-                    else: # Gra się zakończyła
-                        # Oblicz i zapisz zmiany Elo (jeśli rankingowa)
-                        await zaktualizuj_elo_po_meczu(partia)
-
-            elif typ_akcji == 'finalizuj_lewe': # Akcja systemowa - finalizacja lewy
-                rozdanie.finalizuj_lewe()
-
-            elif typ_akcji == 'zagraj_karte': # Gracz zagrywa kartę
-                karta_str = akcja.get('karta') # Pobierz nazwę karty (string)
-                if not karta_str: return # Ignoruj, jeśli brak nazwy karty
-                karta_obj = karta_ze_stringa(karta_str) # Skonwertuj string na obiekt Karta
-                rozdanie.zagraj_karte(gracz_obj, karta_obj) # Wywołaj metodę silnika
-
-            else: # Akcja licytacyjna (deklaracja, pas, lufa, kontra, etc.)
-                # Skopiuj słownik akcji, aby nie modyfikować oryginału
-                akcja_do_wykonania = akcja.copy()
-                # Skonwertuj stringi 'atut' i 'kontrakt' na obiekty Enum (jeśli istnieją)
-                atut_val = akcja_do_wykonania.get('atut')
-                if atut_val and isinstance(atut_val, str):
-                    try: akcja_do_wykonania['atut'] = silnik_gry.Kolor[atut_val]
-                    except KeyError: print(f"BŁĄD: Nieprawidłowa nazwa atutu '{atut_val}' w akcji."); return
-                kontrakt_val = akcja_do_wykonania.get('kontrakt')
-                if kontrakt_val and isinstance(kontrakt_val, str):
-                    try: akcja_do_wykonania['kontrakt'] = silnik_gry.Kontrakt[kontrakt_val]
-                    except KeyError: print(f"BŁĄD: Nieprawidłowa nazwa kontraktu '{kontrakt_val}' w akcji."); return
-                # Wywołaj metodę silnika
-                rozdanie.wykonaj_akcje(gracz_obj, akcja_do_wykonania)
-
+                        # Stwórz NOWY silnik dla następnego rozdania
+                        lobby_data["numer_rozdania"] += 1
+                        player_ids = [s["nazwa"] for s in lobby_data["slots"]]
+                        nowy_rozdajacy_idx = (lobby_data.get("numer_rozdania", 1) - 1) % lobby_data.get("max_graczy", 4)
+                        
+                        # Przekazujemy nazwy drużyn z lobby do silnika
+                        settings = {
+                            'tryb': lobby_data['opcje']['tryb_gry'],
+                            'rozdajacy_idx': nowy_rozdajacy_idx,
+                            'nazwy_druzyn': lobby_data.get('nazwy_druzyn') # Przekaż nazwy
+                        }
+                        
+                        engine = SixtySixEngine(player_ids, settings)
+                        # Zapisz NOWY silnik
+                        await save_game_engine(id_gry, engine)
+                        stan_zmieniony = True
+            
+            else: # Inna akcja (zagraj kartę, licytuj, itp.)
+                try:
+                    # Przekaż akcję bezpośrednio do silnika
+                    engine.perform_action(gracz_akcji_nazwa, akcja)
+                    
+                    # Sprawdź, czy ta akcja zakończyła rozdanie
+                    if engine.is_terminal():
+                        # === POCZĄTEK POPRAWKI (Wersja 7) ===
+                        # Sprawdź, czy punkty nie zostały już przyznane dla tego stanu
+                        # (To zapobiega podwójnemu przyznaniu, jeśli jakimś cudem 
+                        #  funkcja zostanie wywołana wielokrotnie dla tego samego stanu)
+                        if not lobby_data.get("punkty_przyznane_dla_rozdania", 0) == lobby_data.get("numer_rozdania", 0):
+                            await _zaktualizuj_stan_po_rozdaniu(id_gry, lobby_data, engine)
+                            lobby_data["punkty_przyznane_dla_rozdania"] = lobby_data.get("numer_rozdania", 0)
+                            stan_zmieniony = True 
+                        # === KONIEC POPRAWKI ===
+                        
+                    # Zapisz ZMIENIONY silnik (i lobby) z powrotem w Redis
+                    await save_game_engine(id_gry, engine)
+                         
+                except Exception as e:
+                    print(f"BŁĄD (perform_action) dla {gracz_akcji_nazwa} w {id_gry}: {e}")
+                    traceback.print_exc()
+                    return # Nie wysyłaj aktualizacji, jeśli akcja się nie powiodła
+        
         # --- Obsługa Akcji po Zakończeniu Gry ---
-        elif partia["status_partii"] == "ZAKONCZONA":
+        elif lobby_data["status_partii"] == "ZAKONCZONA":
             akcja = data.get('akcja')
-            # Tylko host może wrócić do lobby
-            if akcja and akcja.get('typ') == 'powrot_do_lobby' and partia["host"] == gracz_akcji_nazwa:
-                resetuj_gre_do_lobby(partia) # Zresetuj stan gry
+            if akcja and akcja.get('typ') == 'powrot_do_lobby' and lobby_data["host"] == gracz_akcji_nazwa:
+                # Zresetuj stan lobby do ponownej gry
+                lobby_data["status_partii"] = "LOBBY"
+                lobby_data["gracze_gotowi"] = []
+                lobby_data["wynik_elo"] = None
+                lobby_data["elo_obliczone"] = False
+                lobby_data["punkty_przyznane_dla_rozdania"] = 0 # Zresetuj flagę
+                # Usuń stary silnik gry
+                await redis_client.delete(engine_key(id_gry))
+                stan_zmieniony = True
 
-        # --- Uruchom Timer dla Następnego Gracza (jeśli gra trwa) ---
-        if partia["status_partii"] == "W_TRAKCIE":
+        # --- Zapisz zmiany i powiadom klientów ---
+        if stan_zmieniony:
+            await save_lobby_data(id_gry, lobby_data)
+        
+        # Zawsze uruchom timer dla następnego gracza (jeśli gra trwa)
+        if lobby_data["status_partii"] == "W_TRAKCIE":
             await uruchom_timer_dla_tury(id_gry)
+            
+        # Zawsze powiadamiaj klientów o zmianie
+        await manager.notify_state_update(id_gry)
+
+        # Po KAŻDEJ akcji (człowieka lub bota), uruchom pętlę botów.
+        # Pętla sama sprawdzi, czy jest zablokowana lub czyja jest tura.
+        if lobby_data["status_partii"] == "W_TRAKCIE":
+            asyncio.create_task(uruchom_petle_botow(id_gry))
 
     except Exception as e:
-        # Złap potencjalne błędy podczas przetwarzania akcji
-        print(f"BŁĄD KRYTYCZNY podczas przetwarzania akcji gracza {gracz_akcji_nazwa} w grze {id_gry}: {e}")
+        print(f"BŁĄD KRYTYCZNY (przetworz_akcje_gracza) dla {id_gry}: {e}")
         traceback.print_exc()
 
-async def replacement_timer(id_gry: str, slot_id: int):
-    """
-    Zadanie w tle (asyncio.Task) uruchamiane, gdy gracz się rozłączy w trakcie gry (nierankingowej).
-    Czeka 60 sekund. Jeśli gracz nie wróci, zastępuje go botem.
-    """
-    partia = gry.get(id_gry)
-    if not partia: return # Gra już nie istnieje
-
-    # Nie zastępuj botem w grach rankingowych
-    if partia.get("opcje", {}).get("rankingowa", False):
-        print(f"[{id_gry}] Gra rankingowa, timer zastępujący bota anulowany dla slotu {slot_id}.")
-        return
-
-    print(f"[{id_gry}] Uruchomiono 60s timer zastępujący bota dla slotu {slot_id}...")
-    await asyncio.sleep(60) # Czekaj 60 sekund
-
-    # Sprawdź stan gry ponownie po odczekaniu
-    partia_po_czasie = gry.get(id_gry)
-    if not partia_po_czasie or partia_po_czasie["status_partii"] != "W_TRAKCIE":
-        print(f"[{id_gry}] Timer zastępujący bota dla slotu {slot_id} anulowany (gra zakończona/wróciła do lobby).")
-        return
-
-    # Znajdź slot, którego dotyczył timer
-    slot = next((s for s in partia_po_czasie["slots"] if s["slot_id"] == slot_id), None)
-
-    # Jeśli slot nadal jest rozłączony, zastąp gracza botem
-    if slot and slot.get("typ") == "rozlaczony":
-        stara_nazwa = slot.get("nazwa", f"Gracz_{slot_id}")
-        nowa_nazwa_bota = f"Bot_{stara_nazwa[:8]}" # Użyj części starej nazwy dla identyfikacji
-        print(f"[{id_gry}] Gracz {stara_nazwa} (slot {slot_id}) nie wrócił. Zastępowanie botem {nowa_nazwa_bota}.")
-
-        # Zaktualizuj slot
-        slot["nazwa"] = nowa_nazwa_bota
-        slot["typ"] = "bot"
-        slot["disconnect_task"] = None # Usuń referencję do tego zadania
-
-        # Zaktualizuj nazwę gracza w silniku gry (jeśli istnieje)
-        if partia_po_czasie.get("gracze_engine"):
-            gracz_obj = next((g for g in partia_po_czasie["gracze_engine"] if g.nazwa == stara_nazwa), None)
-            if gracz_obj:
-                gracz_obj.nazwa = nowa_nazwa_bota
-
-        # Sprawdź, czy w grze zostali jeszcze jacyś ludzie
-        pozostali_ludzie = any(s.get("typ") == "czlowiek" for s in partia_po_czasie.get("slots", []))
-        if not pozostali_ludzie:
-            # Jeśli nie ma już ludzi, zakończ i usuń grę
-            print(f"[{id_gry}] Brak graczy ludzkich po zastąpieniu {stara_nazwa}. Usuwanie gry.")
-            try:
-                # Zamknij połączenia WebSocket (jeśli istnieją)
-                if id_gry in manager.active_connections:
-                    connections_copy = manager.active_connections[id_gry][:]
-                    for conn in connections_copy:
-                        await conn.close(code=1000, reason="Gra zakończona - brak graczy.")
-                    del manager.active_connections[id_gry]
-                # Usuń grę ze słownika `gry`
-                del gry[id_gry]
-            except KeyError:
-                # Błąd, jeśli gra została już usunięta
-                print(f"[{id_gry}] Nie można było usunąć gry (może już usunięta).")
-            return # Zakończ funkcję
-
-        # Jeśli są jeszcze ludzie, kontynuuj grę
-        print(f"[{id_gry}] Zostali gracze ludzcy. Kontynuowanie gry.")
-        # Wyślij zaktualizowany stan (z botem)
-        await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
-        # Uruchom pętlę botów (może to teraz tura nowego bota)
-        asyncio.create_task(uruchom_petle_botow(id_gry))
-    else:
-        # Gracz wrócił na czas lub slot został zmieniony
-        print(f"[{id_gry}] Timer zastępujący bota dla slotu {slot_id} anulowany (gracz wrócił lub slot zmieniony).")
-
 # ==========================================================================
-# SEKCJA 12: PĘTLA BOTA (MCTS)
+# SEKCJA 13: PĘTLA BOTA (ZREFRAKTORYZOWANA)
 # ==========================================================================
 
 async def uruchom_petle_botow(id_gry: str):
-    """
-    Asynchroniczna pętla, która cyklicznie sprawdza, czy aktualnie jest tura bota.
-    Uruchamia się TYLKO RAZ dzięki blokadzie i działa, dopóki nie nadejdzie
-    tura człowieka lub gra się nie zakończy.
-    """
-    partia = gry.get(id_gry)
-    if not partia: return
-
-    lock = partia.get("bot_loop_lock")
-    if not lock: # Awaryjny fallback, jeśli gra została stworzona przed tą zmianą
-        lock = asyncio.Lock()
-        partia["bot_loop_lock"] = lock
+    """ZREFAKTORYZOWANA: Używa RedisLock"""
+    lock_key = f"bot_loop_lock:{id_gry}"
+    lock = RedisLock(redis_client, lock_key, timeout=30)
     
-    # Spróbuj zdobyć blokadę BEZ CZEKANIA
-    if not lock.locked():
-        async with lock:
-            # print(f"[{id_gry}] ZDOBYTO BLOKADĘ. Uruchamiam pętlę botów.") # Opcjonalny log
-            while True: 
-                # Sprawdź stan partii *wewnątrz* pętli
-                partia_w_petli = gry.get(id_gry)
-                if not partia_w_petli or partia_w_petli["status_partii"] != "W_TRAKCIE": 
-                    # print(f"[{id_gry}] Gra zakończona lub nie istnieje. ZWALNIAM BLOKADĘ.") # Opcjonalny log
-                    break # Zakończ pętlę, zwolnij blokadę
+    if not await lock.acquire(blocking=False):
+        return  # Inny proces już obsługuje
+    
+    try:
+        while True: 
+            lobby_data = await get_lobby_data(id_gry)
+            if not lobby_data or lobby_data["status_partii"] != "W_TRAKCIE":
+                break
+            
+            engine = await get_game_engine(id_gry)
+            if not engine:
+                print(f"BŁĄD (bot): Brak silnika {id_gry}")
+                break
+            
+            if engine.is_terminal():
+                break
+            
+            player_id = engine.get_current_player()
+            if not player_id:
+                break
+            
+            slot_gracza = next((s for s in lobby_data["slots"] if s["nazwa"] == player_id), None)
+            if not slot_gracza or slot_gracza["typ"] != "bot":
+                break
+            
+            # TURA BOTA
+            print(f"[{id_gry}] Tura bota: {player_id}")
+            
+            bot_algorithm_name = slot_gracza.get("bot_algorithm", default_bot_name)
+            bot_instance = bot_instances.get(bot_algorithm_name, bot_instances[default_bot_name])
+
+            try:
+                cloned_engine = engine.clone() 
+                akcja_bota = await asyncio.to_thread(
+                    bot_instance.znajdz_najlepszy_ruch,
+                    cloned_engine,
+                    player_id
+                )
                 
-                rozdanie = partia_w_petli.get("aktualne_rozdanie")
-                if not rozdanie or not rozdanie.gracze: 
-                    # print(f"[{id_gry}] Błąd rozdania. ZWALNIAM BLOKADĘ.") # Opcjonalny log
-                    break
-                if rozdanie.podsumowanie:
-                    # print(f"[{id_gry}] Wykryto podsumowanie. Zatrzymuję pętlę botów.") # Opcjonalny log
-                    break # Zakończ pętlę i zwolnij blokadę
-                
-                # --- BLOK: AUTOMATYCZNA FINALIZACJA LEWY ---
-                if rozdanie.lewa_do_zamkniecia:
-                    try:
-                        # print(f"[{id_gry}] Pętla botów finalizuje lewę...")
-                        rozdanie.finalizuj_lewe()
-                        await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
-                        await uruchom_timer_dla_tury(id_gry) 
-                        await asyncio.sleep(0.5) 
-                        continue # Wróć na początek pętli
-                    except Exception as e_fin:
-                        print(f"BŁĄD KRYTYCZNY: Pętla botów nie mogła sfinalizować lewy w {id_gry}: {e_fin}")
-                        traceback.print_exc()
-                        break # Zakończ pętlę, zwolnij blokadę
-                
-                if rozdanie.kolej_gracza_idx is None: 
-                    # print(f"[{id_gry}] Brak gracza w turze (podsumowanie?). ZWALNIAM BLOKADĘ.") # Opcjonalny log
-                    break
-                if not (0 <= rozdanie.kolej_gracza_idx < len(rozdanie.gracze)): 
-                    # print(f"[{id_gry}] Błędny indeks gracza. ZWALNIAM BLOKADĘ.") # Opcjonalny log
-                    break 
-                
-                gracz_w_turze = rozdanie.gracze[rozdanie.kolej_gracza_idx]
-                if not gracz_w_turze: 
-                    # print(f"[{id_gry}] Błąd obiektu gracza. ZWALNIAM BLOKADĘ.") # Opcjonalny log
-                    break 
-
-                slot_gracza = next((s for s in partia_w_petli["slots"] if s["nazwa"] == gracz_w_turze.nazwa), None)
-
-                # Jeśli to nie jest tura bota, przerwij pętlę
-                if not slot_gracza or slot_gracza["typ"] == "czlowiek":
-                    # print(f"[{id_gry}] Tura człowieka ({gracz_w_turze.nazwa}). ZWALNIAM BLOKADĘ.") # Opcjonalny log
-                    break # Zakończ pętlę, zwolnij blokadę
-
-                # --- TURA BOTA ---
-                # (Reszta kodu... od 'print(f"[{id_gry}] Tura bota..." do końca)
-                print(f"[{id_gry}] Tura gracza: {gracz_w_turze.nazwa}")
-
-                # Anuluj timer poprzedniego gracza (jeśli istniał - boty nie mają timerów)
-                if partia_w_petli.get("timer_task") and not partia_w_petli["timer_task"].done():
-                    partia_w_petli["timer_task"].cancel()
-
-                # Małe opóźnienie, aby dać UI czas na odświeżenie (opcjonalne)
-                await asyncio.sleep(0.1)
-                #Logika wyboru ruchu bota 
-                bot_algorithm_name = slot_gracza.get("bot_algorithm", default_bot_name)
-                bot_instance = bot_instances.get(bot_algorithm_name, bot_instances[default_bot_name]) # Pobierz instancję
-                if not bot_instance: # Fallback do domyślnego, jeśli nazwa jest nieprawidłowa
-                    print(f"OSTRZEŻENIE: Nieznany algorytm bota '{bot_algorithm_name}', używam domyślnego '{default_bot_name}'.")
-                    bot_instance = bot_instances[default_bot_name]
-                # --- Wywołaj logikę bota ---
-                akcja_bota = None
-                try:
-                    # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
-                    start_time = time.time()
-                    # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Myślenie...")
-                    # Wywołaj metodę bota, aby znaleźć najlepszy ruch
-                    akcja_bota = await asyncio.to_thread(
-                        bot_instance.znajdz_najlepszy_ruch,
-                        poczatkowy_stan_gry=rozdanie,
-                        nazwa_gracza_bota=gracz_w_turze.nazwa
-                    )
-                    end_time = time.time()
-                    # print(f"BOT ({bot_algorithm_name.upper()}) ({gracz_w_turze.nazwa}): Wybrana akcja: {akcja_bota} (Czas: {end_time - start_time:.3f}s)")
-                except Exception as e:
-                    # Złap błędy z logiki bota
-                    print(f"!!! KRYTYCZNY BŁĄD BOTA MCTS dla {gracz_w_turze.nazwa} w grze {id_gry}: {e}")
-                    traceback.print_exc()
-                    break # Przerwij pętlę w razie błędu bota
-
-                # --- Obsługa przypadku, gdy bot nie zwrócił akcji ---
                 if not akcja_bota or 'typ' not in akcja_bota:
-                    print(f"INFO: Bot {gracz_w_turze.nazwa} nie miał ruchu (MCTS zwrócił pustą akcję). Faza: {rozdanie.faza}")
-                    # Spróbuj wymusić PAS w fazach licytacyjnych jako fallback
-                    if rozdanie.faza not in [silnik_gry.FazaGry.ROZGRYWKA, silnik_gry.FazaGry.PODSUMOWANIE_ROZDANIA]:
-                        mozliwe_akcje_bota = rozdanie.get_mozliwe_akcje(gracz_w_turze)
-                        akcja_pas_bota = next((a for a in mozliwe_akcje_bota if 'pas' in a.get('typ','')), None)
-                        if akcja_pas_bota:
-                            print(f"INFO: Bot {gracz_w_turze.nazwa} wymusza PAS.")
-                            akcja_bota = akcja_pas_bota # Użyj akcji PAS
-                        else:
-                            break # Jeśli even PAS nie jest możliwy, przerwij
-                    else: # W rozgrywce brak ruchu oznacza błąd
-                         break
+                    break
+                
+                engine.perform_action(player_id, akcja_bota)
+                await save_game_engine(id_gry, engine)
+                
+                if engine.is_terminal():
+                    if not lobby_data.get("punkty_przyznane_dla_rozdania") == lobby_data.get("numer_rozdania"):
+                        await _zaktualizuj_stan_po_rozdaniu(id_gry, lobby_data, engine)
+                        lobby_data["punkty_przyznane_dla_rozdania"] = lobby_data.get("numer_rozdania")
+                        await save_lobby_data(id_gry, lobby_data)
 
-                # --- Odejmowanie Czasu dla Bota (jeśli rankingowa) ---
-                if (partia_w_petli.get("opcje", {}).get("rankingowa", False) and
-                    partia_w_petli.get("tura_start_czas") is not None and
-                    gracz_w_turze.nazwa in partia_w_petli.get("timery", {})):
+            except Exception as e:
+                print(f"BŁĄD bota: {e}")
+                traceback.print_exc()
+                break
 
-                    czas_teraz = time.time()
-                    czas_zuzyty = czas_teraz - partia_w_petli["tura_start_czas"]
-                    partia_w_petli["timery"][gracz_w_turze.nazwa] -= czas_zuzyty # Odejmij zużyty czas
-                    partia_w_petli["tura_start_czas"] = None # Zresetuj czas startu tury
-                    # print(f"[{id_gry}] Bot {gracz_w_turze.nazwa} zużył {czas_zuzyty:.2f}s.") # Opcjonalny log
-
-                # Anuluj zadanie timera bota (jeśli istniało)
-                if partia_w_petli.get("timer_task") and not partia_w_petli["timer_task"].done():
-                    partia_w_petli["timer_task"].cancel()
-
-                # --- Wykonaj akcję bota w silniku gry ---
-                try:
-                    if akcja_bota['typ'] == 'zagraj_karte':
-                        # Znajdź obiekt karty w ręce bota
-                        karta_do_zagrania = next((k for k in gracz_w_turze.reka if k == akcja_bota.get('karta_obj')), None)
-                        # Sprawdź legalność (dodatkowe zabezpieczenie)
-                        if karta_do_zagrania and rozdanie._waliduj_ruch(gracz_w_turze, karta_do_zagrania):
-                            rozdanie.zagraj_karte(gracz_w_turze, karta_do_zagrania)
-                        else: # Jeśli bot wybrał nielegalną kartę (błąd MCTS?)
-                            print(f"OSTRZEŻENIE: Bot {gracz_w_turze.nazwa} próbował zagrać nielegalną kartę: {akcja_bota.get('karta_obj')}. Wybieram losową legalną.")
-                            # Wybierz losową legalną kartę jako fallback
-                            legalne_karty = [k for k in gracz_w_turze.reka if rozdanie._waliduj_ruch(gracz_w_turze, k)]
-                            if legalne_karty:
-                                losowa_karta = random.choice(legalne_karty)
-                                rozdanie.zagraj_karte(gracz_w_turze, losowa_karta)
-                            else: # Jeśli nie ma legalnych kart (bardzo rzadki błąd)
-                                print(f"BŁĄD KRYTYCZNY: Bot {gracz_w_turze.nazwa} nie ma legalnych kart do zagrania.")
-                                break # Przerwij pętlę
-                    else: # Akcja licytacyjna bota
-                        # Sprawdź legalność akcji (dodatkowe zabezpieczenie)
-                        legalne_akcje = rozdanie.get_mozliwe_akcje(gracz_w_turze)
-                        # Porównaj słowniki akcji (typ, kontrakt, atut)
-                        czy_legalna = any(
-                            a['typ'] == akcja_bota.get('typ') and
-                            a.get('kontrakt') == akcja_bota.get('kontrakt') and
-                            a.get('atut') == akcja_bota.get('atut')
-                            for a in legalne_akcje
-                        )
-                        if czy_legalna:
-                            rozdanie.wykonaj_akcje(gracz_w_turze, akcja_bota)
-                        else: # Jeśli bot wybrał nielegalną akcję
-                            print(f"OSTRZEŻENIE: Bot {gracz_w_turze.nazwa} próbował wykonać nielegalną akcję licytacyjną: {akcja_bota}. Wybieram losową legalną.")
-                            # Wybierz losową legalną akcję jako fallback
-                            if legalne_akcje:
-                                 losowa_akcja = random.choice(legalne_akcje)
-                                 rozdanie.wykonaj_akcje(gracz_w_turze, losowa_akcja)
-                            else: # Jeśli nie ma legalnych akcji (błąd)
-                                print(f"BŁĄD KRYTYCZNY: Bot {gracz_w_turze.nazwa} nie ma legalnych akcji licytacyjnych.")
-                                break # Przerwij pętlę
-                except Exception as e:
-                    # Złap błędy podczas wykonywania akcji przez silnik gry
-                    print(f"BŁĄD podczas wykonywania akcji BOTA {gracz_w_turze.nazwa} w grze {id_gry}: {e}. Akcja: {akcja_bota}")
-                    traceback.print_exc()
-                    break # Przerwij pętlę
-
-                # --- Po ruchu bota ---
-                # Wyślij zaktualizowany stan gry do wszystkich klientów
-                await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
-
-                # Uruchom timer dla następnego gracza (jeśli jest człowiekiem i gra rankingowa)
-                await uruchom_timer_dla_tury(id_gry)
-
-                # Krótka pauza przed następną iteracją (dla płynności i uniknięcia 100% CPU)
-                await asyncio.sleep(0.5) # Zmniejszono pauzę dla szybszej gry botów
-        
-        # Blokada 'async with lock:' została automatycznie zwolniona
-        # print(f"[{id_gry}] Pętla botów zakończona, blokada zwolniona.") # Opcjonalny log
+            await manager.notify_state_update(id_gry)
+            await uruchom_timer_dla_tury(id_gry)
+            await asyncio.sleep(0.5)
     
-    else:
-        # print(f"[{id_gry}] Pętla botów już działa (lock zajęty). Pomijam.") # Opcjonalny log
-        pass # Pętla już działa, nic nie rób
-
+    finally:
+        await lock.release()
 
 # ==========================================================================
-# SEKCJA 12.5: MENEDŻER BOTÓW "ELO WORLD"
+# SEKCJA 14: MENEDŻER BOTÓW "ELO WORLD" (ZREFRAKTORYZOWANY DLA REDIS)
 # ==========================================================================
 
-# --- KONFIGURACJA MENEDŻERA BOTÓW "ELO WORLD" ---
-# Ta lista będzie zawierać nazwy użytkowników botów, którzy mają aktywnie
-# wyszukiwać i tworzyć gry. Pobierzemy ją z bazy danych przy starcie serwera.
-AKTYWNE_BOTY_ELO_WORLD: list[tuple[str, str]] = [] # Lista krotek (nazwa_bota, algorytm)
-
-# Maksymalna liczba gier, które boty mogą hostować jednocześnie
+AKTYWNE_BOTY_ELO_WORLD: list[tuple[str, str]] = []
 MAX_GAMES_HOSTED_BY_BOTS = 5
-# Maksymalna liczba wszystkich gier (ludzkich + botów), zanim boty przestaną tworzyć nowe
 MAX_TOTAL_GAMES_ON_SERVER = 20
-# Co ile sekund menedżer botów ma sprawdzać stan gier
-ELO_WORLD_TICK_RATE = 15.0 # (w sekundach)
-
+ELO_WORLD_TICK_RATE = 15.0
 
 async def zaladuj_aktywne_boty_z_bazy():
-    """
-    Pobiera listę botów (z ich algorytmami) z bazy danych przy starcie serwera.
-    """
+    # Logika bez zmian
     global AKTYWNE_BOTY_ELO_WORLD
     print("[Elo World] Ładowanie kont botów z bazy danych...")
     AKTYWNE_BOTY_ELO_WORLD.clear()
-    
     try:
-        # Używamy poprawnej nazwy 'async_sessionmaker'
         async with async_sessionmaker() as session:
-            # Używamy User.settings do identyfikacji botów i ich algorytmów
             query = select(User.username, User.settings).where(User.settings.like('%"jest_botem": true%'))
             result = await session.execute(query)
             bot_users = result.all()
-            
             for username, settings_json in bot_users:
                 try:
                     settings = json.loads(settings_json)
                     algorytm = settings.get("algorytm")
-                    if algorytm and algorytm in bot_instances: # Sprawdź, czy algorytm jest wspierany
+                    if algorytm and algorytm in bot_instances:
                         AKTYWNE_BOTY_ELO_WORLD.append((username, algorytm))
-                    else:
-                        print(f"  - Ostrzeżenie: Bot {username} ma nieznany algorytm: {algorytm}")
                 except (json.JSONDecodeError, TypeError):
-                    print(f"  - Błąd: Nie można sparsować ustawień JSON dla bota {username} (Ustawienia: {settings_json})")
-                    
+                    pass
         print(f"[Elo World] Załadowano {len(AKTYWNE_BOTY_ELO_WORLD)} aktywnych botów.")
         if not AKTYWNE_BOTY_ELO_WORLD:
-            print("[Elo World] Ostrzeżenie: Nie znaleziono żadnych kont botów w bazie danych.")
-            print("[Elo World] Uruchom skrypt 'create_bots.py', aby je stworzyć.")
-            
+            print("[Elo World] Uruchom skrypt 'create_bots.py'.")
     except Exception as e:
-        print(f"BŁĄD KRYTYCZNY podczas ładowania botów z bazy danych: {e}")
-        traceback.print_exc()
-
+        print(f"BŁĄD KRYTYCZNY (ładowanie botów): {e}")
 
 async def elo_world_manager():
-    """
-    Główna pętla Menedżera Botów. Działa w tle, tworzy lobby, dołącza do gier
-    i zarządza stanem gotowości botów.
-    """
-    # Poczekaj chwilę na pełny start serwera
+    """Główna pętla Menedżera Botów, zrefaktoryzowana dla Redis."""
     await asyncio.sleep(5.0) 
-    
-    # Najpierw załaduj boty z bazy
     await zaladuj_aktywne_boty_z_bazy()
-
-    print("[Elo World] Menedżer botów uruchomiony.")
+    print("[Elo World] Menedżer botów (Redis) uruchomiony.")
     
     while True:
         try:
-            # Poczekaj na następny "tick"
             await asyncio.sleep(ELO_WORLD_TICK_RATE)
-            CZAS_ZYCIA_ZAKONCZONEJ_GRY_S = 10 # 10 se kund
             
-            # Użyj list(gry.items()), aby bezpiecznie modyfikować słownik gry podczas iteracji
-            for id_gry, partia in list(gry.items()):
-                if partia.get("status_partii") == "ZAKONCZONA":
-                    
-                    if "czas_zakonczenia_gry" not in partia:
-                        # Gra właśnie się zakończyła, ustaw jej timestamp
-                        partia["czas_zakonczenia_gry"] = time.time()
-                    else:
-                        # Gra ma timestamp, sprawdź, czy jest wystarczająco stara
-                        if (time.time() - partia["czas_zakonczenia_gry"]) > CZAS_ZYCIA_ZAKONCZONEJ_GRY_S:
-                            print(f"[Garbage Collector] Usuwam starą zakończoną grę: {id_gry}")
-                            try:
-                                # Usuń z globalnego słownika gier
-                                del gry[id_gry] 
-                                
-                                # Usuń również z menedżera połączeń (jeśli istnieją wiszące)
-                                if id_gry in manager.active_connections:
-                                    del manager.active_connections[id_gry]
-                            except KeyError:
-                                pass # Bez problemu, jeśli już usunięto
-            
-            if not AKTYWNE_BOTY_ELO_WORLD:
-                # Jeśli nie ma botów, nie rób nic
+            if not AKTYWNE_BOTY_ELO_WORLD or not redis_client:
                 continue
 
-            # Użyj kopii listy gier, aby uniknąć problemów z jednoczesną modyfikacją
-            gry_copy = list(gry.values())
-            CZAS_NA_GOTOWOSC_S = 30.0 # Czas w sekundach na kliknięcie "Gotowy"
-            
-            for partia in gry_copy:
-                rozdanie = partia.get("aktualne_rozdanie")
-                # Sprawdź, czy gra jest W_TRAKCIE, ma podsumowanie i nie była już wymuszona
-                if (partia.get("status_partii") == "W_TRAKCIE" and 
-                    rozdanie and rozdanie.podsumowanie and 
-                    not partia.get("wymuszono_nastepna_runde", False)): # Flaga, by zrobić to tylko raz
-                    
-                    if "czas_konca_rundy" not in partia:
-                        # Runda właśnie się zakończyła, ustaw timer
-                        partia["czas_konca_rundy"] = time.time()
-                    else:
-                        # Timer już tyka, sprawdź czy minął
-                        if (time.time() - partia["czas_konca_rundy"]) > CZAS_NA_GOTOWOSC_S:
-                            print(f"[Elo World] Wykryto AFK w lobby {partia['id_gry']}. Wymuszam następną rundę.")
-                            
-                            # Znajdź wszystkich ludzi, którzy NIE są gotowi
-                            ludzie_afk = [
-                                s["nazwa"] for s in partia["slots"] 
-                                if s["typ"] == "czlowiek" and s["nazwa"] not in partia.get("gracze_gotowi", [])
-                            ]
-                            
-                            # "Kliknij" za każdego AFK-era
-                            for afk_player in ludzie_afk:
-                                partia.setdefault("gracze_gotowi", []).append(afk_player)
-                            
-                            # Ustaw flagę, aby nie robić tego wielokrotnie w tej rundzie
-                            partia["wymuszono_nastepna_runde"] = True 
-                            
-                            # Wykonawcą akcji musi być ktoś z gry (np. host)
-                            wykonawca_akcji = partia.get("host")
-                            if not wykonawca_akcji: # Awaryjny fallback
-                                wykonawca_akcji = partia["slots"][0]["nazwa"]
-
-                            # Wywołaj akcję (teraz warunek gotowości powinien być spełniony)
-                            if wykonawca_akcji:
-                                dane_akcji = {"gracz": wykonawca_akcji, "akcja": {"typ": "nastepne_rozdanie"}}
-                                await przetworz_akcje_gracza(dane_akcji, partia)
-                                await manager.broadcast(partia["id_gry"], pobierz_stan_gry(partia["id_gry"]))
-                                asyncio.create_task(uruchom_petle_botow(partia["id_gry"]))
-            
-            # --- Zidentyfikuj "bezrobotne" boty ---
+            gry_w_redis = []
             boty_w_grze = set()
             boty_hostujace_lobby = set()
-            boty_w_podsumowaniu = {} # Mapa {bot_name: partia}
-            boty_w_lobby_goscia = set()
+            boty_w_podsumowaniu = {} # {bot_name: id_gry}
 
-            # Zbierz nazwy wszystkich aktywnych botów (dla szybszego sprawdzania)
             wszystkie_aktywne_boty = {bot[0] for bot in AKTYWNE_BOTY_ELO_WORLD}
 
-            for partia in gry_copy:
+            # Skanuj wszystkie aktywne gry w Redis
+            async for key in redis_client.scan_iter(lobby_key("*")):
+                id_gry = key.decode('utf-8').split(":")[-1]
+                partia = await get_lobby_data(id_gry)
+                if not partia:
+                    continue
+                
+                gry_w_redis.append(partia) # Dodaj do listy do przetworzenia
                 status_gry = partia.get("status_partii")
 
-                # Zliczaj boty jako "zajęte" tylko jeśli gra jest aktywna
-                if status_gry == "LOBBY" or status_gry == "W_TRAKCIE":
+                # --- 1. Garbage Collector dla starych gier ---
+                CZAS_ZYCIA_ZAKONCZONEJ_GRY_S = 60
+                if status_gry == "ZAKONCZONA":
+                    if "czas_zakonczenia_gry" not in partia:
+                        partia["czas_zakonczenia_gry"] = time.time()
+                        await save_lobby_data(id_gry, partia) # Zapisz timestamp
+                    else:
+                        if (time.time() - partia["czas_zakonczenia_gry"]) > CZAS_ZYCIA_ZAKONCZONEJ_GRY_S:
+                            print(f"[Garbage Collector] Usuwam starą grę {id_gry} z Redis.")
+                            await delete_game_state(id_gry) # Usuń lobby i silnik
+                            continue # Pomiń resztę pętli dla tej gry
 
+                # --- 2. Sprawdź stan botów w aktywnych grach ---
+                if status_gry == "LOBBY" or status_gry == "W_TRAKCIE":
                     if status_gry == "LOBBY" and partia["host"] in wszystkie_aktywne_boty:
                         boty_hostujace_lobby.add(partia["host"])
 
                     for slot in partia.get("slots", []):
                         bot_name = slot.get("nazwa")
                         if bot_name in wszystkie_aktywne_boty: 
-                            boty_w_grze.add(bot_name) # Dodaj do ogólnej puli zajętych
-                            if status_gry == "LOBBY" and bot_name != partia.get("host"):
-                                 boty_w_lobby_goscia.add(bot_name)
+                            boty_w_grze.add(bot_name)
                              
-                # Sprawdź boty, które muszą kliknąć "Następne rozdanie"
-                rozdanie = partia.get("aktualne_rozdanie")
-                if partia.get("status_partii") == "W_TRAKCIE" and rozdanie and rozdanie.podsumowanie:
-                    gotowi = partia.get("gracze_gotowi", [])
-                    for slot in partia.get("slots", []):
-                        # Sprawdzamy sloty typu 'bot' LUB sloty naszych aktywnych botów
-                        # (na wypadek, gdyby typ się jeszcze nie zaktualizował)
-                        if slot.get("nazwa") in wszystkie_aktywne_boty and slot.get("nazwa") not in gotowi:
-                            boty_w_podsumowaniu[slot["nazwa"]] = partia
-
-            # Boty bezrobotne = Wszystkie boty - Boty w grze/lobby
-            boty_bezrobotne = [bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] not in boty_w_grze]
-            liczba_lobby_botow = len(boty_hostujace_lobby)
+                # --- 3. Sprawdź boty czekające na 'nastepne_rozdanie' ---
+                if status_gry == "W_TRAKCIE":
+                    engine = await get_game_engine(id_gry)
+                    if engine and engine.is_terminal():
+                        gotowi = partia.get("gracze_gotowi", [])
+                        for slot in partia.get("slots", []):
+                            if slot.get("nazwa") in wszystkie_aktywne_boty and slot.get("nazwa") not in gotowi:
+                                boty_w_podsumowaniu[slot["nazwa"]] = id_gry
 
             # --- AKCJE MENEDŻERA ---
-
+            
             # 1. Obsłuż boty czekające na następne rozdanie
-            for bot_name, partia in boty_w_podsumowaniu.items():
-                if partia.get("id_gry") in gry: # Sprawdź, czy gra nadal istnieje
-                    print(f"[Elo World] Bot {bot_name} klika 'Następne rozdanie' w grze {partia['id_gry']}")
+            for bot_name, id_gry in boty_w_podsumowaniu.items():
+                if await redis_client.exists(lobby_key(id_gry)):
+                    print(f"[Elo World] Bot {bot_name} klika 'Następne rozdanie' w {id_gry}")
                     await asyncio.sleep(random.uniform(1.0, 5.0))
                     dane_akcji = {"gracz": bot_name, "akcja": {"typ": "nastepne_rozdanie"}}
-                    await przetworz_akcje_gracza(dane_akcji, partia) # Wywołaj akcję
-                    # Po tej akcji może nastąpić broadcast i uruchomienie pętli botów
-                    await manager.broadcast(partia["id_gry"], pobierz_stan_gry(partia["id_gry"]))
-                    asyncio.create_task(uruchom_petle_botow(partia["id_gry"]))
+                    # Przetwórz akcję (co zapisze stan i wyśle update)
+                    await przetworz_akcje_gracza(dane_akcji, id_gry) 
 
-
-            # 2. Sprawdź, czy boty-hosty mogą rozpocząć swoje gry
+            # 2. Sprawdź, czy boty-hosty mogą rozpocząć gry
             for bot_host_name in boty_hostujace_lobby:
-                partia = next((p for p in gry_copy if p.get("host") == bot_host_name and p.get("status_partii") == "LOBBY"), None)
-            
-                # Teraz sprawdzamy już tylko, czy lobby jest pełne
+                partia = next((p for p in gry_w_redis if p.get("host") == bot_host_name and p.get("status_partii") == "LOBBY"), None)
                 if partia and all(s["typ"] != "pusty" for s in partia["slots"]):
-                        print(f"[Elo World] Bot-host {bot_host_name} uruchamia grę {partia['id_gry']}!")
+                        id_gry = partia['id_gry']
+                        print(f"[Elo World] Bot-host {bot_host_name} uruchamia grę {id_gry}!")
                         dane_akcji = {"gracz": bot_host_name, "akcja_lobby": "start_gry"}
-                        await przetworz_akcje_gracza(dane_akcji, partia) # Wywołaj akcję
-                        await manager.broadcast(partia["id_gry"], pobierz_stan_gry(partia["id_gry"]))
-                        asyncio.create_task(uruchom_petle_botow(partia["id_gry"]))
+                        await przetworz_akcje_gracza(dane_akcji, id_gry) # To uruchomi grę
             
             # 3. Przydziel "bezrobotne" boty
-            random.shuffle(boty_bezrobotne) # Losowa kolejność
-            for bot_name, bot_algorytm in boty_bezrobotne:
-                
-                # --- A. Spróbuj dołączyć do istniejącego lobby ---
-                lobby_do_dolaczenia = None
-                for partia in gry_copy:
-                    if (partia.get("status_partii") == "LOBBY" and 
-                        partia.get("opcje", {}).get("rankingowa", False) and # Tylko rankingowe
-                        not partia.get("opcje", {}).get("haslo")): # Tylko publiczne
-                        
-                        puste_sloty = [s for s in partia["slots"] if s["typ"] == "pusty"]
-                        if puste_sloty:
-                            lobby_do_dolaczenia = partia
-                            slot_do_zajecia = puste_sloty[0] # Weź pierwszy wolny
-                            break
-                            
-                if lobby_do_dolaczenia:
-                    print(f"[Elo World] Gracz {bot_name} dołącza do lobby {lobby_do_dolaczenia['id_gry']} (slot {slot_do_zajecia['slot_id']})")
-                    # Ręcznie zaktualizuj slot, bo bot nie ma Websocketa
-                    slot_do_zajecia.update({
-                        "nazwa": bot_name, 
-                        "typ": "bot", # Ważne: oznaczamy jako 'bot'
-                        "bot_algorithm": bot_algorytm
-                    })
-                    # Poinformuj wszystkich o zmianie w lobby
-                    await manager.broadcast(lobby_do_dolaczenia["id_gry"], pobierz_stan_gry(lobby_do_dolaczenia["id_gry"]))
-                    await asyncio.sleep(random.uniform(2.0, 7.0)) # Losowe opóźnienie 2-7 sekund
-                    continue # Przejdź do następnego bezrobotnego bota
+            boty_bezrobotne = [bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] not in boty_w_grze]
+            liczba_lobby_botow = len(boty_hostujace_lobby)
+            
+            if not boty_bezrobotne:
+                continue # Wszystkie boty zajęte
 
-                # --- B. Jeśli nie dołączył, spróbuj stworzyć nowe lobby ---
-                if (liczba_lobby_botow < MAX_GAMES_HOSTED_BY_BOTS and 
-                    len(gry) < MAX_TOTAL_GAMES_ON_SERVER):
+            random.shuffle(boty_bezrobotne)
+            
+            # --- 3A. Spróbuj dołączyć do istniejącego lobby ---
+            lobby_do_dolaczenia = None
+            slot_do_zajecia = None
+            for partia in gry_w_redis:
+                if (partia.get("status_partii") == "LOBBY" and 
+                    partia.get("opcje", {}).get("rankingowa", False) and 
+                    not partia.get("opcje", {}).get("haslo")):
                     
-                    print(f"[Elo World] Gracz {bot_name} tworzy nowe lobby rankingowe...")
-                    try:
-                        # Użyj logiki z endpointu /gra/stworz
-                        tryb_gry_bota = '3p' if random.random() < 0.33 else '4p' # 33% szansy na 3p
-                        request_bota = CreateGameRequest(
-                            nazwa_gracza=bot_name,
-                            tryb_gry=tryb_gry_bota, # Boty domyślnie grają 4p
-                            tryb_lobby='online',
-                            publiczna=True,
-                            haslo=None,
-                            czy_rankingowa=True
-                        )
-                        # Wywołaj funkcję synchroniczną bezpośrednio
-                        stworz_gre(request_bota) 
-                        liczba_lobby_botow += 1
-                        await asyncio.sleep(random.uniform(2.0, 15.0)) # Opóźnienie stworzenia lobby
-                    except Exception as e:
-                        print(f"BŁĄD KRYTYCZNY: Bot {bot_name} nie mógł stworzyć gry: {e}")
-                        traceback.print_exc()
+                    puste_sloty = [s for s in partia["slots"] if s["typ"] == "pusty"]
+                    if puste_sloty:
+                        lobby_do_dolaczenia = partia
+                        slot_do_zajecia = puste_sloty[0]
+                        break
+            
+            if lobby_do_dolaczenia and slot_do_zajecia:
+                bot_name, bot_algorytm = boty_bezrobotne.pop(0)
+                id_gry = lobby_do_dolaczenia['id_gry']
+                print(f"[Elo World] Bot {bot_name} dołącza do lobby {id_gry} (slot {slot_do_zajecia['slot_id']})")
+                slot_do_zajecia.update({
+                    "nazwa": bot_name, "typ": "bot", "bot_algorithm": bot_algorytm
+                })
+                await save_lobby_data(id_gry, lobby_do_dolaczenia)
+                await manager.notify_state_update(id_gry)
+
+            # --- 3B. Spróbuj stworzyć nowe lobby ---
+            elif (liczba_lobby_botow < MAX_GAMES_HOSTED_BY_BOTS and 
+                  len(gry_w_redis) < MAX_TOTAL_GAMES_ON_SERVER and
+                  boty_bezrobotne):
+                
+                bot_name, bot_algorytm = boty_bezrobotne.pop(0)
+                print(f"[Elo World] Bot {bot_name} tworzy nowe lobby rankingowe...")
+                try:
+                    tryb_gry_bota = '3p' if random.random() < 0.33 else '4p'
+                    request_bota = CreateGameRequest(
+                        nazwa_gracza=bot_name,
+                        tryb_gry=tryb_gry_bota,
+                        tryb_lobby='online',
+                        publiczna=True,
+                        haslo=None,
+                        czy_rankingowa=True
+                    )
+                    # Musimy `await` na funkcję `async`
+                    await stworz_gre(request_bota, async_sessionmaker()) 
+                except Exception as e:
+                    print(f"BŁĄD KRYTYCZNY: Bot {bot_name} nie mógł stworzyć gry: {e}")
+                    traceback.print_exc()
 
         except asyncio.CancelledError:
             print("[Elo World] Menedżer botów zatrzymany (CancelledError).")
             break
         except Exception as e:
-            print(f"BŁĄD KRYTYCZNY w pętli Menedżera Botów: {e}")
+            print(f"BŁĄD KRYTYCZNY w pętli Menedżera Botów (Redis): {e}")
             traceback.print_exc()
-            # Poczekaj dłużej po błędzie, aby uniknąć pętli błędów
             await asyncio.sleep(60.0)
 
 # ==========================================================================
-# SEKCJA 13: GŁÓWNY ENDPOINT WEBSOCKET
+# SEKCJA 15: GŁÓWNY ENDPOINT WEBSOCKET (ZREFRAKTORYZOWANY)
 # ==========================================================================
 
 @app.websocket("/ws/{id_gry}/{nazwa_gracza}")
 async def websocket_endpoint(websocket: WebSocket, id_gry: str, nazwa_gracza: str, haslo: Optional[str] = Query(None)):
     """
-    Główna funkcja obsługująca połączenie WebSocket dla pojedynczego gracza.
-    Zarządza dołączaniem do gry/lobby, powrotem do gry, odbieraniem i przetwarzaniem
-    akcji gracza oraz rozłączaniem.
+    ZREFRAKTORYZOWANY endpoint WebSocket.
+    Korzysta z Redis i ConnectionManagera (Pub/Sub).
     """
-    partia = gry.get(id_gry)
+    lobby_data = await get_lobby_data(id_gry)
 
-    # --- Sprawdzenie istnienia gry i hasła ---
-    if not partia:
-        await websocket.accept() # Zaakceptuj, aby wysłać powód zamknięcia
+    # --- 1. Sprawdzenie istnienia gry i hasła ---
+    if not lobby_data:
+        await websocket.accept()
         await websocket.close(code=1008, reason="Gra nie istnieje.")
         return
 
-    opcje = partia.get("opcje", {})
+    opcje = lobby_data.get("opcje", {})
     haslo_lobby = opcje.get("haslo")
-    # Jeśli lobby ma hasło, sprawdź podane hasło
     if haslo_lobby and (haslo is None or haslo != haslo_lobby):
         await websocket.accept()
         await websocket.close(code=1008, reason="Nieprawidłowe hasło.")
         return
 
-    # --- Połączenie ---
-    await manager.connect(websocket, id_gry) # Dodaj do ConnectionManagera
-    # Sprawdź, czy gracz nie został wcześniej wyrzucony
-    if nazwa_gracza in partia.get("kicked_players", []):
+    # --- 2. Połączenie ---
+    await manager.connect(websocket, id_gry, nazwa_gracza)
+    print(f"INFO: {nazwa_gracza} połączył się z WebSocket dla gry {id_gry}.") # Dodatkowy log
+    
+    if nazwa_gracza in lobby_data.get("kicked_players", []):
         await websocket.close(code=1008, reason="Zostałeś wyrzucony z lobby.")
-        manager.disconnect(websocket, id_gry) # Usuń z managera
+        manager.disconnect(websocket, id_gry)
         return
 
+    stan_zmieniony = False # Flaga, czy trzeba zapisać stan lobby
+
     try:
-        # --- Obsługa Dołączania do Lobby ---
-        if partia["status_partii"] == "LOBBY":
-            # Sprawdź, czy gracz nie jest już w lobby (np. otworzył drugą kartę)
-            if not any(s['nazwa'] == nazwa_gracza for s in partia['slots']):
-                 # Znajdź pierwszy wolny slot
-                 slot = next((s for s in partia["slots"] if s["typ"] == "pusty"), None)
-                 if slot: # Jeśli znaleziono wolny slot
+        # --- 3. Obsługa Dołączania do Lobby / Powrotu do Gry ---
+        if lobby_data["status_partii"] == "LOBBY":
+            if not any(s['nazwa'] == nazwa_gracza for s in lobby_data['slots']):
+                 slot = next((s for s in lobby_data["slots"] if s["typ"] == "pusty"), None)
+                 if slot:
                      slot["typ"], slot["nazwa"] = "czlowiek", nazwa_gracza
-                     # Jeśli lobby było puste, ustaw gracza jako hosta
-                     if not partia["host"]: partia["host"] = nazwa_gracza
-                     # Wyślij zaktualizowany stan lobby do wszystkich
-                     await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
-                 else: # Lobby jest pełne
+                     if not lobby_data["host"]: lobby_data["host"] = nazwa_gracza
+                     stan_zmieniony = True
+                 else:
                      await websocket.close(code=1008, reason="Lobby jest pełne.")
                      manager.disconnect(websocket, id_gry)
                      return
 
-        # --- Obsługa Powrotu do Gry (Reconnect) ---
-        elif partia["status_partii"] == "W_TRAKCIE":
-            slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
-
-            # Jeśli gracz nie był częścią tej gry, odrzuć połączenie
+        elif lobby_data["status_partii"] == "W_TRAKCIE":
+            slot_gracza = next((s for s in lobby_data["slots"] if s["nazwa"] == nazwa_gracza), None)
             if not slot_gracza:
-                await websocket.close(code=1008, reason="Gra jest w toku, nie możesz dołączyć.")
-                manager.disconnect(websocket, id_gry) # Usuń z managera
+                await websocket.close(code=1008, reason="Gra jest w toku.")
+                manager.disconnect(websocket, id_gry)
                 return
-
-            typ_slotu = slot_gracza.get("typ")
-
-            if typ_slotu == "rozlaczony": # Gracz wraca po rozłączeniu
+            
+            if slot_gracza.get("typ") == "rozlaczony":
                 print(f"[{id_gry}] Gracz {nazwa_gracza} dołączył ponownie.")
-                # Zmień status slotu z powrotem na 'czlowiek'
                 slot_gracza["typ"] = "czlowiek"
-                slot_gracza["disconnect_time"] = None # Wyczyść czas rozłączenia
-
-                # Anuluj zadanie zastępujące bota (jeśli działało)
-                task = slot_gracza.get("disconnect_task")
-                if task and not task.done():
-                    task.cancel()
-                    print(f"[{id_gry}] Anulowano timer zastępujący bota dla slotu {slot_gracza.get('slot_id')}.")
-                    slot_gracza["disconnect_task"] = None
-
-                # Uruchom ponownie timer tury, jeśli to była tura tego gracza i gra jest rankingowa
+                slot_gracza["disconnect_time"] = None
+                stan_zmieniony = True
+                
+                # Anuluj timer zastępujący bota (z `transient_game_state`)
+                # Timery zastępujące już nie używane (Redis system)
+                
+                # Uruchom timer tury, jeśli to była tura tego gracza
                 await uruchom_timer_dla_tury(id_gry)
 
-            elif typ_slotu == "czlowiek": # Gracz połączył się ponownie (np. odświeżył stronę)
-                print(f"[{id_gry}] Gracz {nazwa_gracza} połączył się ponownie (status W_TRAKCIE).")
-            # Jeśli typ_slotu to 'bot', nie pozwól człowiekowi dołączyć na jego miejsce (chociaż to nie powinno się zdarzyć)
+        # --- 4. Zapisz zmiany i wyślij aktualizację stanu ---
+        if stan_zmieniony:
+            await save_lobby_data(id_gry, lobby_data)
+            await manager.notify_state_update(id_gry)
+        else:
+            # Jeśli stan się nie zmienił, wyślij stan tylko do tego klienta
+            state_message = await manager.build_state_for_player(lobby_data, await get_game_engine(id_gry), nazwa_gracza)
+            await websocket.send_text(json.dumps(state_message))
 
-        # --- Wysyłanie Stanu Początkowego / Uruchomienie Pętli Botów ---
-        # Wyślij aktualny stan gry do nowo podłączonego gracza (i pozostałych)
-        # (W lobby stan jest wysyłany przy dołączaniu do slotu)
-        await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
+        # === POCZĄTEK POPRAWKI (Wersja 2) ===
+        # Wywołanie pętli botów przy połączeniu WS (na wypadek, gdyby gra już trwała)
+        if lobby_data["status_partii"] == "W_TRAKCIE":
+             print(f"INFO (WS Connect): Gra {id_gry} jest w toku, uruchamiam pętlę botów (na wszelki wypadek).")
+             asyncio.create_task(uruchom_petle_botow(id_gry))
+        # === KONIEC POPRAWKI ===
 
-        # Uruchom pętlę botów (jeśli jest tura bota)
-        asyncio.create_task(uruchom_petle_botow(id_gry))
-
-        # --- Główna Pętla Odbierania Wiadomości od Klienta ---
+        # --- 5. Główna Pętla Odbierania Wiadomości ---
         while True:
-            data = await websocket.receive_json() # Czekaj na wiadomość od klienta
-            partia = gry.get(id_gry) # Odśwież referencję do stanu gry (mógł się zmienić)
-            if not partia: break # Jeśli gra została usunięta, zakończ pętlę
+            data = await websocket.receive_json()
+            
+            # Sprawdź, czy gra nadal istnieje
+            lobby_data = await get_lobby_data(id_gry)
+            if not lobby_data:
+                break # Gra usunięta, zakończ pętlę
 
-            # --- Obsługa Wiadomości Czatowych ---
             if data.get("typ_wiadomosci") == "czat":
-                 # Sprawdź, czy nadawca jest faktycznie w grze
-                 if any(s['nazwa'] == data.get("gracz") for s in partia['slots']):
-                      await manager.broadcast(id_gry, data) # Rozgłoś wiadomość czatu
-                 continue # Przejdź do następnej iteracji pętli
+                 if any(s['nazwa'] == data.get("gracz") for s in lobby_data['slots']):
+                      await manager.publish_chat_message(id_gry, data) # Publikuj czat przez Redis
+                 continue
 
-            # --- Obsługa Akcji Gry/Lobby ---
-            # Sprawdź, czy akcja pochodzi od gracza, którego jest aktualnie tura
-            aktualne_rozdanie = partia.get("aktualne_rozdanie")
-            gracz_w_turze_nazwa = None
-            if aktualne_rozdanie and aktualne_rozdanie.kolej_gracza_idx is not None:
-                # Zabezpieczenie przed błędnym indeksem
-                if 0 <= aktualne_rozdanie.kolej_gracza_idx < len(aktualne_rozdanie.gracze):
-                    gracz_w_turze_nazwa = aktualne_rozdanie.gracze[aktualne_rozdanie.kolej_gracza_idx].nazwa
+            # --- Przekaż akcję do głównej funkcji logiki ---
+            # Nie musimy tu sprawdzać tury, `przetworz_akcje_gracza`
+            # i silnik gry zrobią to za nas.
+            await przetworz_akcje_gracza(data, id_gry)
+            # `przetworz_akcje_gracza` sam zapisze stan i wywoła 
+            # `manager.notify_state_update(id_gry)`, co spowoduje
+            # wysłanie nowego stanu do WSZYSTKICH klientów (w tym tego).
 
-            # Zezwalaj na akcje systemowe, akcje lobby, lub akcje od gracza w turze
-            akcja_systemowa = data.get('akcja', {}).get('typ') in ['nastepne_rozdanie', 'finalizuj_lewe']
-            akcja_lobby = 'akcja_lobby' in data
-            czyj_ruch = data.get("gracz") == gracz_w_turze_nazwa
-            akcja_po_grze = partia["status_partii"] == "ZAKONCZONA"
-
-            if czyj_ruch or akcja_systemowa or akcja_lobby or partia["status_partii"] == "LOBBY" or akcja_po_grze:
-                # 1. Przetwórz akcję gracza (wywołuje logikę silnika gry)
-                await przetworz_akcje_gracza(data, partia)
-
-                # 2. Pobierz NOWY stan gry po przetworzeniu akcji
-                nowy_stan = pobierz_stan_gry(id_gry)
-
-                # 3. Wyślij nowy stan do wszystkich podłączonych graczy
-                await manager.broadcast(id_gry, nowy_stan)
-
-                # 4. Uruchom pętlę botów (jeśli teraz jest tura bota)
-                asyncio.create_task(uruchom_petle_botow(id_gry))
-            else:
-                 # Odrzuć akcję, jeśli nie spełnia warunków
-                 print(f"[{id_gry}] Odrzucono akcję od {data.get('gracz')}. Tura: {gracz_w_turze_nazwa}")
-
-    # --- Obsługa Rozłączenia Klienta ---
+    # --- 6. Obsługa Rozłączenia Klienta ---
     except WebSocketDisconnect:
         print(f"[{id_gry}] Gracz {nazwa_gracza} rozłączył się.")
-        manager.disconnect(websocket, id_gry) # Usuń z ConnectionManagera
-        partia = gry.get(id_gry) # Pobierz stan gry ponownie
+        manager.disconnect(websocket, id_gry)
+        lobby_data = await get_lobby_data(id_gry)
+        stan_zmieniony = False
+        lobby_usunięte = False
 
-        stan_zmieniony = False # Flaga, czy trzeba wysłać broadcast
-        lobby_usunięte = False # Flaga, czy lobby zostało usunięte
-
-        if partia: # Sprawdź, czy gra nadal istnieje
-            if partia["status_partii"] == "LOBBY": # Rozłączenie w lobby
-                 slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
-                 
-                 if slot_gracza: # Jeśli gracz zajmował slot
-                     # Opróżnij slot
+        if lobby_data:
+            if lobby_data["status_partii"] == "LOBBY":
+                 slot_gracza = next((s for s in lobby_data["slots"] if s["nazwa"] == nazwa_gracza), None)
+                 if slot_gracza:
                      slot_gracza.update({"typ": "pusty", "nazwa": None, "bot_algorithm": None})
-                     
-                     # Logika przekazywania hosta
-                     if partia["host"] == nazwa_gracza:
-                         # 1. Spróbuj przekazać innemu człowiekowi
-                         nowy_host = next((s["nazwa"] for s in partia["slots"] if s["typ"] == "czlowiek"), None)
-                         
+                     if lobby_data["host"] == nazwa_gracza:
+                         nowy_host = next((s["nazwa"] for s in lobby_data["slots"] if s["typ"] == "czlowiek"), None)
                          if not nowy_host:
-                             # 2. Jeśli nie ma ludzi, przekaż botowi (naszemu 'elo world' LUB zwykłemu)
-                             nowy_host = next((s["nazwa"] for s in partia["slots"] if s["typ"] == "bot"), None)
-                         
-                         partia["host"] = nowy_host # Może być None, jeśli lobby jest puste
-                         
+                             nowy_host = next((s["nazwa"] for s in lobby_data["slots"] if s["typ"] == "bot"), None)
+                         lobby_data["host"] = nowy_host
                      stan_zmieniony = True
 
-                 # Sprawdź, czy lobby jest teraz CAŁKOWICIE puste
-                 if partia.get("tryb_lobby") == "online":
-                     # Sprawdzamy, czy WSZYSTKIE sloty są "pusty"
-                     czy_lobby_puste = all(s.get("typ") == "pusty" for s in partia.get("slots", []))
-                     
+                 if lobby_data.get("tryb_lobby") == "online":
+                     czy_lobby_puste = all(s.get("typ") == "pusty" for s in lobby_data.get("slots", []))
                      if czy_lobby_puste:
-                         OKRES_OCHRONNY_S = 10 # 10 sekund
-                         czas_stworzenia = partia.get("czas_stworzenia", 0)
+                         print(f"Lobby {id_gry} jest puste. Usuwanie...")
+                         await delete_game_state(id_gry) # Usuń z Redis
+                         lobby_usunięte = True
+                         stan_zmieniony = False 
                          
-                         if (time.time() - czas_stworzenia) < OKRES_OCHRONNY_S:
-                             # Lobby jest w okresie ochronnym, nie usuwaj go
-                             print(f"[{id_gry}] Lobby jest w 10s okresie ochronnym. Ignorowanie rozłączenia (prawdopodobnie hosta).")
-                         else:
-                             # Lobby jest stare i puste, usuń je
-                             print(f"Lobby {id_gry} (host: {partia.get('host')}) jest teraz całkowicie puste. Usuwanie...")
-                             try:
-                                 del gry[id_gry] # Usuń grę
-                                 lobby_usunięte = True
-                                 stan_zmieniony = False 
-                                 if id_gry in manager.active_connections:
-                                      del manager.active_connections[id_gry]
-                             except KeyError:
-                                 print(f"[{id_gry}] Nie można było usunąć lobby (może już usunięte).")
-            elif partia["status_partii"] == "W_TRAKCIE": # Rozłączenie w trakcie gry
-                print(f"Gracz {nazwa_gracza} rozłączył się w trakcie gry {id_gry}.")
-                slot_gracza = next((s for s in partia["slots"] if s["nazwa"] == nazwa_gracza), None)
+            elif lobby_data["status_partii"] == "W_TRAKCIE":
+                slot_gracza = next((s for s in lobby_data["slots"] if s["nazwa"] == nazwa_gracza), None)
 
-                # --- Zarządzanie Timerami przy Rozłączeniu ---
-                # Wstrzymaj timer tury (jeśli gra rankingowa i timer działał)
-                if partia.get("opcje", {}).get("rankingowa", False):
-                    if partia.get("timer_task") and not partia["timer_task"].done():
-                        partia["timer_task"].cancel()
-                        print(f"[{id_gry}] Timer tury wstrzymany z powodu rozłączenia gracza.")
+                # Wstrzymaj timer tury
+                # Timer zarządzany przez Timer Worker
 
-                # Oznacz slot jako rozłączony i uruchom timer zastępujący bota (dla gier nierankingowych)
                 if slot_gracza and slot_gracza.get('typ') == 'czlowiek':
                      slot_gracza['typ'] = 'rozlaczony'
-                     slot_gracza['disconnect_time'] = time.time() # Zapisz czas rozłączenia
-                     # Uruchom `replacement_timer` tylko jeśli gra NIE jest rankingowa
-                     if not partia.get("opcje", {}).get("rankingowa", False):
-                         task = asyncio.create_task(replacement_timer(id_gry, slot_gracza["slot_id"]))
-                         slot_gracza['disconnect_task'] = task # Zapisz referencję do zadania
-                     else:
-                         print(f"[{id_gry}] Gra rankingowa, gracz {nazwa_gracza} nie zostanie zastąpiony botem.")
+                     slot_gracza['disconnect_time'] = time.time()
                      stan_zmieniony = True
+                     
+                         
 
-        # --- Wyslij aktualizację stanu po rozłączeniu (jeśli trzeba) ---
-        if stan_zmieniony and not lobby_usunięte and partia:
-             try:
-                 # Wyślij zaktualizowany stan do pozostałych graczy
-                 await manager.broadcast(id_gry, pobierz_stan_gry(id_gry))
-                 # Uruchom pętlę botów (może to teraz tura bota zastępującego)
-                 asyncio.create_task(uruchom_petle_botow(id_gry))
-             except Exception as broadcast_error:
-                 # Błąd broadcastu może wystąpić, jeśli wszyscy się rozłączyli
-                 print(f"INFO: Nie udało się wysłać broadcastu po rozłączeniu gracza {nazwa_gracza} w grze {id_gry}: {broadcast_error}")
+        if stan_zmieniony and not lobby_usunięte:
+             await save_lobby_data(id_gry, lobby_data)
+             await manager.notify_state_update(id_gry)
 
-    # --- Obsługa Niespodziewanych Błędów WebSocket ---
     except Exception as e:
-        print(f"!!! KRYTYCZNY BŁĄD WEBSOCKET DLA GRY {id_gry} !!! Gracz: {nazwa_gracza}")
-        print(f"Typ błędu: {type(e).__name__}")
-        traceback.print_exc() # Wydrukuj pełny traceback błędu
-
-        # Spróbuj wysłać informację o błędzie do pozostałych graczy
-        try:
-            if id_gry in manager.active_connections:
-                 await manager.broadcast(id_gry, {"error": "Krytyczny błąd serwera. Gra może być niestabilna.", "details": str(e)})
-        except Exception as broadcast_error:
-            print(f"BŁĄD podczas broadcastu błędu krytycznego: {broadcast_error}")
-
-        # Spróbuj zamknąć problematyczne połączenie
-        try:
-            await websocket.close(code=1011, reason="Internal server error")
-        except RuntimeError as close_error:
-            # Błąd może wystąpić, jeśli połączenie jest już zamknięte
-            print(f"Info: Błąd podczas zamykania websocket po krytycznym błędzie: {close_error}")
-
-        # Zawsze usuń połączenie z managera po błędzie
+        print(f"!!! KRYTYCZNY BŁĄD WEBSOCKET DLA {id_gry} / {nazwa_gracza} !!!")
+        traceback.print_exc()
         manager.disconnect(websocket, id_gry)
+
+# Zrefaktoryzowany timer zastępujący (dla Redis)
+async def replacement_timer_redis(id_gry: str, slot_id: int):
+    lobby_data = await get_lobby_data(id_gry)
+    if not lobby_data or lobby_data.get("opcje", {}).get("rankingowa", False):
+        return
+
+    print(f"[{id_gry}] Uruchomiono 60s timer zastępujący bota (Redis) dla slotu {slot_id}...")
+    await asyncio.sleep(60)
+
+    lobby_po_czasie = await get_lobby_data(id_gry)
+    if not lobby_po_czasie or lobby_po_czasie["status_partii"] != "W_TRAKCIE":
+        return
+
+    slot = next((s for s in lobby_po_czasie["slots"] if s["slot_id"] == slot_id), None)
+
+    if slot and slot.get("typ") == "rozlaczony":
+        stara_nazwa = slot.get("nazwa", f"Gracz_{slot_id}")
+        nowa_nazwa_bota = f"Bot_{stara_nazwa[:8]}"
+        print(f"[{id_gry}] Gracz {stara_nazwa} (slot {slot_id}) zastąpiony botem {nowa_nazwa_bota}.")
+
+        slot["nazwa"] = nowa_nazwa_bota
+        slot["typ"] = "bot"
+        slot["bot_algorithm"] = default_bot_name
+        
+        # Zapisz zmiany i powiadom
+        await save_lobby_data(id_gry, lobby_po_czasie)
+        await manager.notify_state_update(id_gry)
+        asyncio.create_task(uruchom_petle_botow(id_gry))

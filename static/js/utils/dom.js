@@ -1,0 +1,1 @@
+export const $=s=>document.querySelector(s);export const $$=s=>document.querySelectorAll(s);export const hide=el=>el?.classList.add('hidden');export const show=el=>el?.classList.remove('hidden');export const toggle=el=>el?.classList.toggle('hidden');

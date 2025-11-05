@@ -1,0 +1,115 @@
+/* LANDING PAGE */
+.landing-page {background: var(--bg-app);}
+.hero {position: relative; min-height: 100vh; display: flex; align-items: center; padding: var(--space-24) 0; overflow: hidden;}
+.hero-background {position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.1), transparent 70%); z-index: 0;}
+.hero-content {position: relative; z-index: 1; max-width: 600px;}
+.hero-title {font-size: var(--text-5xl); font-weight: var(--font-bold); line-height: 1.2; margin-bottom: var(--space-6);}
+.hero-subtitle {font-size: var(--text-xl); color: var(--text-secondary); margin-bottom: var(--space-8);}
+.hero-actions {display: flex; gap: var(--space-4); margin-bottom: var(--space-12);}
+.hero-stats {display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-8);}
+.stat-item {text-align: center;}
+.stat-value {font-size: var(--text-3xl); font-weight: var(--font-bold); color: var(--primary-500);}
+.stat-label {font-size: var(--text-sm); color: var(--text-muted);}
+.hero-visual {position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 40%; display: flex; align-items: center; justify-content: center;}
+.floating-card {position: absolute; font-size: 60px; animation: float 6s ease-in-out infinite;}
+.card-1 {top: 20%; left: 20%; animation-delay: 0s;}
+.card-2 {top: 40%; right: 20%; animation-delay: 1s;}
+.card-3 {bottom: 30%; left: 30%; animation-delay: 2s;}
+.card-4 {bottom: 20%; right: 30%; animation-delay: 3s;}
+@keyframes float {0%, 100% {transform: translateY(0);} 50% {transform: translateY(-20px);}}
+.rules {
+    padding: var(--space-24) 0;
+    background: var(--neutral-900);
+}
+
+.rules-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-8);
+}
+
+.rule-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-8);
+    border: 2px solid var(--neutral-700);
+    transition: all var(--transition-base);
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: var(--text-primary);
+}
+
+.rule-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--primary-500);
+    box-shadow: var(--shadow-xl);
+}
+
+.rule-card-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.rule-card-placeholder {
+    border-style: dashed;
+    background: transparent;
+}
+
+.rule-icon {
+    font-size: 64px;
+    margin-bottom: var(--space-4);
+    text-align: center;
+}
+
+.rule-title {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-bold);
+    margin-bottom: var(--space-3);
+    text-align: center;
+    color: var(--text-primary);
+}
+
+.rule-description {
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: var(--space-6);
+    flex: 1;
+}
+
+.rule-footer {
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--neutral-700);
+    text-align: center;
+}
+
+.rule-link {
+    color: var(--primary-500);
+    font-weight: var(--font-semibold);
+    transition: color var(--transition-fast);
+}
+
+.rule-card:hover .rule-link {
+    color: var(--primary-400);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .rules-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.section-title {font-size: var(--text-4xl); font-weight: var(--font-bold); text-align: center; margin-bottom: var(--space-4);}
+.section-subtitle {text-align: center; color: var(--text-secondary); margin-bottom: var(--space-12); max-width: 600px; margin-left: auto; margin-right: auto;}
+.games {padding: var(--space-24) 0;}
+.games-grid {display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-8);}
+.cta {padding: var(--space-24) 0; background: linear-gradient(135deg, var(--primary-700), var(--primary-900)); text-align: center;}
+.cta-title {font-size: var(--text-4xl); margin-bottom: var(--space-4);}
+.cta-description {font-size: var(--text-xl); color: var(--text-secondary); margin-bottom: var(--space-8); max-width: 600px; margin-left: auto; margin-right: auto;}
+@media (max-width: 768px) {
+.hero {min-height: auto; padding: var(--space-12) 0;}
+.hero-visual {display: none;}
+.hero-title {font-size: var(--text-3xl);}
+.hero-actions {flex-direction: column;}
+}

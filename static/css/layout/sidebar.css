@@ -1,0 +1,14 @@
+/* SIDEBAR */
+.sidebar {position: fixed; top: 60px; left: 0; width: 280px; height: calc(100vh - 60px); background: var(--bg-surface); border-right: 1px solid var(--neutral-700); overflow-y: auto; z-index: var(--z-sticky); transition: transform var(--transition-base);}
+.sidebar-content {padding: var(--space-6);}
+.sidebar-section {margin-bottom: var(--space-8);}
+.sidebar-title {font-size: var(--text-sm); font-weight: var(--font-semibold); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-3);}
+.sidebar-link {display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-lg); color: var(--text-secondary); transition: all var(--transition-fast);}
+.sidebar-link:hover {background: var(--neutral-800); color: var(--text-primary);}
+.sidebar-link.active {background: var(--primary-500); color: white;}
+.sidebar-link.disabled {opacity: 0.5; cursor: not-allowed;}
+.sidebar-toggle {display: none;}
+@media (max-width: 1024px) {
+.sidebar {transform: translateX(-100%);}
+.sidebar.open {transform: translateX(0);}
+}

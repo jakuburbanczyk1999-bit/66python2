@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Miedziowe Karty</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/base/reset.css">
+    <link rel="stylesheet" href="/static/css/base/variables.css">
+    <link rel="stylesheet" href="/static/css/base/base.css">
+    <link rel="stylesheet" href="/static/css/base/utilities.css">
+    <link rel="stylesheet" href="/static/css/components/buttons.css">
+    <link rel="stylesheet" href="/static/css/components/cards.css">
+    <link rel="stylesheet" href="/static/css/components/forms.css">
+    <link rel="stylesheet" href="/static/css/components/modals.css">
+    <link rel="stylesheet" href="/static/css/components/tabs.css">
+    <link rel="stylesheet" href="/static/css/layout/navbar.css">
+    <link rel="stylesheet" href="/static/css/layout/sidebar.css">
+    <link rel="stylesheet" href="/static/css/pages/dashboard.css">
+    <link rel="stylesheet" href="/static/css/animations.css">
+</head>
+<body class="dashboard-page">
+
+    <!-- Top Navigation -->
+    <nav class="navbar navbar-dashboard">
+        <div class="navbar-brand">
+            <button class="sidebar-toggle" id="sidebar-toggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <a href="/dashboard.html" class="logo">
+                <span class="logo-icon">🃏</span>
+                <span class="logo-text">Miedziowe Karty</span>
+            </a>
+        </div>
+        
+        <div class="navbar-center">
+            <div class="navbar-search">
+                <input 
+                    type="text" 
+                    placeholder="Szukaj graczy, gier..." 
+                    class="search-input"
+                    id="search-input"
+                >
+                <button class="search-btn">🔍</button>
+            </div>
+        </div>
+        
+        <div class="navbar-actions">
+            <button class="navbar-btn" title="Powiadomienia" id="notifications-btn">
+                <span class="icon">🔔</span>
+                <span class="badge">3</span>
+            </button>
+            
+            <div class="navbar-user" id="navbar-user">
+                <img src="/static/images/default-avatar.png" alt="Avatar" class="user-avatar" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%234f46e5%22/><text x=%2250%22 y=%2255%22 text-anchor=%22middle%22 dominant-baseline=%22middle%22 font-size=%2240%22 fill=%22white%22 font-family=%22Arial%22>U</text></svg>'">
+                <span class="user-name" id="user-name-display">Gracz</span>
+                <span class="icon">▼</span>
+            </div>
+            
+            <!-- User dropdown -->
+            <div class="dropdown-menu hidden" id="user-dropdown">
+                <a href="/profile.html" class="dropdown-item">
+                    <span class="icon">👤</span>
+                    Profil
+                </a>
+                <a href="/ranking.html" class="dropdown-item">
+                    <span class="icon">🏆</span>
+                    Ranking
+                </a>
+                <a href="#" class="dropdown-item" id="settings-btn">
+                    <span class="icon">⚙️</span>
+                    Ustawienia
+                </a>
+                <div class="dropdown-divider"></div>
+                <a href="#" class="dropdown-item" id="logout-btn">
+                    <span class="icon">🚪</span>
+                    Wyloguj się
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Gry</h3>
+                <a href="/dashboard.html?game=66" class="sidebar-link active">
+                    <span class="icon">🃏</span>
+                    Gra w 66
+                    <span class="badge badge-success">Online</span>
+                </a>
+                <a href="#" class="sidebar-link disabled">
+                    <span class="icon">🎴</span>
+                    Tysiąc
+                    <span class="badge badge-secondary">Wkrótce</span>
+                </a>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Tryby</h3>
+                <a href="#" class="sidebar-link">
+                    <span class="icon">🎮</span>
+                    Gra szybka
+                </a>
+                <a href="#" class="sidebar-link">
+                    <span class="icon">🏆</span>
+                    Rankingowa
+                </a>
+                <a href="#" class="sidebar-link disabled">
+                    <span class="icon">🏅</span>
+                    Turniej
+                    <span class="badge badge-secondary">Soon</span>
+                </a>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Społeczność</h3>
+                <a href="#" class="sidebar-link disabled">
+                    <span class="icon">👥</span>
+                    Znajomi
+                </a>
+                <a href="#" class="sidebar-link disabled">
+                    <span class="icon">🎯</span>
+                    Drużyny
+                </a>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3 class="sidebar-title">Inne</h3>
+                <a href="/ranking.html" class="sidebar-link">
+                    <span class="icon">📊</span>
+                    Ranking
+                </a>
+                <a href="/zasady.html" class="sidebar-link">
+                    <span class="icon">📖</span>
+                    Zasady gier
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container-fluid">
+            
+            <!-- Welcome Section -->
+            <section class="welcome-section">
+                <h1 class="page-title">
+                    Witaj, <span id="welcome-user-name">Graczu</span>! 👋
+                </h1>
+                <p class="page-subtitle">
+                    Wybierz grę i rozpocznij rozgrywkę, lub przeglądaj aktywne lobby
+                </p>
+            </section>
+
+            <!-- Quick Stats -->
+            <section class="quick-stats">
+                <div class="stat-card">
+                    <div class="stat-icon">🎮</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-games-played">0</div>
+                        <div class="stat-label">Rozegranych gier</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">🏆</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-wins">0</div>
+                        <div class="stat-label">Wygranych</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">📈</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-elo">1500</div>
+                        <div class="stat-label">Rating Elo</div>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="stat-icon">⭐</div>
+                    <div class="stat-content">
+                        <div class="stat-value" id="stat-rank">#999</div>
+                        <div class="stat-label">Pozycja</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tabs Navigation -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="create">
+                    <span class="icon">➕</span>
+                    Stwórz Lobby
+                </button>
+                <button class="tab-btn" data-tab="browse">
+                    <span class="icon">🔍</span>
+                    Przeglądaj Lobby
+                </button>
+                <button class="tab-btn" data-tab="replays">
+                    <span class="icon">📹</span>
+                    Powtórki
+                    <span class="badge badge-secondary">Soon</span>
+                </button>
+            </div>
+
+            <!-- Tab Content: Create Lobby -->
+            <div class="tab-content active" id="tab-create">
+                <div class="create-lobby-section">
+                    <h2 class="section-title">Stwórz Nową Grę</h2>
+                    
+                    <div class="game-selector">
+                        <h3>Wybierz grę:</h3>
+                        <div class="game-options">
+                            <button class="game-option active" data-game="66">
+                                <span class="game-icon">🃏</span>
+                                <span class="game-name">66</span>
+                            </button>
+                            <button class="game-option disabled" data-game="1000">
+                                <span class="game-icon">🎴</span>
+                                <span class="game-name">Tysiąc</span>
+                                <span class="badge">Soon</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <form class="create-lobby-form" id="create-lobby-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Typ lobby</label>
+                                <select class="form-input" id="lobby-type">
+                                    <option value="online">Online (Multiplayer)</option>
+                                    <option value="lokalna">Lokalna (z Botami)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Tryb gry</label>
+                                <select class="form-input" id="game-mode">
+                                    <option value="4p">4-osobowy (2v2)</option>
+                                    <option value="3p">3-osobowy (FFA)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="ranked-checkbox" class="checkbox">
+                                <label for="ranked-checkbox">
+                                    <strong>Gra rankingowa</strong> 🏆
+                                    <small>Wpływa na rating Elo (tylko dla gier online)</small>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group" id="password-group">
+                            <label>Hasło (opcjonalne)</label>
+                            <input 
+                                type="text" 
+                                class="form-input" 
+                                id="lobby-password"
+                                placeholder="Pozostaw puste dla publicznego lobby"
+                            >
+                            <small class="form-hint">Hasło chronione lobby będzie widoczne tylko z linkiem</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-lg btn-block">
+                            🎮 Stwórz Lobby
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Tab Content: Browse Lobbies -->
+            <div class="tab-content" id="tab-browse">
+                <div class="browse-section">
+                    <div class="browse-header">
+                        <h2 class="section-title">Dostępne Lobby</h2>
+                        
+                        <div class="browse-filters">
+                            <button class="filter-btn active" data-filter="all">
+                                Wszystkie
+                            </button>
+                            <button class="filter-btn" data-filter="ranked">
+                                🏆 Rankingowe
+                            </button>
+                            <button class="filter-btn" data-filter="casual">
+                                🎮 Casual
+                            </button>
+                        </div>
+                        
+                        <button class="btn btn-secondary" id="refresh-lobbies-btn">
+                            🔄 Odśwież
+                        </button>
+                    </div>
+                    
+                    <!-- Lobbies List -->
+                    <div class="lobbies-grid" id="lobbies-grid">
+                        <!-- Lobby cards will be dynamically inserted here -->
+                        <div class="loading-state" id="lobbies-loading">
+                            <div class="spinner"></div>
+                            <p>Ładowanie lobby...</p>
+                        </div>
+                        
+                        <div class="empty-state hidden" id="lobbies-empty">
+                            <span class="empty-icon">🎮</span>
+                            <h3>Brak dostępnych lobby</h3>
+                            <p>Stwórz nowe lobby aby rozpocząć grę!</p>
+                            <button class="btn btn-primary" onclick="switchTab('create')">
+                                Stwórz Lobby
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Replays -->
+            <div class="tab-content" id="tab-replays">
+                <div class="replays-section">
+                    <h2 class="section-title">Powtórki Gier</h2>
+                    
+                    <div class="coming-soon-card">
+                        <span class="icon">📹</span>
+                        <h3>Wkrótce dostępne!</h3>
+                        <p>
+                            Pracujemy nad systemem nagrywania i odtwarzania rozgrywek.
+                            Będziesz mógł oglądać gry najlepszych graczy, analizować strategie
+                            i uczyć się od mistrzów!
+                        </p>
+                        <div class="features-preview">
+                            <div class="feature-preview">✅ Nagrywanie gier rankingowych</div>
+                            <div class="feature-preview">✅ Filmy z komentarzem</div>
+                            <div class="feature-preview">✅ Analiza ruchów</div>
+                            <div class="feature-preview">✅ Top gry tygodnia</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modals -->
+    
+    <!-- Join Lobby Modal -->
+    <div class="modal-overlay hidden" id="join-lobby-modal">
+        <div class="modal">
+            <button class="modal-close" id="join-modal-close">&times;</button>
+            
+            <div class="modal-header">
+                <h2>Dołącz do Lobby</h2>
+                <p id="join-lobby-name">Gra: ...</p>
+            </div>
+            
+            <div class="modal-body">
+                <div class="lobby-details" id="join-lobby-details">
+                    <!-- Dynamically filled -->
+                </div>
+                
+                <div class="form-group" id="join-password-group" style="display: none;">
+                    <label>To lobby wymaga hasła</label>
+                    <input 
+                        type="password" 
+                        class="form-input" 
+                        id="join-lobby-password"
+                        placeholder="Wpisz hasło"
+                    >
+                </div>
+                
+                <div class="form-error hidden" id="join-error"></div>
+                
+                <button class="btn btn-primary btn-block" id="confirm-join-btn">
+                    Dołącz do gry
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/utils/dom.js"></script>
+    <script src="/static/js/utils/storage.js"></script>
+    <script src="/static/js/utils/formatters.js"></script>
+    <script src="/static/js/services/auth.js"></script>
+    <script src="/static/js/services/api.js"></script>
+    <script src="/static/js/components/LobbyCard.js"></script>
+    <script src="/static/js/pages/dashboard.js"></script>
+</body>
+</html>
