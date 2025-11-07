@@ -6,3 +6,9 @@ __pycache__/
 *.db
 *.sqlite
 *.sqlite3
+# Ustawienia edytora VSCode
+.vscode/
+
+# Dane bazy danych Postgres
+postgres-data/
+miedziowe_karty/
