@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gra w 66 - Miedziowe Karty</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/base/reset.css">
+    <link rel="stylesheet" href="/static/css/base/variables.css">
+    <link rel="stylesheet" href="/static/css/base/base.css">
+    <link rel="stylesheet" href="/static/css/base/utilities.css">
+    <link rel="stylesheet" href="/static/css/components/buttons.css">
+    <link rel="stylesheet" href="/static/css/pages/game.css">
+</head>
+<body class="game-page">
+
+    <!-- Top Bar -->
+    <header class="game-header">
+        <div class="header-left">
+            <button class="btn btn-secondary btn-sm" id="leave-game-btn">
+                ← Opuść grę
+            </button>
+            <h1 class="game-title">
+                <span class="game-icon">🃏</span>
+                Gra w 66
+            </h1>
+        </div>
+        <div class="header-center">
+            <div class="game-info">
+                <span class="round-info">Runda: <strong id="round-number">1</strong></span>
+                <span class="divider">|</span>
+                <span class="turn-info">Tura: <strong id="current-player-name">Gracz 1</strong></span>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="game-status" id="game-status">
+                <span class="status-dot"></span>
+                <span class="status-text">W trakcie gry</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main class="game-container">
+        
+        <!-- Table -->
+        <div class="game-table">
+            
+            <!-- Top Player (Opponent) -->
+            <div class="player-area player-top" id="player-2">
+                <div class="player-info">
+                    <div class="player-avatar">👤</div>
+                    <div class="player-details">
+                        <div class="player-name">Gracz 3</div>
+                        <div class="player-stats">
+                            <span class="stat-item">💰 <span class="points">0</span></span>
+                            <span class="stat-item">🃏 <span class="cards-count">6</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="player-hand opponent-hand">
+                    <!-- Karty wroga (zakryte) -->
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                </div>
+            </div>
+
+            <!-- Left Player -->
+            <div class="player-area player-left" id="player-1">
+                <div class="player-info">
+                    <div class="player-avatar">🤖</div>
+                    <div class="player-details">
+                        <div class="player-name">Bot 1</div>
+                        <div class="player-stats">
+                            <span class="stat-item">💰 <span class="points">0</span></span>
+                            <span class="stat-item">🃏 <span class="cards-count">6</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="player-hand opponent-hand vertical">
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                </div>
+            </div>
+
+            <!-- Right Player -->
+            <div class="player-area player-right" id="player-3">
+                <div class="player-info">
+                    <div class="player-avatar">🤖</div>
+                    <div class="player-details">
+                        <div class="player-name">Bot 2</div>
+                        <div class="player-stats">
+                            <span class="stat-item">💰 <span class="points">0</span></span>
+                            <span class="stat-item">🃏 <span class="cards-count">6</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="player-hand opponent-hand vertical">
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                    <div class="card card-back"></div>
+                </div>
+            </div>
+
+            <!-- Center Table -->
+            <div class="table-center">
+                
+                <!-- Played Cards Area -->
+                <div class="played-cards" id="played-cards">
+                    <!-- Karty zagrane w tej lewie -->
+                </div>
+
+                <!-- Deck & Trump -->
+                <div class="deck-area">
+                    <div class="deck" id="deck">
+                        <div class="card card-back">
+                            <span class="deck-count">18</span>
+                        </div>
+                    </div>
+                    <div class="trump-card" id="trump-card">
+                        <!-- Karta atutowa -->
+                        <div class="card" data-suit="hearts" data-rank="A">
+                            <div class="card-content">
+                                <div class="card-corner top-left">
+                                    <span class="rank">A</span>
+                                    <span class="suit">♥</span>
+                                </div>
+                                <div class="card-center">
+                                    <span class="suit-big">♥</span>
+                                </div>
+                                <div class="card-corner bottom-right">
+                                    <span class="rank">A</span>
+                                    <span class="suit">♥</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trump Indicator -->
+                <div class="trump-indicator">
+                    <span class="trump-label">Atuty:</span>
+                    <span class="trump-suit" id="trump-suit">♥</span>
+                </div>
+
+            </div>
+
+            <!-- Bottom Player (You) -->
+            <div class="player-area player-bottom" id="player-0">
+                <div class="player-info">
+                    <div class="player-avatar">👤</div>
+                    <div class="player-details">
+                        <div class="player-name">Ty</div>
+                        <div class="player-stats">
+                            <span class="stat-item">💰 <span class="points">0</span></span>
+                            <span class="stat-item">🃏 <span class="cards-count">6</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="player-hand your-hand" id="your-hand">
+                    <!-- Twoje karty (odkryte, klikalne) -->
+                    <div class="card" data-suit="hearts" data-rank="K" onclick="playCard(this)">
+                        <div class="card-content">
+                            <div class="card-corner top-left">
+                                <span class="rank">K</span>
+                                <span class="suit">♥</span>
+                            </div>
+                            <div class="card-center">
+                                <span class="suit-big">♥</span>
+                            </div>
+                            <div class="card-corner bottom-right">
+                                <span class="rank">K</span>
+                                <span class="suit">♥</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Sidebar -->
+        <aside class="game-sidebar">
+            
+            <!-- Scoreboard -->
+            <div class="scoreboard">
+                <h3>Wyniki rundy</h3>
+                <div class="score-list">
+                    <div class="score-item">
+                        <span class="score-player">Ty</span>
+                        <span class="score-value">0</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-player">Bot 1</span>
+                        <span class="score-value">0</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-player">Gracz 3</span>
+                        <span class="score-value">0</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-player">Bot 2</span>
+                        <span class="score-value">0</span>
+                    </div>
+                </div>
+                <div class="score-goal">
+                    Cel: <strong>66 punktów</strong>
+                </div>
+            </div>
+
+            <!-- Action Log -->
+            <div class="action-log">
+                <h3>Historia</h3>
+                <div class="log-messages" id="log-messages">
+                    <div class="log-message system">
+                        Gra rozpoczęta!
+                    </div>
+                    <div class="log-message info">
+                        Atuty: ♥ Kier
+                    </div>
+                    <div class="log-message">
+                        <strong>Ty</strong> rozpoczynasz grę
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+
+    </main>
+
+    <!-- Modals -->
+    
+    <!-- Trump Selection Modal -->
+    <div class="modal-overlay hidden" id="trump-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Wybierz kolor atutowy</h2>
+            </div>
+            <div class="modal-body">
+                <div class="trump-selection">
+                    <button class="trump-btn" data-suit="hearts" onclick="selectTrump('hearts')">
+                        <span class="suit-icon">♥</span>
+                        <span>Kiery</span>
+                    </button>
+                    <button class="trump-btn" data-suit="diamonds" onclick="selectTrump('diamonds')">
+                        <span class="suit-icon">♦</span>
+                        <span>Kara</span>
+                    </button>
+                    <button class="trump-btn" data-suit="clubs" onclick="selectTrump('clubs')">
+                        <span class="suit-icon">♣</span>
+                        <span>Trefle</span>
+                    </button>
+                    <button class="trump-btn" data-suit="spades" onclick="selectTrump('spades')">
+                        <span class="suit-icon">♠</span>
+                        <span>Piki</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div class="modal-overlay hidden" id="game-over-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>🎉 Koniec gry!</h2>
+            </div>
+            <div class="modal-body">
+                <div class="winner-announcement">
+                    <div class="winner-avatar">👑</div>
+                    <h3 id="winner-name">Gracz 1</h3>
+                    <p class="winner-score">
+                        <strong id="winner-points">66</strong> punktów
+                    </p>
+                </div>
+                <div class="final-scores">
+                    <!-- Finalne wyniki -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="window.location.href='/dashboard.html'">
+                    Wróć do lobby
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

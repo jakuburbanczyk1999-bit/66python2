@@ -17,7 +17,8 @@ import time
 import copy
 from typing import Any, Optional, AsyncGenerator, Dict, List
 from contextlib import asynccontextmanager
-
+import secrets
+import hashlib
 # --- Biblioteki firm trzecich ---
 from fastapi import (
     FastAPI, WebSocket, WebSocketDisconnect, Query, Depends, 
@@ -28,6 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 import redis.asyncio as aioredis # <-- NOWY IMPORT: Asynchroniczny klient Redis
 import cloudpickle                 # <-- NOWY IMPORT: Do serializacji obiektów (silnika)
+import pickle
 
 # --- Biblioteki SQLAlchemy ---
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +47,7 @@ from engines.sixtysix_engine import SixtySixEngine
 # Stare importy (wciąż potrzebne do modeli Pydantic, ale nie do logiki gry)
 import silnik_gry 
 import boty # Wciąż potrzebne do instancji botów, dopóki nie zostaną zrefaktoryzowane
+from boty import wybierz_akcje_dla_bota_testowego
 from redis_utils import (   # NOWE: funkcje pomocnicze Redis
     RedisLock, 
     TimerInfo, 
@@ -97,14 +100,11 @@ async def lifespan(app: FastAPI):
     timer_worker_instance = TimerWorker(
         redis_url="redis://localhost",
         check_interval=1.0,
-        debug=True
+        debug=False
     )
     timer_worker_task = asyncio.create_task(timer_worker_instance.run())
     print("Timer Worker uruchomiony.")
     
-    # 4. Menedżer botów
-    print("Uruchamianie menedżera botów...")
-    asyncio.create_task(elo_world_manager())
     
     # 5. Periodic cleanup
     print("Uruchamianie periodic cleanup...")
@@ -130,6 +130,7 @@ async def periodic_cleanup():
         try:
             print("[Periodic Cleanup] Rozpoczynam...")
             await cleanup_expired_games(redis_client, max_age_seconds=21600)
+            await cleanup_empty_lobbies()
             active_count = await get_active_game_count(redis_client)
             print(f"[Periodic Cleanup] Aktywnych gier: {active_count}")
         except Exception as e:
@@ -139,6 +140,7 @@ async def periodic_cleanup():
 
 # --- Główna instancja aplikacji FastAPI ---
 app = FastAPI(lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- Globalna instancja botów (pozostaje na razie bez zmian) ---
 # TODO: To powinno zostać zrefaktoryzowane, gdy 'boty.py' zostanie zaktualizowane
@@ -275,6 +277,329 @@ async def delete_game_state(id_gry: str):
         print(f"[Garbage Collector] Usunięto stan gry {id_gry} z Redis.")
     except Exception as e:
         print(f"BŁĄD Redis (delete_game_state) dla {id_gry}: {e}")
+
+async def cleanup_empty_lobbies():
+    """Usuń puste lobby, z samymi botami, lub stare zombie lobby"""
+    try:
+        deleted_count = 0
+        now = time.time()
+        MAX_LOBBY_AGE = 300  # 5 minut w sekundach
+        
+        print("[Cleanup] Skanowanie lobby...")
+        
+        async for key in redis_client.scan_iter(match="lobby:*"):
+            lobby_id = key.decode('utf-8').split(":")[-1]
+            lobby_data = await get_lobby_data(lobby_id)
+            
+            if not lobby_data:
+                print(f"[Cleanup] Pominięto {lobby_id} - brak danych")
+                continue
+            
+            slots = lobby_data.get('slots', [])
+            status = lobby_data.get('status_partii', 'UNKNOWN')
+            
+            # Policz typy
+            player_count = sum(1 for s in slots if s['typ'] == 'gracz')
+            bot_count = sum(1 for s in slots if s['typ'] == 'bot')
+            empty_count = sum(1 for s in slots if s['typ'] == 'pusty')
+            
+            # Sprawdź wiek (jeśli ma created_at)
+            created_at = lobby_data.get('created_at', 0)
+            age_seconds = (now - created_at) if created_at > 0 else 0
+            is_old = age_seconds > MAX_LOBBY_AGE
+            
+            print(f"[Cleanup] {lobby_id}: status={status}, graczy={player_count}, botów={bot_count}, wiek={int(age_seconds)}s")
+            
+            # WARUNKI USUNIĘCIA:
+            should_delete = False
+            reason = ""
+            
+            # 1. Całkowicie puste
+            if player_count == 0 and bot_count == 0:
+                should_delete = True
+                reason = "puste"
+            
+            # 2. Same boty (bez prawdziwych graczy)
+            elif player_count == 0 and bot_count > 0:
+                should_delete = True
+                reason = "same boty"
+            
+            # 3. Starsze niż 5 minut (zombie lobby)
+            elif is_old and status == 'LOBBY':
+                should_delete = True
+                reason = f"zombie (wiek: {int(age_seconds/60)}min)"
+            
+            if should_delete:
+                await delete_game_state(lobby_id)
+                deleted_count += 1
+                print(f"[Cleanup] ✅ USUNIĘTO {lobby_id} - powód: {reason}")
+            else:
+                print(f"[Cleanup] ⏭️ Pominięto {lobby_id} - aktywne lobby")
+        
+        if deleted_count > 0:
+            print(f"[Cleanup] 🧹 Usunięto {deleted_count} lobby")
+        else:
+            print(f"[Cleanup] ℹ️ Nic do usunięcia")
+            
+    except Exception as e:
+        print(f"[Cleanup Empty Lobbies] ❌ BŁĄD: {e}")
+        import traceback
+        traceback.print_exc()
+
+active_lobby_connections: Dict[str, List[WebSocket]] = {}
+
+
+async def add_lobby_connection(lobby_id: str, websocket: WebSocket):
+    """Dodaj połączenie WebSocket do lobby"""
+    if lobby_id not in active_lobby_connections:
+        active_lobby_connections[lobby_id] = []
+    active_lobby_connections[lobby_id].append(websocket)
+    print(f"[WebSocket] Dodano połączenie do lobby {lobby_id}. Aktywnych: {len(active_lobby_connections[lobby_id])}")
+
+
+async def remove_lobby_connection(lobby_id: str, websocket: WebSocket):
+    """Usuń połączenie WebSocket z lobby"""
+    if lobby_id in active_lobby_connections:
+        active_lobby_connections[lobby_id].remove(websocket)
+        print(f"[WebSocket] Usunięto połączenie z lobby {lobby_id}. Aktywnych: {len(active_lobby_connections[lobby_id])}")
+        
+        # Jeśli brak połączeń, usuń lobby z dict
+        if not active_lobby_connections[lobby_id]:
+            del active_lobby_connections[lobby_id]
+
+
+async def initialize_game_round(lobby_id: str, lobby_data: dict):
+    """Inicjalizuj pierwszą rundę gry (rozdaj karty, etc.)"""
+    try:
+        # Tu będzie logika rozdawania kart
+        # Na razie tylko ustaw podstawowe wartości
+        
+        lobby_data['aktualna_runda'] = 1
+        lobby_data['aktualny_gracz'] = 0  # Pierwszy gracz zaczyna
+        lobby_data['status_rundy'] = 'ROZDANIE'
+        
+        # Rozdaj karty (placeholder - rozwiniemy to później)
+        # await deal_cards(lobby_id, lobby_data)
+        
+        print(f"[Game] Inicjalizacja rundy dla lobby {lobby_id}")
+        
+    except Exception as e:
+        print(f"[Game] Błąd inicjalizacji: {e}")
+        raise
+
+async def process_bot_actions(game_id: str, engine):
+    """
+    Automatycznie wykonuje akcje botów dopóki jest ich kolej.
+    Obsługuje wszystkie fazy gry: DEKLARACJA, MELDUNEK, ROZGRYWKA.
+    """
+    max_iterations = 20  # Zabezpieczenie przed nieskończoną pętlą
+    iteration = 0
+    
+    while iteration < max_iterations:
+        iteration += 1
+        
+        # Pobierz aktualny stan
+        state = engine.game_state
+        
+        # Sprawdź czyja kolej
+        kolej_idx = state.kolej_gracza_idx
+        if kolej_idx is None:
+            print("[Bot] Brak kolejki - koniec automatycznych ruchów")
+            break
+        
+        current_player = state.gracze[kolej_idx]
+        player_id = current_player.nazwa
+        
+        # Jeśli to nie bot - zakończ
+        if not player_id.startswith('Bot'):
+            print(f"[Bot] Kolej gracza {player_id} - koniec automatycznych ruchów")
+            break
+        
+        print(f"[Bot] Kolej bota {player_id}, faza: {state.faza.name}")
+        
+        # Pobierz dozwolone akcje
+        try:
+            allowed_actions = engine.get_allowed_actions(player_id)
+        except Exception as e:
+            print(f"[Bot] Błąd pobierania akcji: {e}")
+            break
+        
+        if not allowed_actions:
+            print(f"[Bot] Brak dostępnych akcji dla {player_id}")
+            break
+        
+        # Bot wybiera akcję
+        try:
+            from boty import wybierz_akcje_dla_bota_testowego
+            typ_akcji, parametry = wybierz_akcje_dla_bota_testowego(current_player, state)
+            
+            bot_action = {
+                'typ': typ_akcji,
+                **parametry
+            }
+            
+            print(f"[Bot] Bot {player_id} wykonuje: {bot_action}")
+            
+            # Wykonaj akcję bota
+            engine.perform_action(player_id, bot_action)
+            
+            # Zapisz silnik
+            await save_game_engine(game_id, engine)
+            
+            # Broadcast
+            await broadcast_game_update(game_id, {
+                'type': 'bot_action',
+                'player': player_id,
+                'action': bot_action
+            })
+            
+            # Małe opóźnienie dla płynności
+            await asyncio.sleep(0.5)
+            
+        except Exception as e:
+            print(f"[Bot] Błąd wykonywania akcji bota: {e}")
+            import traceback
+            traceback.print_exc()
+            break
+    
+    if iteration >= max_iterations:
+        print(f"[Bot] UWAGA: Osiągnięto limit iteracji ({max_iterations})")
+
+
+def engine_key(id_gry: str) -> str:
+    """Klucz Redis dla silnika gry"""
+    return f"engine:{id_gry}"
+
+async def save_game_engine(id_gry: str, engine: SixtySixEngine):
+    """Zapisuje silnik gry do Redis (pickle)"""
+    try:
+        key = engine_key(id_gry)
+        # Serializuj silnik używając pickle
+        serialized = pickle.dumps(engine)
+        await redis_client.set(key, serialized)
+        print(f"[Redis] Zapisano silnik gry: {id_gry}")
+    except Exception as e:
+        print(f"BŁĄD Redis (save_game_engine) dla {id_gry}: {e}")
+        import traceback
+        traceback.print_exc()
+
+async def get_game_engine(id_gry: str) -> Optional[SixtySixEngine]:
+    """Odczytuje silnik gry z Redis"""
+    try:
+        key = engine_key(id_gry)
+        data = await redis_client.get(key)
+        if data:
+            # Deserializuj silnik
+            engine = pickle.loads(data)
+            return engine
+        return None
+    except Exception as e:
+        print(f"BŁĄD Redis (get_game_engine) dla {id_gry}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+async def delete_game_engine(id_gry: str):
+    """Usuwa silnik gry z Redis"""
+    try:
+        key = engine_key(id_gry)
+        await redis_client.delete(key)
+        print(f"[Redis] Usunięto silnik gry: {id_gry}")
+    except Exception as e:
+        print(f"BŁĄD Redis (delete_game_engine) dla {id_gry}: {e}")
+
+async def process_bot_turns(game_id: str, engine: SixtySixEngine, max_iterations: int = 10):
+    """
+    Automatycznie wykonuje akcje botów, jeśli mają turę.
+    max_iterations - zabezpieczenie przed nieskończoną pętlą.
+    """
+    iteration = 0
+    
+    while iteration < max_iterations:
+        iteration += 1
+        
+        # Sprawdź czy gra się skończyła
+        if engine.is_terminal():
+            print(f"[Bot] Gra zakończona po {iteration} iteracjach")
+            break
+        
+        # Czyja tura?
+        current_player = engine.get_current_player()
+        
+        if not current_player:
+            print("[Bot] Brak aktywnego gracza - koniec przetwarzania botów")
+            break
+        
+        # Sprawdź czy to bot
+        lobby_data = await get_lobby_data(game_id)
+        if not lobby_data:
+            break
+        
+        player_slot = next(
+            (s for s in lobby_data['slots'] if s['nazwa'] == current_player),
+            None
+        )
+        
+        if not player_slot or player_slot['typ'] != 'bot':
+            # To człowiek - czekamy na jego akcję
+            print(f"[Bot] Tura gracza {current_player} (człowiek) - stop")
+            break
+        
+        # Bot ma turę - wykonaj akcję
+        print(f"[Bot] Tura bota: {current_player}")
+        
+        try:
+            # Pobierz legalne akcje
+            legal_actions = engine.get_legal_actions(current_player)
+            
+            if not legal_actions:
+                print(f"[Bot] Brak legalnych akcji dla {current_player}")
+                break
+            
+            # === WYBÓR AKCJI BOTA ===
+            # TODO: Użyj inteligentnego bota (MCTS)
+            # Na razie: losowa akcja
+            import random
+            chosen_action = random.choice(legal_actions)
+            
+            print(f"[Bot] {current_player} wybiera: {chosen_action}")
+            
+            # Wykonaj akcję
+            engine.perform_action(current_player, chosen_action)
+            
+            # Zapisz silnik
+            await save_game_engine(game_id, engine)
+            
+            # Broadcast
+            new_state = engine.get_state_for_player(current_player)
+            await broadcast_game_update(game_id, {
+                'type': 'bot_action',
+                'player': current_player,
+                'action': chosen_action,
+                'state': new_state
+            })
+            
+            # Krótkie opóźnienie dla UX (aby gracze widzieli ruchy bota)
+            await asyncio.sleep(0.5)
+            
+        except Exception as e:
+            print(f"[Bot] Błąd wykonywania akcji bota: {e}")
+            import traceback
+            traceback.print_exc()
+            break
+    
+    if iteration >= max_iterations:
+        print(f"[Bot] OSTRZEŻENIE: Osiągnięto limit iteracji ({max_iterations})")
+
+
+async def broadcast_game_update(game_id: str, message: dict):
+    """Wysyła aktualizację stanu gry do wszystkich graczy przez WebSocket"""
+    # TODO: Implementacja WebSocket broadcast
+    # Na razie tylko log
+    print(f"[WebSocket] Broadcast do {game_id}: {message.get('type')}")
+    pass
+
+
 
 # ==========================================================================
 # SEKCJA 5: ZARZĄDZANIE CZASOMIERZEM (Logika bez zmian, ale stan w Redis)
@@ -915,28 +1240,27 @@ async def _zaktualizuj_stan_po_rozdaniu(id_gry: str, lobby_data: Dict[str, Any],
 # SEKCJA 9: KONFIGURACJA PLIKÓW STATYCZNYCH I GŁÓWNYCH ENDPOINTÓW HTTP
 # ==========================================================================
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-@app.get("/gra.html")
-async def read_game_page(): return FileResponse('static/index.html')
-@app.get("/lobby.html")
-async def read_lobby_browser_page(): return FileResponse('static/lobby.html')
-@app.get("/zasady.html")
-async def read_rules_page(): return FileResponse('static/zasady.html')
-@app.get("/ranking.html")
-async def read_ranking_page(): return FileResponse('static/ranking.html')
-@app.get("/", response_class=FileResponse)
-async def serve_landing():
-    """Nowy landing page"""
-    return FileResponse("index.html")
+# ============================================
+# HTML PAGES ENDPOINTS
+# ============================================
 
-@app.get("/dashboard", response_class=FileResponse)  
+@app.get("/dashboard", response_class=FileResponse)
+@app.get("/dashboard.html", response_class=FileResponse)
 async def serve_dashboard():
-    """Dashboard (główna strona po zalogowaniu)"""
-    return FileResponse("dashboard.html")
+    """Dashboard (po zalogowaniu)"""
+    return FileResponse('dashboard.html')
+
+@app.get("/lobby", response_class=FileResponse)
+@app.get("/lobby.html", response_class=FileResponse)
+async def serve_lobby():
+    """Ekran lobby (przed grą)"""
+    return FileResponse('lobby.html')
+
 @app.get("/zasady", response_class=FileResponse)
 async def serve_rules():
+    """Strona z zasadami gier"""
     return FileResponse('zasady.html')
 
 # ==========================================================================
@@ -1193,6 +1517,51 @@ async def pobierz_liste_lobby(db: AsyncSession = Depends(get_db)):
 
     return {"lobby_list": lista_lobby}
 
+@app.delete("/api/lobby/{lobby_id}")
+async def api_delete_lobby(lobby_id: str):
+    """Usuń lobby (tylko host może usunąć)"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+        
+        # Usuń z Redis
+        await delete_game_state(lobby_id)
+        
+        return {"message": "Lobby usunięte", "id": lobby_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Błąd usuwania lobby: {e}")
+        raise HTTPException(status_code=500, detail="Błąd usuwania lobby")
+
+
+@app.post("/api/lobby/{lobby_id}/cleanup")
+async def api_cleanup_empty_lobby(lobby_id: str):
+    """Sprawdź i usuń puste lobby"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            return {"deleted": False, "reason": "not_found"}
+        
+        # Sprawdź czy puste
+        is_empty = all(s['typ'] == 'pusty' for s in lobby_data.get('slots', []))
+        
+        if is_empty:
+            await delete_game_state(lobby_id)
+            return {"deleted": True, "id": lobby_id}
+        
+        return {"deleted": False, "reason": "not_empty"}
+        
+    except Exception as e:
+        print(f"Błąd cleanup: {e}")
+        return {"deleted": False, "reason": "error"}
+    
+
+
 @app.post("/gra/stworz")
 async def stworz_gre(request: CreateGameRequest, db: AsyncSession = Depends(get_db)):
     """
@@ -1266,16 +1635,7 @@ async def stworz_gre(request: CreateGameRequest, db: AsyncSession = Depends(get_
         })
 
     # --- Umieść hosta w pierwszym slocie ---
-    bot_data = next((bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] == nazwa_gracza), None)
-    if bot_data:
-        bot_algorytm = bot_data[1]
-        partia["slots"][0].update({
-            "nazwa": nazwa_gracza, 
-            "typ": "bot",
-            "bot_algorithm": bot_algorytm
-        })
-    else:
-        partia["slots"][0].update({"nazwa": nazwa_gracza, "typ": "czlowiek"})
+    partia["slots"][0].update({"nazwa": nazwa_gracza, "typ": "czlowiek"})
 
     # --- Zapisz lobby w Redis ---
     await save_lobby_data(id_gry, partia)
@@ -1618,183 +1978,6 @@ async def uruchom_petle_botow(id_gry: str):
         await lock.release()
 
 # ==========================================================================
-# SEKCJA 14: MENEDŻER BOTÓW "ELO WORLD" (ZREFRAKTORYZOWANY DLA REDIS)
-# ==========================================================================
-
-AKTYWNE_BOTY_ELO_WORLD: list[tuple[str, str]] = []
-MAX_GAMES_HOSTED_BY_BOTS = 5
-MAX_TOTAL_GAMES_ON_SERVER = 20
-ELO_WORLD_TICK_RATE = 15.0
-
-async def zaladuj_aktywne_boty_z_bazy():
-    # Logika bez zmian
-    global AKTYWNE_BOTY_ELO_WORLD
-    print("[Elo World] Ładowanie kont botów z bazy danych...")
-    AKTYWNE_BOTY_ELO_WORLD.clear()
-    try:
-        async with async_sessionmaker() as session:
-            query = select(User.username, User.settings).where(User.settings.like('%"jest_botem": true%'))
-            result = await session.execute(query)
-            bot_users = result.all()
-            for username, settings_json in bot_users:
-                try:
-                    settings = json.loads(settings_json)
-                    algorytm = settings.get("algorytm")
-                    if algorytm and algorytm in bot_instances:
-                        AKTYWNE_BOTY_ELO_WORLD.append((username, algorytm))
-                except (json.JSONDecodeError, TypeError):
-                    pass
-        print(f"[Elo World] Załadowano {len(AKTYWNE_BOTY_ELO_WORLD)} aktywnych botów.")
-        if not AKTYWNE_BOTY_ELO_WORLD:
-            print("[Elo World] Uruchom skrypt 'create_bots.py'.")
-    except Exception as e:
-        print(f"BŁĄD KRYTYCZNY (ładowanie botów): {e}")
-
-async def elo_world_manager():
-    """Główna pętla Menedżera Botów, zrefaktoryzowana dla Redis."""
-    await asyncio.sleep(5.0) 
-    await zaladuj_aktywne_boty_z_bazy()
-    print("[Elo World] Menedżer botów (Redis) uruchomiony.")
-    
-    while True:
-        try:
-            await asyncio.sleep(ELO_WORLD_TICK_RATE)
-            
-            if not AKTYWNE_BOTY_ELO_WORLD or not redis_client:
-                continue
-
-            gry_w_redis = []
-            boty_w_grze = set()
-            boty_hostujace_lobby = set()
-            boty_w_podsumowaniu = {} # {bot_name: id_gry}
-
-            wszystkie_aktywne_boty = {bot[0] for bot in AKTYWNE_BOTY_ELO_WORLD}
-
-            # Skanuj wszystkie aktywne gry w Redis
-            async for key in redis_client.scan_iter(lobby_key("*")):
-                id_gry = key.decode('utf-8').split(":")[-1]
-                partia = await get_lobby_data(id_gry)
-                if not partia:
-                    continue
-                
-                gry_w_redis.append(partia) # Dodaj do listy do przetworzenia
-                status_gry = partia.get("status_partii")
-
-                # --- 1. Garbage Collector dla starych gier ---
-                CZAS_ZYCIA_ZAKONCZONEJ_GRY_S = 60
-                if status_gry == "ZAKONCZONA":
-                    if "czas_zakonczenia_gry" not in partia:
-                        partia["czas_zakonczenia_gry"] = time.time()
-                        await save_lobby_data(id_gry, partia) # Zapisz timestamp
-                    else:
-                        if (time.time() - partia["czas_zakonczenia_gry"]) > CZAS_ZYCIA_ZAKONCZONEJ_GRY_S:
-                            print(f"[Garbage Collector] Usuwam starą grę {id_gry} z Redis.")
-                            await delete_game_state(id_gry) # Usuń lobby i silnik
-                            continue # Pomiń resztę pętli dla tej gry
-
-                # --- 2. Sprawdź stan botów w aktywnych grach ---
-                if status_gry == "LOBBY" or status_gry == "W_TRAKCIE":
-                    if status_gry == "LOBBY" and partia["host"] in wszystkie_aktywne_boty:
-                        boty_hostujace_lobby.add(partia["host"])
-
-                    for slot in partia.get("slots", []):
-                        bot_name = slot.get("nazwa")
-                        if bot_name in wszystkie_aktywne_boty: 
-                            boty_w_grze.add(bot_name)
-                             
-                # --- 3. Sprawdź boty czekające na 'nastepne_rozdanie' ---
-                if status_gry == "W_TRAKCIE":
-                    engine = await get_game_engine(id_gry)
-                    if engine and engine.is_terminal():
-                        gotowi = partia.get("gracze_gotowi", [])
-                        for slot in partia.get("slots", []):
-                            if slot.get("nazwa") in wszystkie_aktywne_boty and slot.get("nazwa") not in gotowi:
-                                boty_w_podsumowaniu[slot["nazwa"]] = id_gry
-
-            # --- AKCJE MENEDŻERA ---
-            
-            # 1. Obsłuż boty czekające na następne rozdanie
-            for bot_name, id_gry in boty_w_podsumowaniu.items():
-                if await redis_client.exists(lobby_key(id_gry)):
-                    print(f"[Elo World] Bot {bot_name} klika 'Następne rozdanie' w {id_gry}")
-                    await asyncio.sleep(random.uniform(1.0, 5.0))
-                    dane_akcji = {"gracz": bot_name, "akcja": {"typ": "nastepne_rozdanie"}}
-                    # Przetwórz akcję (co zapisze stan i wyśle update)
-                    await przetworz_akcje_gracza(dane_akcji, id_gry) 
-
-            # 2. Sprawdź, czy boty-hosty mogą rozpocząć gry
-            for bot_host_name in boty_hostujace_lobby:
-                partia = next((p for p in gry_w_redis if p.get("host") == bot_host_name and p.get("status_partii") == "LOBBY"), None)
-                if partia and all(s["typ"] != "pusty" for s in partia["slots"]):
-                        id_gry = partia['id_gry']
-                        print(f"[Elo World] Bot-host {bot_host_name} uruchamia grę {id_gry}!")
-                        dane_akcji = {"gracz": bot_host_name, "akcja_lobby": "start_gry"}
-                        await przetworz_akcje_gracza(dane_akcji, id_gry) # To uruchomi grę
-            
-            # 3. Przydziel "bezrobotne" boty
-            boty_bezrobotne = [bot for bot in AKTYWNE_BOTY_ELO_WORLD if bot[0] not in boty_w_grze]
-            liczba_lobby_botow = len(boty_hostujace_lobby)
-            
-            if not boty_bezrobotne:
-                continue # Wszystkie boty zajęte
-
-            random.shuffle(boty_bezrobotne)
-            
-            # --- 3A. Spróbuj dołączyć do istniejącego lobby ---
-            lobby_do_dolaczenia = None
-            slot_do_zajecia = None
-            for partia in gry_w_redis:
-                if (partia.get("status_partii") == "LOBBY" and 
-                    partia.get("opcje", {}).get("rankingowa", False) and 
-                    not partia.get("opcje", {}).get("haslo")):
-                    
-                    puste_sloty = [s for s in partia["slots"] if s["typ"] == "pusty"]
-                    if puste_sloty:
-                        lobby_do_dolaczenia = partia
-                        slot_do_zajecia = puste_sloty[0]
-                        break
-            
-            if lobby_do_dolaczenia and slot_do_zajecia:
-                bot_name, bot_algorytm = boty_bezrobotne.pop(0)
-                id_gry = lobby_do_dolaczenia['id_gry']
-                print(f"[Elo World] Bot {bot_name} dołącza do lobby {id_gry} (slot {slot_do_zajecia['slot_id']})")
-                slot_do_zajecia.update({
-                    "nazwa": bot_name, "typ": "bot", "bot_algorithm": bot_algorytm
-                })
-                await save_lobby_data(id_gry, lobby_do_dolaczenia)
-                await manager.notify_state_update(id_gry)
-
-            # --- 3B. Spróbuj stworzyć nowe lobby ---
-            elif (liczba_lobby_botow < MAX_GAMES_HOSTED_BY_BOTS and 
-                  len(gry_w_redis) < MAX_TOTAL_GAMES_ON_SERVER and
-                  boty_bezrobotne):
-                
-                bot_name, bot_algorytm = boty_bezrobotne.pop(0)
-                print(f"[Elo World] Bot {bot_name} tworzy nowe lobby rankingowe...")
-                try:
-                    tryb_gry_bota = '3p' if random.random() < 0.33 else '4p'
-                    request_bota = CreateGameRequest(
-                        nazwa_gracza=bot_name,
-                        tryb_gry=tryb_gry_bota,
-                        tryb_lobby='online',
-                        publiczna=True,
-                        haslo=None,
-                        czy_rankingowa=True
-                    )
-                    # Musimy `await` na funkcję `async`
-                    await stworz_gre(request_bota, async_sessionmaker()) 
-                except Exception as e:
-                    print(f"BŁĄD KRYTYCZNY: Bot {bot_name} nie mógł stworzyć gry: {e}")
-                    traceback.print_exc()
-
-        except asyncio.CancelledError:
-            print("[Elo World] Menedżer botów zatrzymany (CancelledError).")
-            break
-        except Exception as e:
-            print(f"BŁĄD KRYTYCZNY w pętli Menedżera Botów (Redis): {e}")
-            traceback.print_exc()
-            await asyncio.sleep(60.0)
-
 # ==========================================================================
 # SEKCJA 15: GŁÓWNY ENDPOINT WEBSOCKET (ZREFRAKTORYZOWANY)
 # ==========================================================================
@@ -1980,3 +2163,1058 @@ async def replacement_timer_redis(id_gry: str, slot_id: int):
         await save_lobby_data(id_gry, lobby_po_czasie)
         await manager.notify_state_update(id_gry)
         asyncio.create_task(uruchom_petle_botow(id_gry))
+# ==========================================================================
+# REST API ENDPOINTS - NOWY FRONTEND (Miedziowe Karty)
+# ==========================================================================
+
+# Pydantic Models dla REST API
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+class GuestRequest(BaseModel):
+    name: Optional[str] = None
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: int
+    username: str
+    is_guest: bool = False
+
+class LobbyCreateRequest(BaseModel):
+    lobby_type: str = "66"
+    player_count: int = 4
+    ranked: bool = False
+    password: Optional[str] = None
+
+# Helper function
+def generate_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+# ============================================
+# AUTH DEPENDENCY - get_current_user
+# ============================================
+
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer()
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> dict:
+    """Pobierz zalogowanego użytkownika z tokena (Redis session)"""
+    token = credentials.credentials
+    
+    # Pobierz user_id z Redis
+    user_id_str = await redis_client.get(f"token:{token}")
+    
+    if not user_id_str:
+        raise HTTPException(status_code=401, detail="Nieprawidłowy lub wygasły token")
+    
+    user_id = int(user_id_str.decode('utf-8'))
+    
+    # Pobierz użytkownika z bazy
+    async with async_sessionmaker() as db:
+        try:
+            result = await db.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                raise HTTPException(status_code=401, detail="Użytkownik nie znaleziony")
+            
+            return {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email if hasattr(user, 'email') else None
+            }
+        except Exception as e:
+            print(f"[Auth] Błąd: {e}")
+            raise HTTPException(status_code=401, detail="Błąd autentykacji")
+
+
+# AUTH ENDPOINTS
+@app.post("/api/auth/login", response_model=AuthResponse)
+async def api_login(request: LoginRequest):
+    """Logowanie użytkownika"""
+    async with async_sessionmaker() as db:
+        result = await db.execute(select(User).where(User.username == request.username))
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="Nieprawidłowe dane logowania")
+        
+        # Sprawdź czy to nie jest gość (goście nie mają hasła)
+        if user.hashed_password is None:
+            raise HTTPException(status_code=401, detail="Konto gościa - brak hasła")
+        
+        # Sprawdź hasło
+        if not verify_password(request.password, user.hashed_password):
+            raise HTTPException(status_code=401, detail="Nieprawidłowe dane logowania")
+        
+        # Wygeneruj token i zapisz w Redis
+        token = generate_token()
+        await redis_client.set(f"token:{token}", str(user.id), ex=86400)  # 24h
+        
+        return AuthResponse(
+            access_token=token,
+            user_id=user.id,
+            username=user.username,
+            is_guest=False
+        )
+
+@app.post("/api/auth/register", response_model=AuthResponse)
+async def api_register(request: RegisterRequest):
+    """Rejestracja nowego użytkownika"""
+    # Walidacja
+    if len(request.username) < 3 or len(request.username) > 15:
+        raise HTTPException(status_code=400, detail="Nazwa: 3-15 znaków")
+    if len(request.password) < 6:
+        raise HTTPException(status_code=400, detail="Hasło: min 6 znaków")
+    
+    async with async_sessionmaker() as db:
+        # Sprawdź czy użytkownik już istnieje
+        result = await db.execute(select(User).where(User.username == request.username))
+        if result.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="Nazwa zajęta")
+        
+        # Stwórz użytkownika (TYLKO pola które istnieją w modelu User)
+        user = User(
+            username=request.username,
+            hashed_password=hash_password(request.password),
+            status='online'  # Opcjonalnie
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        
+        # Wygeneruj token i zapisz w Redis
+        token = generate_token()
+        await redis_client.set(f"token:{token}", str(user.id), ex=86400)  # 24h
+        
+        return AuthResponse(
+            access_token=token,
+            user_id=user.id,
+            username=user.username,
+            is_guest=False
+        )
+
+@app.post("/api/auth/guest", response_model=AuthResponse)
+async def api_guest_login(request: GuestRequest):
+    """Logowanie jako gość (bez hasła)"""
+    import random
+    name = request.name or f"Guest_{random.randint(1000, 9999)}"
+    
+    async with async_sessionmaker() as db:
+        # Sprawdź czy nazwa jest zajęta
+        result = await db.execute(select(User).where(User.username == name))
+        if result.scalar_one_or_none():
+            name = f"{name}_{random.randint(100, 999)}"
+        
+        # Stwórz gościa (hashed_password = NULL oznacza gościa)
+        user = User(
+            username=name,
+            hashed_password=None,  # NULL = gość
+            status='online'
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        
+        # Wygeneruj token i zapisz w Redis
+        token = generate_token()
+        await redis_client.set(f"token:{token}", str(user.id), ex=86400)  # 24h
+        
+        return AuthResponse(
+            access_token=token,
+            user_id=user.id,
+            username=user.username,
+            is_guest=True
+        )
+
+# LOBBY ENDPOINTS
+@app.get("/api/lobby/list")
+async def api_list_lobbies():
+    """Pobierz listę dostępnych lobby"""
+    try:
+        lobbies = []
+        async for key in redis_client.scan_iter(match="lobby:*"):
+            data = await redis_client.get(key)
+            if data:
+                lobby = json.loads(data.decode('utf-8'))
+                if lobby.get('status_partii') == 'LOBBY':
+                    lobbies.append(lobby)
+        return lobbies
+    except Exception as e:
+        print(f"Błąd list lobby: {e}")
+        return []
+
+@app.post("/api/lobby/create")
+async def api_create_lobby(
+    request: LobbyCreateRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Stwórz nowe lobby"""
+    game_id = str(uuid.uuid4())[:8]
+    if request.player_count not in [3, 4]:
+        raise HTTPException(status_code=400, detail="Liczba graczy musi być 3 lub 4")
+    max_players = request.player_count
+    
+    # Stwórz sloty z poprawną strukturą
+    slots = []
+    for i in range(max_players):
+        if i == 0:
+            # Pierwszy slot = Host (twórca lobby)
+            slots.append({
+                'numer_gracza': i,
+                'typ': 'gracz',
+                'id_uzytkownika': current_user['id'],
+                'nazwa': current_user['username'],
+                'is_host': True,
+                'ready': False,
+                'avatar_url': 'default_avatar.png'
+            })
+        else:
+            # Pozostałe = puste
+            slots.append({
+                'numer_gracza': i,
+                'typ': 'pusty',
+                'id_uzytkownika': None,
+                'nazwa': None,
+                'is_host': False,
+                'ready': False,
+                'avatar_url': None
+            })
+    
+    lobby_data = {
+        "id_gry": game_id,
+        "id": f"Lobby_{game_id[:4]}",
+        "max_graczy": max_players,
+        "status_partii": "LOBBY",
+        "slots": slots,
+        "opcje": {
+            "tryb_gry": f"{request.player_count}p",
+            "rankingowa": request.ranked,
+            "typ_gry": request.lobby_type,
+            "haslo": request.password
+        },
+        "host_id": current_user['id'],
+        "tryb_lobby": "online",
+        "kicked_players": [],
+        "created_at": time.time()  # NOWE: timestamp utworzenia
+    }
+    
+    await redis_client.setex(
+        f"lobby:{game_id}",
+        GAME_STATE_EXPIRATION_S,
+        json.dumps(lobby_data).encode('utf-8')
+    )
+    
+    return lobby_data
+
+
+# ============================================
+# LOBBY - SZCZEGÓŁY I ZARZĄDZANIE
+# ============================================
+
+@app.get("/api/lobby/{lobby_id}")
+async def api_get_lobby_details(
+    lobby_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Pobierz szczegóły lobby"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+        
+        # Dodaj informacje o hoście
+        host_slot = next((s for s in lobby_data['slots'] if s.get('is_host')), None)
+        lobby_data['host_id'] = host_slot['id_uzytkownika'] if host_slot else None
+        lobby_data['is_host'] = lobby_data['host_id'] == current_user['id']
+        lobby_data['current_user_id'] = current_user['id']
+        
+        return lobby_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Błąd pobierania lobby: {e}")
+        raise HTTPException(status_code=500, detail="Błąd serwera")
+
+
+@app.post("/api/lobby/{lobby_id}/add-bot")
+async def api_add_bot_to_lobby(
+    lobby_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Dodaj bota do lobby (tylko host)"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+        
+        # Sprawdź czy użytkownik jest hostem
+        host_slot = next((s for s in lobby_data['slots'] if s.get('is_host')), None)
+        if not host_slot or host_slot['id_uzytkownika'] != current_user['id']:
+            raise HTTPException(status_code=403, detail="Tylko host może dodawać boty")
+        
+        # Znajdź pusty slot
+        empty_slot_idx = next(
+            (i for i, s in enumerate(lobby_data['slots']) if s['typ'] == 'pusty'),
+            None
+        )
+        
+        if empty_slot_idx is None:
+            raise HTTPException(status_code=400, detail="Brak wolnych miejsc")
+        
+        # Wygeneruj bota
+        bot_number = sum(1 for s in lobby_data['slots'] if s['typ'] == 'bot') + 1
+        bot_id = f"bot_{lobby_id}_{bot_number}"
+        bot_name = f"Bot #{bot_number}"
+        
+        # Dodaj bota do slotu
+        lobby_data['slots'][empty_slot_idx] = {
+            'numer_gracza': empty_slot_idx,
+            'typ': 'bot',
+            'id_uzytkownika': bot_id,
+            'nazwa': bot_name,
+            'is_host': False,
+            'ready': True,  # Boty zawsze gotowe
+            'avatar_url': 'bot_avatar.png'
+        }
+        
+        # Zapisz
+        await save_lobby_data(lobby_id, lobby_data)
+        
+        # Broadcast przez WebSocket
+        await broadcast_lobby_update(lobby_id, {
+            'type': 'player_joined',
+            'player': lobby_data['slots'][empty_slot_idx],
+            'lobby': lobby_data
+        })
+        
+        return {
+            "message": "Bot dodany",
+            "bot": lobby_data['slots'][empty_slot_idx],
+            "lobby": lobby_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Błąd dodawania bota: {e}")
+        raise HTTPException(status_code=500, detail="Błąd serwera")
+
+
+@app.post("/api/lobby/{lobby_id}/start")
+async def api_start_game(
+    lobby_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Rozpocznij grę (tylko host) - tworzy silnik gry"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+        
+        # Sprawdź czy użytkownik jest hostem
+        host_slot = next((s for s in lobby_data['slots'] if s.get('is_host')), None)
+        if not host_slot or host_slot['id_uzytkownika'] != current_user['id']:
+            raise HTTPException(status_code=403, detail="Tylko host może rozpocząć grę")
+        
+        # Sprawdź liczbę graczy
+        player_count = sum(1 for s in lobby_data['slots'] if s['typ'] != 'pusty')
+        max_players = lobby_data.get('max_graczy', 4)
+        
+        if player_count < max_players:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Potrzeba {max_players} graczy (masz {player_count})"
+            )
+        
+        # Sprawdź czy wszyscy gotowi (poza botem)
+        not_ready = [
+            s['nazwa'] for s in lobby_data['slots']
+            if s['typ'] == 'gracz' and not s.get('ready', False)
+        ]
+        
+        if not_ready:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Nie wszyscy gracze są gotowi: {', '.join(not_ready)}"
+            )
+        
+        # Zmień status na IN_PROGRESS
+        lobby_data['status_partii'] = 'IN_PROGRESS'
+        
+        # === NOWE: Utwórz silnik gry ===
+        print(f"[Game] Tworzenie silnika gry dla lobby {lobby_id}")
+        
+        # Przygotuj listę ID graczy (w kolejności slotów)
+        player_ids = []
+        for slot in lobby_data['slots']:
+            if slot['typ'] != 'pusty':
+                # Dla botów używamy ich nazwy jako ID
+                player_ids.append(slot['nazwa'])
+        
+        # Ustawienia gry
+        game_settings = {
+            'tryb': '4p' if max_players == 4 else '3p',
+            'rozdajacy_idx': 0,  # Pierwszy gracz rozdaje
+            'nazwy_druzyn': {
+                'My': 'Drużyna 1',
+                'Oni': 'Drużyna 2'
+            }
+        }
+        
+        # Utwórz instancję silnika
+        engine = SixtySixEngine(player_ids, game_settings)
+        
+        # Zapisz silnik do Redis
+        await save_game_engine(lobby_id, engine)
+        
+        print(f"[Game] Silnik utworzony, faza: {engine.game_state.faza}")
+        
+        # Zapisz lobby
+        await save_lobby_data(lobby_id, lobby_data)
+        
+        # Broadcast przez WebSocket
+        await broadcast_lobby_update(lobby_id, {
+            'type': 'game_started',
+            'lobby': lobby_data
+        })
+        
+        # === NOWE: Auto-wykonaj akcje botów jeśli bot ma turę ===
+        await process_bot_turns(lobby_id, engine)
+        
+        return {
+            "message": "Gra rozpoczęta",
+            "lobby_id": lobby_id,
+            "status": "IN_PROGRESS",
+            "phase": engine.game_state.faza.name
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Błąd rozpoczynania gry: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Błąd serwera")
+
+
+@app.post("/api/lobby/{lobby_id}/leave")
+async def api_leave_lobby(
+    lobby_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Opuść lobby"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+        
+        # Sprawdź czy gra się rozpoczęła
+        game_started = lobby_data.get('status_partii') == 'IN_PROGRESS'
+        
+        # Jeśli gra w trakcie - nie pozwól opuścić (gracz musi zostać w slocie!)
+        if game_started:
+            print(f"[Leave] {current_user['username']} próbuje opuścić grę w trakcie - blokada")
+            return {
+                "message": "Nie możesz opuścić gry w trakcie",
+                "game_started": True
+            }
+        
+        # Znajdź slot gracza
+        player_slot_idx = next(
+            (i for i, s in enumerate(lobby_data['slots'])
+             if s['id_uzytkownika'] == current_user['id']),
+            None
+        )
+        
+        if player_slot_idx is None:
+            raise HTTPException(status_code=400, detail="Nie jesteś w tym lobby")
+        
+        was_host = lobby_data['slots'][player_slot_idx].get('is_host', False)
+        
+        # Usuń gracza ze slotu (tylko w lobby, nie podczas gry)
+        lobby_data['slots'][player_slot_idx] = {
+            'numer_gracza': player_slot_idx,
+            'typ': 'pusty',
+            'id_uzytkownika': None,
+            'nazwa': None,
+            'is_host': False,
+            'ready': False,
+            'avatar_url': None
+        }
+        
+        # Jeśli był hostem, przekaż host następnemu graczowi
+        if was_host:
+            new_host_slot = next(
+                (s for s in lobby_data['slots'] if s['typ'] in ['gracz', 'bot']),
+                None
+            )
+            if new_host_slot:
+                new_host_slot['is_host'] = True
+        
+        # Sprawdź czy lobby jest puste lub zostały tylko boty
+        is_empty = all(s['typ'] == 'pusty' for s in lobby_data['slots'])
+        only_bots = all(s['typ'] in ['pusty', 'bot'] for s in lobby_data['slots'])
+        
+        if is_empty or only_bots:
+            # Usuń lobby (puste lub same boty)
+            await delete_game_state(lobby_id)
+            
+            return {
+                "message": "Lobby opuszczone i usunięte",
+                "deleted": True
+            }
+        else:
+            # Zapisz
+            await save_lobby_data(lobby_id, lobby_data)
+            
+            # Broadcast przez WebSocket
+            await broadcast_lobby_update(lobby_id, {
+                'type': 'player_left',
+                'user_id': current_user['id'],
+                'lobby': lobby_data
+            })
+            
+            return {
+                "message": "Lobby opuszczone",
+                "lobby": lobby_data
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Błąd opuszczania lobby: {e}")
+        raise HTTPException(status_code=500, detail="Błąd serwera")
+
+
+@app.post("/api/lobby/{lobby_id}/kick/{user_id}")
+async def api_kick_player(
+    lobby_id: str,
+    user_id: str,  # <- ZMIENIONE: str zamiast int (obsłuży boty i graczy)
+    current_user: dict = Depends(get_current_user)
+):
+    """Wyrzuć gracza lub bota z lobby (tylko host)"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+        
+        # Sprawdź czy użytkownik jest hostem
+        host_slot = next((s for s in lobby_data['slots'] if s.get('is_host')), None)
+        if not host_slot or host_slot['id_uzytkownika'] != current_user['id']:
+            raise HTTPException(status_code=403, detail="Tylko host może wyrzucać")
+        
+        # Znajdź slot do wyrzucenia (porównaj jako string)
+        player_slot_idx = next(
+            (i for i, s in enumerate(lobby_data['slots'])
+             if str(s['id_uzytkownika']) == str(user_id)),
+            None
+        )
+        
+        if player_slot_idx is None:
+            raise HTTPException(status_code=404, detail="Gracz/Bot nie znaleziony")
+        
+        if lobby_data['slots'][player_slot_idx].get('is_host'):
+            raise HTTPException(status_code=400, detail="Nie można wyrzucić hosta")
+        
+        # Usuń gracza/bota
+        kicked_name = lobby_data['slots'][player_slot_idx]['nazwa']
+        kicked_type = lobby_data['slots'][player_slot_idx]['typ']
+        
+        lobby_data['slots'][player_slot_idx] = {
+            'numer_gracza': player_slot_idx,
+            'typ': 'pusty',
+            'id_uzytkownika': None,
+            'nazwa': None,
+            'is_host': False,
+            'ready': False,
+            'avatar_url': None
+        }
+        
+        # Zapisz
+        await save_lobby_data(lobby_id, lobby_data)
+        
+        # Broadcast przez WebSocket
+        await broadcast_lobby_update(lobby_id, {
+            'type': 'player_kicked',
+            'kicked_user_id': user_id,
+            'kicked_name': kicked_name,
+            'lobby': lobby_data
+        })
+        
+        return {
+            "message": f"Gracz {kicked_name} wyrzucony",
+            "lobby": lobby_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Błąd wyrzucania gracza: {e}")
+        raise HTTPException(status_code=500, detail="Błąd serwera")
+
+
+@app.post("/api/lobby/{lobby_id}/ready")
+async def api_toggle_ready(
+    lobby_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Zmień status gotowości gracza"""
+    try:
+        lobby_data = await get_lobby_data(lobby_id)
+        
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+        
+        # Znajdź slot gracza
+        player_slot_idx = next(
+            (i for i, s in enumerate(lobby_data['slots'])
+             if s['id_uzytkownika'] == current_user['id']),
+            None
+        )
+        
+        if player_slot_idx is None:
+            raise HTTPException(status_code=400, detail="Nie jesteś w tym lobby")
+        
+        # Toggle ready
+        current_ready = lobby_data['slots'][player_slot_idx].get('ready', False)
+        lobby_data['slots'][player_slot_idx]['ready'] = not current_ready
+        
+        # Zapisz
+        await save_lobby_data(lobby_id, lobby_data)
+        
+        # Broadcast przez WebSocket
+        await broadcast_lobby_update(lobby_id, {
+            'type': 'ready_changed',
+            'user_id': current_user['id'],
+            'ready': not current_ready,
+            'lobby': lobby_data
+        })
+        
+        return {
+            "ready": not current_ready,
+            "lobby": lobby_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Błąd zmiany gotowości: {e}")
+        raise HTTPException(status_code=500, detail="Błąd serwera")
+    
+
+# ============================================
+# ADMIN ENDPOINTS
+# ============================================
+
+@app.post("/api/admin/cleanup-empty")
+async def admin_cleanup_empty():
+    """Wymuś czyszczenie pustych lobby"""
+    await cleanup_empty_lobbies()
+    return {"message": "Cleanup wykonany"}
+
+
+@app.post("/api/admin/cleanup-all-lobbies")
+async def admin_cleanup_all():
+    """Usuń WSZYSTKIE lobby z Redis"""
+    try:
+        keys = []
+        async for key in redis_client.scan_iter(match="lobby:*"):
+            keys.append(key)
+        
+        if keys:
+            await redis_client.delete(*keys)
+            print(f"[ADMIN] Usunięto {len(keys)} lobby")
+            return {"message": f"Usunięto {len(keys)} lobby", "count": len(keys)}
+        else:
+            return {"message": "Brak lobby", "count": 0}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/debug/lobbies")
+async def debug_lobbies():
+    """DEBUG: Lista wszystkich lobby"""
+    lobbies = []
+    now = time.time()
+    
+    async for key in redis_client.scan_iter(match="lobby:*"):
+        lobby_id = key.decode('utf-8').split(":")[-1]
+        data = await redis_client.get(key)
+        
+        if data:
+            try:
+                lobby = json.loads(data.decode('utf-8'))
+                slots = lobby.get('slots', [])
+                
+                lobbies.append({
+                    'id': lobby_id,
+                    'status': lobby.get('status_partii'),
+                    'players': sum(1 for s in slots if s['typ'] == 'gracz'),
+                    'bots': sum(1 for s in slots if s['typ'] == 'bot'),
+                    'age_minutes': round((now - lobby.get('created_at', now)) / 60, 1),
+                    'slots': [(s['typ'], s.get('nazwa')) for s in slots]
+                })
+            except:
+                pass
+    
+    return {'count': len(lobbies), 'lobbies': lobbies}
+
+
+# ============================================
+# WEBSOCKET BROADCAST HELPER
+# ============================================
+
+async def broadcast_lobby_update(lobby_id: str, message: dict):
+    """Wyślij update do wszystkich w lobby przez WebSocket"""
+    try:
+        # Pobierz listę połączeń dla tego lobby
+        # (zakładam że masz dict z połączeniami WebSocket)
+        
+        if lobby_id in active_lobby_connections:
+            for connection in active_lobby_connections[lobby_id]:
+                try:
+                    await connection.send_json(message)
+                except Exception as e:
+                    print(f"Błąd wysyłania do WebSocket: {e}")
+                    
+    except Exception as e:
+        print(f"Błąd broadcast: {e}")
+
+@app.post("/api/lobby/{lobby_id}/join")
+async def api_join_lobby(
+    lobby_id: str,
+    password: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Dołącz do lobby"""
+    lobby_data = await get_lobby_data(lobby_id)
+    
+    if not lobby_data:
+        raise HTTPException(status_code=404, detail="Lobby nie znalezione")
+    
+    # Sprawdź hasło
+    haslo = lobby_data.get('opcje', {}).get('haslo')
+    if haslo and haslo != password:
+        raise HTTPException(status_code=403, detail="Złe hasło")
+    
+    # Sprawdź czy jest wolny slot
+    empty_slot_idx = next(
+        (i for i, s in enumerate(lobby_data['slots']) if s['typ'] == 'pusty'),
+        None
+    )
+    
+    if empty_slot_idx is None:
+        raise HTTPException(status_code=400, detail="Lobby pełne")
+    
+    # Sprawdź czy gracz już jest w lobby
+    already_in = any(
+        s['id_uzytkownika'] == current_user['id']
+        for s in lobby_data['slots']
+        if s['typ'] == 'gracz'
+    )
+    
+    if already_in:
+        return {"message": "Już jesteś w lobby", "lobby": lobby_data}
+    
+    # Dodaj gracza do slotu
+    lobby_data['slots'][empty_slot_idx] = {
+        'numer_gracza': empty_slot_idx,
+        'typ': 'gracz',
+        'id_uzytkownika': current_user['id'],
+        'nazwa': current_user['username'],
+        'is_host': False,  # Host to pierwszy gracz (utworzył lobby)
+        'ready': False,
+        'avatar_url': 'default_avatar.png'
+    }
+    
+    # Zapisz
+    await save_lobby_data(lobby_id, lobby_data)
+    
+    return {"message": "Dołączono do lobby", "lobby": lobby_data}
+
+@app.get("/api/game/{game_id}/state")
+async def get_game_state_endpoint(
+    game_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Pobierz stan gry z silnika"""
+    try:
+        # Sprawdź czy gra istnieje
+        lobby_data = await get_lobby_data(game_id)
+        if not lobby_data:
+            raise HTTPException(status_code=404, detail="Gra nie znaleziona")
+        
+        # Sprawdź czy użytkownik jest w grze
+        player_in_game = any(
+            s['typ'] in ['gracz', 'bot'] and 
+            (s['id_uzytkownika'] == current_user['id'] or s['nazwa'] == current_user['username'])
+            for s in lobby_data['slots']
+        )
+        
+        if not player_in_game:
+            raise HTTPException(status_code=403, detail="Nie jesteś w tej grze")
+        
+        # Pobierz silnik z Redis
+        engine = await get_game_engine(game_id)
+        
+        if not engine:
+            raise HTTPException(status_code=404, detail="Silnik gry nie znaleziony")
+        
+        # Pobierz stan dla tego gracza
+        player_id = current_user['username']
+        state = engine.get_state_for_player(player_id)
+        
+        # Dodaj dodatkowe info z lobby
+        state['lobby_id'] = game_id
+        state['status_partii'] = lobby_data.get('status_partii', 'IN_PROGRESS')
+        
+        # Mapuj nazwy graczy na avatary/info z lobby
+        players_info = []
+        for slot in lobby_data['slots']:
+            if slot['typ'] != 'pusty':
+                players_info.append({
+                    'id': slot['id_uzytkownika'] if slot['typ'] == 'gracz' else slot['nazwa'],
+                    'name': slot['nazwa'],
+                    'is_bot': slot['typ'] == 'bot',
+                    'avatar_url': slot.get('avatar_url', 'default_avatar.png')
+                })
+        
+        state['players'] = players_info
+        
+        return state
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error getting game state: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="Błąd serwera")
+
+
+class GameActionRequest(BaseModel):
+    """Request body dla akcji w grze"""
+    typ: str
+    karta: Optional[str] = None
+    kontrakt: Optional[str] = None
+    atut: Optional[str] = None
+
+@app.post("/api/game/{game_id}/play")
+async def play_card(
+    game_id: str,
+    request: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Wykonaj akcję w grze (licytacja, zagranie karty, itp.)"""
+    try:
+        engine = await get_game_engine(game_id)
+        
+        if not engine:
+            raise HTTPException(status_code=404, detail="Silnik gry nie znaleziony")
+        
+        player_id = current_user['username']
+        action = request
+        
+        print(f"[Game] Gracz {player_id} wykonuje akcję: {action}")
+        
+        # Wykonaj akcję gracza
+        try:
+            engine.perform_action(player_id, action)
+        except Exception as e:
+            print(f"Błąd wykonywania akcji: {e}")
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        # Zapisz silnik
+        await save_game_engine(game_id, engine)
+        
+        # Pobierz nowy stan
+        new_state = engine.get_state_for_player(player_id)
+        
+        # Broadcast
+        await broadcast_game_update(game_id, {
+            'type': 'action_performed',
+            'player': player_id,
+            'action': action,
+            'state': new_state
+        })
+        
+        # === AUTOMATYCZNIE WYKONAJ AKCJE BOTÓW ===
+        await process_bot_actions(game_id, engine)
+        
+        # Pobierz finalny stan (po ruchach botów)
+        final_state = engine.get_state_for_player(player_id)
+        
+        return {
+            "success": True,
+            "message": "Akcja wykonana",
+            "state": final_state
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in play_card: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@app.post("/api/game/{game_id}/finalize-trick")
+async def finalize_trick(
+    game_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Finalizuje lewę (po zagraniu wszystkich kart)"""
+    try:
+        engine = await get_game_engine(game_id)
+        
+        if not engine:
+            raise HTTPException(status_code=404, detail="Silnik gry nie znaleziony")
+        
+        # Sprawdź czy lewa czeka na finalizację
+        if not engine.game_state.lewa_do_zamkniecia:
+            # Jeśli lewa już sfinalizowana, zwróć aktualny stan (nie błąd!)
+            print(f"[Game] Lewa już sfinalizowana w grze {game_id}")
+            player_id = current_user['username']
+            new_state = engine.get_state_for_player(player_id)
+            
+            return {
+                "success": True,
+                "message": "Lewa już sfinalizowana",
+                "state": new_state
+            }
+        
+        print(f"[Game] Finalizacja lewy w grze {game_id}")
+        
+        # Finalizuj lewę
+        engine.game_state.finalizuj_lewe()
+        
+        # Zapisz silnik
+        await save_game_engine(game_id, engine)
+        
+        # Pobierz nowy stan
+        player_id = current_user['username']
+        new_state = engine.get_state_for_player(player_id)
+        
+        # Broadcast
+        await broadcast_game_update(game_id, {
+            'type': 'trick_finalized',
+            'state': new_state
+        })
+        
+        # Auto-wykonaj akcje botów
+        await process_bot_turns(game_id, engine)
+        
+        return {
+            "success": True,
+            "message": "Lewa sfinalizowana",
+            "state": new_state
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error finalizing trick: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/api/game/{game_id}/next-round")
+async def start_next_round(
+    game_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Rozpoczyna następną rundę w grze"""
+    try:
+        engine = await get_game_engine(game_id)
+        
+        if not engine:
+            raise HTTPException(status_code=404, detail="Silnik gry nie znaleziony")
+        
+        # Sprawdź czy to koniec meczu
+        max_punkty = 0
+        for druzyna in engine.game_state.druzyny:
+            if druzyna.punkty_meczu > max_punkty:
+                max_punkty = druzyna.punkty_meczu
+        
+        if max_punkty >= 66:
+            raise HTTPException(status_code=400, detail="Mecz zakończony - nie można rozpocząć nowej rundy")
+        
+        print(f"[Game] Rozpoczynam następną rundę w grze {game_id}")
+        
+        # Zmień rozdającego
+        engine.game_state.rozdajacy_idx = (engine.game_state.rozdajacy_idx + 1) % len(engine.game_state.gracze)
+        
+        # Rozpocznij nowe rozdanie
+        engine.game_state.rozpocznij_nowe_rozdanie()
+        
+        # Zapisz silnik
+        await save_game_engine(game_id, engine)
+        
+        # === AUTO-WYKONAJ AKCJE BOTÓW (np. licytacja) ===
+        await process_bot_actions(game_id, engine)
+        
+        # Pobierz nowy stan
+        player_id = current_user['username']
+        new_state = engine.get_state_for_player(player_id)
+        
+        # Broadcast
+        await broadcast_game_update(game_id, {
+            'type': 'next_round_started',
+            'state': new_state
+        })
+        
+        return {
+            "success": True,
+            "message": "Nowa runda rozpoczęta",
+            "state": new_state
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error starting next round: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    
+# HTML PAGES
+@app.get("/", response_class=FileResponse)
+async def serve_landing():
+    """Landing page"""
+    return FileResponse('index.html')
+
+@app.get("/dashboard", response_class=FileResponse)
+async def serve_dashboard():
+    """Dashboard"""
+    return FileResponse('dashboard.html')
+
+@app.get("/zasady", response_class=FileResponse)
+async def serve_rules():
+    """Zasady gier"""
+    return FileResponse('zasady.html')
+@app.get("/game", response_class=FileResponse)
+@app.get("/game.html", response_class=FileResponse)
+async def serve_game():
+    """Ekran gry"""
+    return FileResponse('game.html')

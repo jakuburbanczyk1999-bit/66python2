@@ -16,9 +16,34 @@
     <link rel="stylesheet" href="/static/css/components/modals.css">
     <link rel="stylesheet" href="/static/css/components/tabs.css">
     <link rel="stylesheet" href="/static/css/layout/navbar.css">
-    <link rel="stylesheet" href="/static/css/layout/sidebar.css">
     <link rel="stylesheet" href="/static/css/pages/dashboard.css">
-    <link rel="stylesheet" href="/static/css/animations.css">
+    <link rel="stylesheet" href="/static/css/layout/sidebar.css">
+    <style>
+    /* SIDEBAR FIX - INLINE */
+    .sidebar {
+        position: fixed !important;
+        left: 0 !important;
+        top: 60px !important;
+        width: 280px !important;
+        height: calc(100vh - 60px) !important;
+        background: var(--dark-700) !important;
+        transition: transform 0.3s ease !important;
+        z-index: 100 !important;
+        overflow-y: auto !important;
+        transform: translateX(-100%) !important;
+    }
+    
+    .sidebar.open {
+        transform: translateX(0) !important;
+    }
+    
+    /* Desktop - zawsze widoczny */
+    @media (min-width: 1025px) {
+        .sidebar {
+            transform: translateX(0) !important;
+        }
+    }
+</style>
 </head>
 <body class="dashboard-page">
 
@@ -211,70 +236,58 @@
 
             <!-- Tab Content: Create Lobby -->
             <div class="tab-content active" id="tab-create">
-                <div class="create-lobby-section">
-                    <h2 class="section-title">Stwórz Nową Grę</h2>
-                    
-                    <div class="game-selector">
-                        <h3>Wybierz grę:</h3>
-                        <div class="game-options">
-                            <button class="game-option active" data-game="66">
-                                <span class="game-icon">🃏</span>
-                                <span class="game-name">66</span>
-                            </button>
-                            <button class="game-option disabled" data-game="1000">
-                                <span class="game-icon">🎴</span>
-                                <span class="game-name">Tysiąc</span>
-                                <span class="badge">Soon</span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <form class="create-lobby-form" id="create-lobby-form">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Typ lobby</label>
-                                <select class="form-input" id="lobby-type">
-                                    <option value="online">Online (Multiplayer)</option>
-                                    <option value="lokalna">Lokalna (z Botami)</option>
-                                </select>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>Tryb gry</label>
-                                <select class="form-input" id="game-mode">
-                                    <option value="4p">4-osobowy (2v2)</option>
-                                    <option value="3p">3-osobowy (FFA)</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <div class="checkbox-wrapper">
-                                <input type="checkbox" id="ranked-checkbox" class="checkbox">
-                                <label for="ranked-checkbox">
-                                    <strong>Gra rankingowa</strong> 🏆
-                                    <small>Wpływa na rating Elo (tylko dla gier online)</small>
-                                </label>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group" id="password-group">
-                            <label>Hasło (opcjonalne)</label>
-                            <input 
-                                type="text" 
-                                class="form-input" 
-                                id="lobby-password"
-                                placeholder="Pozostaw puste dla publicznego lobby"
-                            >
-                            <small class="form-hint">Hasło chronione lobby będzie widoczne tylko z linkiem</small>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-primary btn-lg btn-block">
-                            🎮 Stwórz Lobby
-                        </button>
-                    </form>
-                </div>
+    <div class="create-lobby-section">
+        <h2 class="section-title">Stwórz Nową Grę</h2>
+        
+        <form class="create-lobby-form" id="create-lobby-form">
+            
+            <!-- Wybór gry (na przyszłość) -->
+            <div class="form-group">
+                <label class="form-label">Gra</label>
+                <select class="form-input" id="lobby-game" disabled>
+                    <option value="66">🃏 Gra w 66</option>
+                    <option value="1000" disabled>🎴 Tysiąc (Wkrótce)</option>
+                </select>
             </div>
+            
+            <!-- NOWE: Liczba graczy -->
+            <div class="form-group">
+                <label class="form-label">Liczba graczy</label>
+                <select class="form-input" id="player-count">
+                    <option value="4">4 graczy</option>
+                    <option value="3">3 graczy</option>
+                </select>
+                <small class="form-help">Wybierz liczbę graczy w grze</small>
+            </div>
+            
+            <!-- Rankingowa -->
+            <div class="form-group">
+                <label class="form-label checkbox-label">
+                    <input type="checkbox" id="ranked-checkbox">
+                    <span>🏆 Gra rankingowa</span>
+                </label>
+                <small class="form-help">Wpływa na rating Elo (tylko dla gier online)</small>
+            </div>
+            
+            <!-- Hasło (opcjonalne) -->
+            <div class="form-group">
+                <label class="form-label">Hasło (opcjonalne)</label>
+                <input 
+                    type="password" 
+                    class="form-input" 
+                    id="lobby-password" 
+                    placeholder="Pozostaw puste dla publicznego lobby"
+                    maxlength="20"
+                >
+                <small class="form-help">Hasło chronione lobby będzie widoczne tylko z linkiem</small>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block btn-lg">
+                ➕ Stwórz Lobby
+            </button>
+        </form>
+    </div>
+</div>
 
             <!-- Tab Content: Browse Lobbies -->
             <div class="tab-content" id="tab-browse">
@@ -382,12 +395,6 @@
     </div>
 
     <!-- Scripts -->
-    <script src="/static/js/utils/dom.js"></script>
-    <script src="/static/js/utils/storage.js"></script>
-    <script src="/static/js/utils/formatters.js"></script>
-    <script src="/static/js/services/auth.js"></script>
-    <script src="/static/js/services/api.js"></script>
-    <script src="/static/js/components/LobbyCard.js"></script>
-    <script src="/static/js/pages/dashboard.js"></script>
+    <script src="/static/js/app.js"></script>
 </body>
 </html>

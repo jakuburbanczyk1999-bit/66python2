@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lobby - Miedziowe Karty</title>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/css/base/reset.css">
+    <link rel="stylesheet" href="/static/css/base/variables.css">
+    <link rel="stylesheet" href="/static/css/base/base.css">
+    <link rel="stylesheet" href="/static/css/base/utilities.css">
+    <link rel="stylesheet" href="/static/css/components/buttons.css">
+    <link rel="stylesheet" href="/static/css/components/cards.css">
+    <link rel="stylesheet" href="/static/css/pages/lobby.css">
+</head>
+<body class="lobby-page">
+
+    <!-- Top Bar -->
+    <header class="lobby-header">
+        <div class="lobby-header-left">
+            <a href="/dashboard.html" class="btn btn-secondary btn-sm">
+                ← Wróć do lobby
+            </a>
+            <h1 class="lobby-title">
+                <span class="icon">🎮</span>
+                Lobby: <span id="lobby-id">Ładowanie...</span>
+            </h1>
+        </div>
+        <div class="lobby-header-right">
+            <span class="user-badge" id="user-badge">
+                <span class="user-avatar">👤</span>
+                <span class="user-name" id="header-user-name">Gracz</span>
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="lobby-container">
+        
+        <!-- Left Panel - Gracze -->
+        <section class="players-panel">
+            <div class="panel-header">
+                <h2>Gracze (<span id="player-count">0</span>/4)</h2>
+                <div class="lobby-status" id="lobby-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Oczekiwanie</span>
+                </div>
+            </div>
+
+            <!-- Sloty graczy -->
+            <div class="players-grid" id="players-grid">
+                <!-- Slot 1 -->
+                <div class="player-slot empty" data-slot="0" id="slot-0">
+                    <div class="slot-number">1</div>
+                    <div class="slot-content">
+                        <div class="empty-slot-text">Puste miejsce</div>
+                    </div>
+                </div>
+
+                <!-- Slot 2 -->
+                <div class="player-slot empty" data-slot="1" id="slot-1">
+                    <div class="slot-number">2</div>
+                    <div class="slot-content">
+                        <div class="empty-slot-text">Puste miejsce</div>
+                    </div>
+                </div>
+
+                <!-- Slot 3 -->
+                <div class="player-slot empty" data-slot="2" id="slot-2">
+                    <div class="slot-number">3</div>
+                    <div class="slot-content">
+                        <div class="empty-slot-text">Puste miejsce</div>
+                    </div>
+                </div>
+
+                <!-- Slot 4 -->
+                <div class="player-slot empty" data-slot="3" id="slot-3">
+                    <div class="slot-number">4</div>
+                    <div class="slot-content">
+                        <div class="empty-slot-text">Puste miejsce</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Akcje -->
+            <div class="lobby-actions">
+                <button class="btn btn-primary btn-block" id="ready-btn" disabled>
+                    ⏳ Ładowanie...
+                </button>
+                <button class="btn btn-success btn-block hidden" id="start-btn">
+                    ▶️ Rozpocznij grę
+                </button>
+                <button class="btn btn-secondary btn-block hidden" id="add-bot-btn">
+                    🤖 Dodaj bota
+                </button>
+                <button class="btn btn-danger btn-block" id="leave-btn">
+                    🚪 Opuść lobby
+                </button>
+            </div>
+        </section>
+
+        <!-- Right Panel - Info & Chat -->
+        <section class="info-panel">
+            
+            <!-- Informacje o grze -->
+            <div class="game-info-card">
+                <h3>Informacje o grze</h3>
+                <div class="info-row">
+                    <span class="info-label">🃏 Gra:</span>
+                    <span class="info-value">Gra w 66</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">🎲 Tryb:</span>
+                    <span class="info-value" id="game-mode">4-osobowy</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">🏆 Typ:</span>
+                    <span class="info-value" id="game-type">Casual</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">👑 Host:</span>
+                    <span class="info-value" id="host-name">-</span>
+                </div>
+            </div>
+
+            <!-- Chat (prosty) -->
+            <div class="chat-card">
+                <h3>Chat</h3>
+                <div class="chat-messages" id="chat-messages">
+                    <div class="chat-message system">
+                        <span class="chat-text">Witaj w lobby! Poczekaj na innych graczy.</span>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <input 
+                        type="text" 
+                        class="chat-input" 
+                        id="chat-input" 
+                        placeholder="Napisz wiadomość..."
+                        maxlength="200"
+                    >
+                    <button class="btn btn-primary btn-sm" id="chat-send-btn">
+                        Wyślij
+                    </button>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loading-overlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>Ładowanie lobby...</p>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div class="modal-overlay hidden" id="error-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>❌ Błąd</h2>
+            </div>
+            <div class="modal-body">
+                <p id="error-message">Wystąpił błąd</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="window.location.href='/dashboard.html'">
+                    Wróć do dashboard
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
