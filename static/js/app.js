@@ -1069,9 +1069,121 @@ function showError(message) {
 // ============================================
 // GAME PAGE - Gra w 66
 // ============================================
+function centerPlayerElements() {
+    const gameTable = document.querySelector('.game-table');
+    if (!gameTable) {
+        console.warn('⚠️ .game-table nie znaleziony');
+        return;
+    }
+    
+    // Oblicz środek table-center (środkowa kolumna grid)
+    const tableCenter = document.querySelector('.table-center');
+    let centerX;
+    
+    if (tableCenter) {
+        const rect = tableCenter.getBoundingClientRect();
+        centerX = rect.x + (rect.width / 2);
+        // console.log('📍 Centrowanie względem .table-center:', centerX);
+    } else {
+        const rect = gameTable.getBoundingClientRect();
+        centerX = rect.x + (rect.width / 2);
+        // console.log('📍 Centrowanie względem .game-table:', centerX);
+    }
+    
+    const yourHand = document.getElementById('your-hand');
+    const container = document.getElementById('action-buttons-container');
+    const playerInfo = document.querySelector('.player-bottom .player-info');
+    
+    if (yourHand) {
+        yourHand.style.cssText = `
+            position: fixed !important;
+            bottom: 20px !important;
+            left: ${centerX}px !important;
+            transform: translateX(-50%) !important;
+            z-index: 100 !important;
+            display: flex !important;
+            gap: 8px !important;
+            justify-content: center !important;
+        `;
+    }
+    
+    if (container) {
+        container.style.cssText = `
+            position: fixed !important;
+            bottom: 160px !important;
+            left: ${centerX}px !important;
+            transform: translateX(-50%) !important;
+            z-index: 200 !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+            justify-content: center !important;
+            padding: 15px 25px !important;
+            background: rgba(0, 0, 0, 0.85) !important;
+            border-radius: 10px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+            max-width: 90vw !important;
+        `;
+    }
+    
+    if (playerInfo) {
+        playerInfo.style.cssText = `
+            position: fixed !important;
+            bottom: 240px !important;
+            left: ${centerX}px !important;
+            transform: translateX(-50%) !important;
+            z-index: 150 !important;
+        `;
+    }
+    
+    // console.log('✅ Elementy wycentrowane na:', centerX, 'px');
+}
+function updateMatchScores(state) {
+    const punktyMeczu = state.punkty_meczu || {};
+    document.getElementById('team1-points').textContent = punktyMeczu['Drużyna 1'] || 0;
+    document.getElementById('team2-points').textContent = punktyMeczu['Drużyna 2'] || 0;
+}
+
+// Wywołaj w renderGameUI:
+function updateRoundPoints(state) {
+    const kontrakt = state.kontrakt?.typ;
+    const roundPointsEl = document.getElementById('round-points');
+    
+    // Jeśli element nie istnieje, nic nie rób
+    if (!roundPointsEl) return;
+    
+    // Pokazuj tylko dla NORMALNA i BEZ_PYTANIA
+    if (kontrakt === 'NORMALNA' || kontrakt === 'BEZ_PYTANIA') {
+        roundPointsEl.style.display = 'block';
+        const punkty = state.punkty_w_rozdaniu || {};
+        const team1El = document.getElementById('round-team1');
+        const team2El = document.getElementById('round-team2');
+        if (team1El) team1El.textContent = punkty['Drużyna 1'] || 0;
+        if (team2El) team2El.textContent = punkty['Drużyna 2'] || 0;
+    } else {
+        roundPointsEl.style.display = 'none';
+    }
+}
+
+// Wywołaj przy resize okna
+window.addEventListener('resize', centerPlayerElements);
 
 function initGame() {
     console.log('🎮 Initializing Game Page');
+    
+    // === CZYSZCZENIE PRZYKŁADOWYCH KART Z HTML ===
+    const deckEl = $('#deck');
+    const trumpEl = $('#trump-card');
+    const trumpSuitEl = $('#trump-suit');
+    const playedCardsEl = $('#played-cards');
+    
+    if (deckEl) deckEl.innerHTML = '';
+    if (trumpEl) trumpEl.innerHTML = '';
+    if (trumpSuitEl) trumpSuitEl.textContent = '-';
+    if (playedCardsEl) playedCardsEl.innerHTML = '';
+    
+    console.log('✅ Wyczyszczono przykładowe karty z HTML');
+    // === KONIEC CZYSZCZENIA ===
     
     // Check auth
     if (!AuthService.isAuthenticated()) {
@@ -1120,6 +1232,9 @@ function initGame() {
     }, 2000);
     
     console.log('✅ Game initialized');
+    setTimeout(() => {
+    centerPlayerElements();
+    }, 500);
 }
 
 // Setup Game UI
@@ -1150,14 +1265,14 @@ async function loadGameState(gameId) {
         }
         
         const data = await res.json();
-        console.log('Game state:', data);
+        // console.log('Game state:', data);
         
         // Update global state
         window.gameState.engineState = data;
         
         // Sprawdź czy gra się zakończyła
         if (data.faza === 'PODSUMOWANIE_ROZDANIA' || data.faza === 'ZAKONCZONE') {
-            console.log('🏁 Gra zakończona - zatrzymuję auto-refresh');
+            // console.log('🏁 Gra zakończona - zatrzymuję auto-refresh');
             if (window.gameRefreshInterval) {
                 clearInterval(window.gameRefreshInterval);
                 window.gameRefreshInterval = null;
@@ -1186,12 +1301,26 @@ function renderGameUI(state) {
     const playerNameEl = $('#current-player-name');
     if (playerNameEl) playerNameEl.textContent = currentPlayerName;
     
+    // Ustaw kontrakt/atut
+    const trumpSuitEl = $('#trump-suit');
+    if (trumpSuitEl) {
+        const kontrakt = state.kontrakt?.typ || 'BRAK';
+        const atut = state.atut || '';
+        const displayText = atut ? `${kontrakt} ${atut}` : kontrakt;
+        trumpSuitEl.textContent = displayText;
+    }
+    
     // Jeśli gra się zakończyła, wyczyść stół i ręce
     if (state.faza === 'PODSUMOWANIE_ROZDANIA' || state.faza === 'ZAKONCZONE') {
         const playedEl = $('#played-cards');
         if (playedEl) playedEl.innerHTML = '';
         const handEl = $('#your-hand');
         if (handEl) handEl.innerHTML = '';
+        
+        // Wyczyść przyciski akcji
+        const actionContainer = $('#action-buttons-container');
+        if (actionContainer) actionContainer.innerHTML = '';
+        
         return; // Nie renderuj nic więcej
     }
     
@@ -1200,6 +1329,9 @@ function renderGameUI(state) {
     
     // Render played cards on table
     renderPlayedCards(state);
+    
+    // === NOWE: Renderuj przyciski akcji ===
+    renderActionButtons(state);
     
     // Update trump display
     if (state.kontrakt && state.kontrakt.atut) {
@@ -1218,7 +1350,7 @@ function renderGameUI(state) {
     // === POPRAWIONE: Automatyczna finalizacja lewy (tylko RAZ!) ===
     if (state.lewa_do_zamkniecia) {
         if (!window.gameState.finalizingTrick) {
-            console.log('🎯 Lewa do zamknięcia - auto-finalizacja za 2s');
+            // console.log('🎯 Lewa do zamknięcia - auto-finalizacja za 2s');
             window.gameState.finalizingTrick = true;
             addLog('Lewa zakończona - finalizacja...', 'success');
             
@@ -1229,6 +1361,11 @@ function renderGameUI(state) {
     } else {
         window.gameState.finalizingTrick = false;
     }
+    
+    // === Aktualizuj wyniki meczu i punkty rozdania ===
+    updateMatchScores(state);
+    updateRoundPoints(state);
+    // === KONIEC ===
 }
 
 // === Finalizacja lewy ===
@@ -1476,7 +1613,7 @@ function updateScores(state) {
     
     // TODO: Mapowanie drużyn na graczy
     // Na razie wyświetl podstawowe info
-    console.log('Punkty:', punkty);
+    // console.log('Punkty:', punkty);
 }
 
 // Add Log Message
@@ -1508,13 +1645,13 @@ function setupGameButtons() {
 
 function showGameSummary(state) {
     console.log('🏆 Pokazuję podsumowanie:', state.podsumowanie);
-    console.log('🎮 Cały stan:', state);
     
     if (!state.podsumowanie) {
-        console.warn('Brak danych podsumowania - używam danych ze stanu');
+        console.warn('Brak danych podsumowania');
+        return;
     }
     
-    const summary = state.podsumowanie || {};
+    const summary = state.podsumowanie;
     
     // Usuń stary modal jeśli istnieje
     const oldModal = $('#game-summary-modal');
@@ -1551,114 +1688,56 @@ function showGameSummary(state) {
     title.textContent = '🏆 Koniec Rozdania';
     title.style.cssText = 'color: #fff; margin-bottom: 30px; font-size: 32px;';
     
-    // Zwycięzca - sprawdź różne źródła danych
     const winner = document.createElement('div');
     winner.style.cssText = 'font-size: 24px; color: #4ade80; margin-bottom: 20px; font-weight: bold;';
-    
-    const zwyciezca = summary.zwyciezca || 
-                     summary.druzyna_wygrana || 
-                     (state.zwyciezca_rozdania ? state.zwyciezca_rozdania.nazwa : null) ||
-                     'Nierozstrzygnięte';
-    winner.textContent = `Zwycięzca: ${zwyciezca}`;
-    
-    // Punkty - pobierz z różnych źródeł
-    const punktyRozdania = summary.punkty_rozdania || state.punkty_w_rozdaniu || {};
-    const punktyMeczu = summary.punkty_meczu || {};
-    
-    // Jeśli punkty_meczu są puste, spróbuj z drużyn
-    if (Object.keys(punktyMeczu).length === 0 && state.druzyny) {
-        state.druzyny.forEach(druzyna => {
-            punktyMeczu[druzyna.nazwa] = druzyna.punkty_meczu || 0;
-        });
-    }
+    winner.textContent = `Zwycięzca: ${summary.zwyciezca || 'Nierozstrzygnięte'}`;
     
     const points = document.createElement('div');
     points.style.cssText = 'background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; margin: 20px 0;';
+    points.innerHTML = `
+        <div style="color: #fff; font-size: 18px; margin-bottom: 15px;"><strong>Punkty w rozdaniu:</strong></div>
+        <div style="color: #94a3b8; font-size: 16px; line-height: 1.8;">
+            ${Object.entries(summary.punkty_rozdania || {}).map(([team, pts]) => 
+                `<div>${team}: <strong style="color: #fff">${pts} pkt</strong></div>`
+            ).join('')}
+        </div>
+        <div style="margin-top: 20px; color: #fff; font-size: 18px;"><strong>Punkty meczu:</strong></div>
+        <div style="color: #94a3b8; font-size: 16px; line-height: 1.8;">
+            ${Object.entries(summary.punkty_meczu || {}).map(([team, pts]) => 
+                `<div>${team}: <strong style="color: #4ade80">${pts} pkt</strong></div>`
+            ).join('')}
+        </div>
+    `;
     
-    let pointsHTML = '<div style="color: #fff; font-size: 18px; margin-bottom: 15px;"><strong>Punkty w rozdaniu:</strong></div>';
-    if (Object.keys(punktyRozdania).length > 0) {
-        pointsHTML += '<div style="color: #94a3b8; font-size: 16px; line-height: 1.8;">';
-        Object.entries(punktyRozdania).forEach(([team, pts]) => {
-            pointsHTML += `<div>${team}: <strong style="color: #fff">${pts} pkt</strong></div>`;
-        });
-        pointsHTML += '</div>';
-    } else {
-        pointsHTML += '<div style="color: #94a3b8; font-size: 14px;">Brak danych</div>';
-    }
-    
-    pointsHTML += '<div style="margin-top: 20px; color: #fff; font-size: 18px;"><strong>Punkty meczu:</strong></div>';
-    if (Object.keys(punktyMeczu).length > 0) {
-        pointsHTML += '<div style="color: #94a3b8; font-size: 16px; line-height: 1.8;">';
-        Object.entries(punktyMeczu).forEach(([team, pts]) => {
-            pointsHTML += `<div>${team}: <strong style="color: #4ade80">${pts} pkt</strong></div>`;
-        });
-        pointsHTML += '</div>';
-    } else {
-        pointsHTML += '<div style="color: #94a3b8; font-size: 14px;">Brak danych</div>';
-    }
-    
-    points.innerHTML = pointsHTML;
-    
-    // Przyciski
     const buttons = document.createElement('div');
     buttons.style.cssText = 'margin-top: 30px; display: flex; gap: 15px; justify-content: center;';
     
-    // Sprawdź czy to koniec meczu (któraś drużyna ma >= 66 pkt)
-    let maxPoints = 0;
+    const nextRoundBtn = document.createElement('button');
+    nextRoundBtn.textContent = '▶️ Następna runda';
+    nextRoundBtn.style.cssText = `
+        padding: 15px 30px; font-size: 18px; border: none; border-radius: 10px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white; cursor: pointer; font-weight: bold; transition: transform 0.2s;
+    `;
+    nextRoundBtn.onmouseover = () => nextRoundBtn.style.transform = 'scale(1.05)';
+    nextRoundBtn.onmouseout = () => nextRoundBtn.style.transform = 'scale(1)';
+    nextRoundBtn.onclick = () => { modal.remove(); startNextRound(); };
     
-    if (Object.keys(punktyMeczu).length > 0) {
-        // Pobierz wartości punktów, odfiltruj nie-liczby
-        const punktyValues = Object.values(punktyMeczu)
-            .filter(p => typeof p === 'number' && !isNaN(p));
-        
-        if (punktyValues.length > 0) {
-            maxPoints = Math.max(...punktyValues);
-        }
-    }
+    const leaveBtnModal = document.createElement('button');
+    leaveBtnModal.textContent = '🚪 Wyjdź';
+    leaveBtnModal.style.cssText = `
+        padding: 15px 30px; font-size: 18px; border: none; border-radius: 10px;
+        background: rgba(255,255,255,0.1); color: white; cursor: pointer;
+        font-weight: bold; transition: transform 0.2s;
+    `;
+    leaveBtnModal.onmouseover = () => leaveBtnModal.style.transform = 'scale(1.05)';
+    leaveBtnModal.onmouseout = () => leaveBtnModal.style.transform = 'scale(1)';
+    leaveBtnModal.onclick = () => {
+        if (confirm('Opuścić grę?')) window.location.href = '/dashboard.html';
+    };
     
-    const koniecMeczu = maxPoints >= 66;
-    
-    console.log('Punkty meczu:', punktyMeczu);
-    console.log('Max punktów:', maxPoints, 'Koniec meczu:', koniecMeczu);
-    
-    // Przycisk "Następna runda" - tylko jeśli NIE koniec meczu
-    if (!koniecMeczu) {
-        const nextRoundBtn = document.createElement('button');
-        nextRoundBtn.textContent = '▶️ Następna runda';
-        nextRoundBtn.style.cssText = `
-            padding: 15px 30px; font-size: 18px; border: none; border-radius: 10px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; cursor: pointer; font-weight: bold; transition: transform 0.2s;
-        `;
-        nextRoundBtn.onmouseover = () => nextRoundBtn.style.transform = 'scale(1.05)';
-        nextRoundBtn.onmouseout = () => nextRoundBtn.style.transform = 'scale(1)';
-        nextRoundBtn.onclick = () => { 
-            modal.remove(); 
-            startNextRound(); 
-        };
-        buttons.appendChild(nextRoundBtn);
-    }
-    
-    // Przycisk "Wyjdź" - tylko jeśli KONIEC meczu
-    if (koniecMeczu) {
-        title.textContent = '🏆 KONIEC MECZU!';
-        
-        const leaveBtnModal = document.createElement('button');
-        leaveBtnModal.textContent = '🚪 Wyjdź do Dashboard';
-        leaveBtnModal.style.cssText = `
-            padding: 15px 30px; font-size: 18px; border: none; border-radius: 10px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white; cursor: pointer; font-weight: bold; transition: transform 0.2s;
-        `;
-        leaveBtnModal.onmouseover = () => leaveBtnModal.style.transform = 'scale(1.05)';
-        leaveBtnModal.onmouseout = () => leaveBtnModal.style.transform = 'scale(1)';
-        leaveBtnModal.onclick = () => {
-            window.location.href = '/dashboard.html';
-        };
-        buttons.appendChild(leaveBtnModal);
-    }
-    
-    // Złóż modal
+    buttons.appendChild(nextRoundBtn);
+    buttons.appendChild(leaveBtnModal);
     content.appendChild(title);
     content.appendChild(winner);
     content.appendChild(points);
@@ -1667,7 +1746,6 @@ function showGameSummary(state) {
     document.body.appendChild(modal);
 }
 
-// Funkcja startująca następną rundę
 async function startNextRound() {
     console.log('🔄 Rozpoczynam następną rundę...');
     addLog('Rozpoczynam następną rundę...', 'info');
@@ -1712,6 +1790,223 @@ async function startNextRound() {
 }
 
 // ============================================
+// ============================================
+// PRAWIDŁOWY System przycisków akcji - Gra w 66
+// ============================================
+
+// === Renderuj przyciski akcji ===
+function renderActionButtons(state) {
+    const container = $('#action-buttons-container');
+    if (!container) {
+        console.warn('Brak kontenera action-buttons-container');
+        return;
+    }
+    
+    // Wyczyść poprzednie przyciski
+    container.innerHTML = '';
+    
+    // Sprawdź czy to kolej gracza
+    if (state.kolej_gracza !== window.gameState.yourPlayerId) {
+        container.innerHTML = '<div class="waiting-message">Czekam na innych graczy...</div>';
+        return;
+    }
+    
+    // W fazie ROZGRYWKA nie ma przycisków - tylko klikalne karty
+    if (state.faza === 'ROZGRYWKA') {
+        container.innerHTML = '<div class="info-message">Zagraj kartę z ręki (meldowanie automatyczne)</div>';
+        return;
+    }
+    
+    // Sprawdź czy są dostępne akcje
+    if (!state.mozliwe_akcje || state.mozliwe_akcje.length === 0) {
+        container.innerHTML = '<div class="info-message">Brak dostępnych akcji</div>';
+        return;
+    }
+    
+    // console.log('🎮 Renderuję przyciski dla fazy:', state.faza);
+    // console.log('Dostępne akcje:', state.mozliwe_akcje);
+    
+    // Renderuj przyciski dla każdej akcji
+    state.mozliwe_akcje.forEach(action => {
+        const button = createActionButton(action, state);
+        if (button) {
+            container.appendChild(button);
+        }
+    });
+}
+
+// === Utwórz przycisk akcji ===
+function createActionButton(action, state) {
+    const typ = action.typ;
+    
+    // ===== FAZA DEKLARACJA_1 - Wybór kontraktu =====
+    if (typ === 'deklaracja') {
+        const kontrakt = action.kontrakt;
+        const atut = action.atut;
+        
+        let label = '';
+        let className = 'btn-deklaracja';
+        
+        if (kontrakt === 'NORMALNA') {
+            label = `Normalna ${getSuitSymbol(atut)}`;
+            className = 'btn-normalna';
+        } else if (kontrakt === 'BEZ_PYTANIA') {
+            label = `Bez Pytania ${getSuitSymbol(atut)}`;
+            className = 'btn-bez-pytania';
+        } else if (kontrakt === 'GORSZA') {
+            label = 'Gorsza (bez atutu)';
+            className = 'btn-gorsza';
+        } else if (kontrakt === 'LEPSZA') {
+            label = 'Lepsza (bez atutu)';
+            className = 'btn-lepsza';
+        }
+        
+        return createSimpleActionButton(label, className, () => {
+            performAction({
+                typ: 'deklaracja',
+                kontrakt: kontrakt,
+                atut: atut
+            });
+        });
+    }
+    
+    // ===== FAZA_PYTANIA_START - Pytanie partnera =====
+    if (typ === 'pytanie') {
+        return createSimpleActionButton('Pytam partnera', 'btn-pytanie', () => {
+            performAction({typ: 'pytanie'});
+        });
+    }
+    
+    if (typ === 'nie_pytam') {
+        return createSimpleActionButton('Nie pytam (bez pytania)', 'btn-nie-pytam', () => {
+            performAction({typ: 'nie_pytam'});
+        });
+    }
+    
+    // ===== FAZA_DECYZJI_PO_PASACH - Zmiana kontraktu =====
+    if (typ === 'zmiana_kontraktu') {
+        const kontrakt = action.kontrakt;
+        const label = kontrakt === 'GORSZA' ? 'Gorsza' : 'Lepsza';
+        return createSimpleActionButton(label, `btn-${kontrakt.toLowerCase()}`, () => {
+            performAction({typ: 'zmiana_kontraktu', kontrakt: kontrakt});
+        });
+    }
+    
+    if (typ === 'graj_normalnie') {
+        return createSimpleActionButton('Graj normalnie', 'btn-graj-normalnie', () => {
+            performAction({typ: 'graj_normalnie'});
+        });
+    }
+    
+    // ===== FAZA LICYTACJA - Przebijanie =====
+    if (typ === 'pas') {
+        return createSimpleActionButton('Pas', 'btn-pas', () => {
+            performAction({typ: 'pas'});
+        });
+    }
+    
+    if (typ === 'przebicie') {
+        const kontrakt = action.kontrakt;
+        const label = `Przebij na ${kontrakt === 'GORSZA' ? 'Gorszą' : 'Lepszą'}`;
+        return createSimpleActionButton(label, `btn-przebicie-${kontrakt.toLowerCase()}`, () => {
+            performAction({typ: 'przebicie', kontrakt: kontrakt});
+        });
+    }
+    
+    // ===== FAZA LUFA - Podbijanie stawki =====
+    if (typ === 'kontra') {
+        return createSimpleActionButton('Kontra (2x)', 'btn-kontra', () => {
+            performAction({typ: 'kontra', kontrakt: action.kontrakt, atut: action.atut});
+        });
+    }
+    
+    if (typ === 'lufa') {
+        return createSimpleActionButton('Lufa (2x)', 'btn-lufa', () => {
+            performAction({typ: 'lufa', kontrakt: action.kontrakt, atut: action.atut});
+        });
+    }
+    
+    if (typ === 'do_konca') {
+        return createSimpleActionButton('Do końca!', 'btn-do-konca', () => {
+            performAction({typ: 'do_konca'});
+        });
+    }
+    
+    if (typ === 'pas_lufa') {
+        return createSimpleActionButton('Pas', 'btn-pas-lufa', () => {
+            performAction({typ: 'pas_lufa'});
+        });
+    }
+    
+    // Nieznany typ akcji
+    console.warn('⚠️ Nieznany typ akcji:', typ, action);
+    return createSimpleActionButton(`${typ}`, 'btn-unknown', () => {
+        performAction(action);
+    });
+}
+
+// === Prosty przycisk akcji ===
+function createSimpleActionButton(text, className, onClick) {
+    const btn = document.createElement('button');
+    btn.className = `btn action-btn ${className}`;
+    btn.textContent = text;
+    btn.onclick = onClick;
+    return btn;
+}
+
+// === Symbol koloru ===
+function getSuitSymbol(kolor) {
+    if (!kolor) return '';
+    const symbols = {
+        'Kier': '♥',
+        'Karo': '♦',
+        'Trefl': '♣',
+        'Pik': '♠'
+    };
+    return symbols[kolor] || kolor;
+}
+
+// === Wykonaj akcję ===
+async function performAction(action) {
+    console.log('🎯 Wykonuję akcję:', action);
+    addLog(`Akcja: ${action.typ}`, 'info');
+    
+    // Wyłącz wszystkie przyciski
+    const buttons = $$('.action-btn');
+    buttons.forEach(btn => btn.disabled = true);
+    
+    try {
+        const res = await fetch(`/api/game/${window.gameState.gameId}/play`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${AuthService.getToken()}`
+            },
+            body: JSON.stringify(action)
+        });
+        
+        if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.detail || 'Action failed');
+        }
+        
+        const data = await res.json();
+        console.log('✅ Akcja wykonana:', data);
+        
+        // Odśwież stan
+        window.gameState.engineState = data.state;
+        renderGameUI(data.state);
+        
+        addLog('Akcja wykonana!', 'success');
+        
+    } catch (err) {
+        console.error('❌ Error performing action:', err);
+        addLog(`Błąd: ${err.message}`, 'error');
+        
+        // Włącz przyciski z powrotem przy błędzie
+        buttons.forEach(btn => btn.disabled = false);
+    }
+}
 // INITIALIZATION
 // ============================================
 

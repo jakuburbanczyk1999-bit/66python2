@@ -125,35 +125,11 @@
                 <!-- Deck & Trump -->
                 <div class="deck-area">
                     <div class="deck" id="deck">
-                        <div class="card card-back">
-                            <span class="deck-count">18</span>
-                        </div>
                     </div>
                     <div class="trump-card" id="trump-card">
-                        <!-- Karta atutowa -->
-                        <div class="card" data-suit="hearts" data-rank="A">
-                            <div class="card-content">
-                                <div class="card-corner top-left">
-                                    <span class="rank">A</span>
-                                    <span class="suit">♥</span>
-                                </div>
-                                <div class="card-center">
-                                    <span class="suit-big">♥</span>
-                                </div>
-                                <div class="card-corner bottom-right">
-                                    <span class="rank">A</span>
-                                    <span class="suit">♥</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
-                <!-- Trump Indicator -->
-                <div class="trump-indicator">
-                    <span class="trump-label">Atuty:</span>
-                    <span class="trump-suit" id="trump-suit">♥</span>
-                </div>
 
             </div>
 
@@ -169,6 +145,7 @@
                         </div>
                     </div>
                 </div>
+                <div id="action-buttons-container" class="action-buttons-container"></div>
                 <div class="player-hand your-hand" id="your-hand">
                     <!-- Twoje karty (odkryte, klikalne) -->
                     <div class="card" data-suit="hearts" data-rank="K" onclick="playCard(this)">
@@ -193,6 +170,17 @@
 
         <!-- Right Sidebar -->
         <aside class="game-sidebar">
+            <div class="match-scores">
+            <h3>Wyniki meczu:</h3>
+            <div class="team-score">
+                <span class="team-name">Drużyna 1:</span>
+                <span class="team-points" id="team1-points">0</span>
+            </div>
+            <div class="team-score">
+                <span class="team-name">Drużyna 2:</span>
+                <span class="team-points" id="team2-points">0</span>
+            </div>
+        </div>
             
             <!-- Scoreboard -->
             <div class="scoreboard">

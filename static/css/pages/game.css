@@ -106,7 +106,7 @@
         "left center right"
         ". bottom .";
     grid-template-columns: 160px 1fr 160px;
-    grid-template-rows: 90px 1fr 130px;  /* FIXED: Mniejsze wartości */
+    grid-template-rows: 90px 1fr 280px;  /* FIXED: Mniejsze wartości */
     padding: var(--space-3);
     gap: var(--space-2);
     overflow: hidden;
@@ -145,6 +145,11 @@
 }
 
 /* Player Info */
+.player-bottom .player-info {
+    order: 0 !important;
+    align-self: center !important;
+}
+
 .player-info {
     display: flex;
     align-items: center;
@@ -588,7 +593,7 @@
 @media (max-width: 1400px) {
     .game-table {
         grid-template-columns: 140px 1fr 140px;
-        grid-template-rows: 80px 1fr 120px;
+        /* grid-template-rows: 80px 1fr 120px; */
         padding: var(--space-2);
     }
     
@@ -616,7 +621,7 @@
     
     .game-table {
         grid-template-columns: 120px 1fr 120px;
-        grid-template-rows: 70px 1fr 110px;
+        /* grid-template-rows: 70px 1fr 110px; */
     }
     
     .card {
@@ -649,7 +654,7 @@
     
     .game-table {
         grid-template-columns: 100px 1fr 100px;
-        grid-template-rows: 60px 1fr 100px;
+        /* grid-template-rows: 60px 1fr 100px; */
         padding: var(--space-2);
         gap: var(--space-1);
     }
@@ -835,4 +840,563 @@
 .player-score {
     font-size: 11px;
     color: rgba(255,255,255,0.7);
+}
+* Kontener przycisków */
+.action-buttons-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    padding: 10px 15px;
+    min-height: 50px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+    margin: 0 auto 10px auto;
+    max-width: 90%;
+    position: relative;
+    z-index: 100; /* Nad kartami */
+}
+
+/* Przyciski akcji - mniejsze dla lepszego dopasowania */
+.action-btn {
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    min-width: 100px;
+    white-space: nowrap;
+}
+
+.action-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.action-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* === KOLORY PRZYCISKÓW === */
+
+/* Kontrakty DEKLARACJA_1 */
+.btn-normalna {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+}
+
+.btn-bez-pytania {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    color: white;
+}
+
+.btn-gorsza {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    color: white;
+}
+
+.btn-lepsza {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+}
+
+/* FAZA_PYTANIA */
+.btn-pytanie {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.btn-nie-pytam {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+}
+
+/* DECYZJA_PO_PASACH */
+.btn-graj-normalnie {
+    background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+    color: white;
+}
+
+/* LICYTACJA */
+.btn-pas {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+}
+
+.btn-przebicie-gorsza {
+    background: linear-gradient(135deg, #fb923c 0%, #f97316 100%);
+    color: white;
+}
+
+.btn-przebicie-lepsza {
+    background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+    color: white;
+}
+
+/* LUFA */
+.btn-kontra {
+    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+    color: white;
+    font-size: 16px;
+}
+
+.btn-lufa {
+    background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+    color: white;
+    font-size: 16px;
+}
+
+.btn-do-konca {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    font-size: 18px;
+    font-weight: 900;
+    animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.5);
+    }
+    50% {
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.8);
+    }
+}
+
+.btn-pas-lufa {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+}
+
+/* Komunikaty */
+.waiting-message,
+.info-message {
+    color: #cbd5e1;
+    font-size: 14px;
+    text-align: center;
+    padding: 10px;
+    width: 100%;
+}
+
+.waiting-message {
+    animation: pulse-opacity 2s ease-in-out infinite;
+}
+
+@keyframes pulse-opacity {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.info-message {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* === POPRAWKA LAYOUTU - player-bottom === */
+.player-area.player-bottom {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 900px !important;
+    justify-self: center !important;
+    align-self: end !important;
+    padding-bottom: 15px !important;
+}
+
+/* Ręka gracza - zapewnij odpowiednie odstępy */
+.player-hand.your-hand {
+    margin-top: 0;
+    z-index: 50;
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+    .action-buttons-container {
+        padding: 8px;
+        gap: 6px;
+        max-width: 95%;
+    }
+    
+    .action-btn {
+        min-width: 80px;
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+}
+
+
+
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 4px 6px rgba(239, 68, 68, 0.5);
+    }
+    50% {
+        box-shadow: 0 6px 20px rgba(239, 68, 68, 0.8);
+    }
+}
+
+.btn-pas-lufa {
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+}
+
+/* Komunikaty */
+.waiting-message,
+.info-message {
+    color: #94a3b8;
+    font-size: 16px;
+    text-align: center;
+    padding: 15px;
+    width: 100%;
+}
+
+.waiting-message {
+    animation: pulse-opacity 2s ease-in-out infinite;
+}
+
+@keyframes pulse-opacity {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.info-message {
+    color: #cbd5e1;
+    font-style: italic;
+}
+
+/* Responsywność */
+@media (max-width: 768px) {
+    .action-buttons-container {
+        padding: 15px;
+    }
+    
+    .action-btn {
+        min-width: 100px;
+        padding: 12px 20px;
+        font-size: 14px;
+    }
+}
+#action-buttons-container {
+    order: 1 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    justify-content: center !important;
+    padding: 12px 15px !important;
+    min-height: 60px !important;
+    max-height: 90px !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    border-radius: 8px !important;
+    overflow-y: auto !important;
+    margin: 0 auto !important;
+    max-width: 95% !important;
+}
+.player-hand.your-hand {
+    order: 2 !important;
+    display: flex !important;
+    justify-content: center !important;
+    gap: var(--space-1) !important;
+    flex-wrap: wrap !important;
+}
+
+/* POPRAWKA 4: Przyciski akcji */
+.action-btn {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    border: 2px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    min-width: 95px !important;
+    white-space: nowrap !important;
+}
+
+.action-btn:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4) !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.action-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* Kolory przycisków */
+.btn-normalna { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important; color: white !important; }
+.btn-bez-pytania { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important; color: white !important; }
+.btn-gorsza { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; color: white !important; }
+.btn-lepsza { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important; color: white !important; }
+.btn-pytanie { background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: white !important; }
+.btn-nie-pytam { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important; color: white !important; }
+.btn-graj-normalnie { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%) !important; color: white !important; }
+.btn-pas { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important; color: white !important; }
+.btn-przebicie-gorsza { background: linear-gradient(135deg, #fb923c 0%, #f97316 100%) !important; color: white !important; }
+.btn-przebicie-lepsza { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%) !important; color: white !important; }
+.btn-kontra { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important; color: white !important; font-size: 14px !important; }
+.btn-lufa { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%) !important; color: white !important; font-size: 14px !important; }
+.btn-do-konca { 
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important; 
+    color: white !important; 
+    font-size: 16px !important; 
+    font-weight: 900 !important;
+    animation: pulse-glow 1.5s ease-in-out infinite !important;
+}
+.btn-pas-lufa { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important; color: white !important; }
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 2px 4px rgba(239, 68, 68, 0.5); }
+    50% { box-shadow: 0 4px 12px rgba(239, 68, 68, 0.8); }
+}
+
+/* Komunikaty */
+.waiting-message, .info-message {
+    color: #cbd5e1 !important;
+    font-size: 14px !important;
+    text-align: center !important;
+    padding: 10px !important;
+    width: 100% !important;
+}
+
+.waiting-message {
+    animation: pulse-opacity 2s ease-in-out infinite;
+}
+
+@keyframes pulse-opacity {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* POPRAWKA 5: Ukryj deck-area jeśli puste */
+.deck-area:empty {
+    display: none !important;
+}
+
+/* Responsywność */
+@media (max-width: 1200px) {
+    .game-table {
+        grid-template-rows: 80px 1fr 250px !important;
+    }
+    
+    #action-buttons-container {
+        padding: 10px !important;
+        max-height: 80px !important;
+    }
+    
+    .action-btn {
+        min-width: 85px !important;
+        padding: 8px 14px !important;
+        font-size: 12px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .game-table {
+        grid-template-rows: 70px 1fr 220px !important;
+    }
+    
+    #action-buttons-container {
+        padding: 8px !important;
+        max-height: 70px !important;
+    }
+    
+    .action-btn {
+        min-width: 75px !important;
+        padding: 6px 12px !important;
+        font-size: 11px !important;
+    }
+}
+/* ============================================
+   NADPISANIE GRID-TEMPLATE-ROWS - POPRAWKA
+   ============================================ */
+
+/* Rozdzielczość < 1400px (laptopy) */
+@media (max-width: 1400px) {
+    .game-table {
+        grid-template-rows: 80px 1fr 260px !important;
+    }
+}
+
+/* Rozdzielczość < 1200px (tablety) */
+@media (max-width: 1200px) {
+    .game-table {
+        grid-template-rows: 70px 1fr 250px !important;
+    }
+}
+
+/* Rozdzielczość < 768px (mobile) */
+@media (max-width: 768px) {
+    .game-table {
+        grid-template-rows: 60px 1fr 220px !important;
+    }
+}
+#your-hand,
+.player-hand.your-hand {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 100 !important;
+    display: flex !important;
+    justify-content: center !important;
+    gap: 8px !important;
+}
+
+#action-buttons-container {
+    position: fixed !important;
+    bottom: 160px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 200 !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    justify-content: center !important;
+    padding: 15px 25px !important;
+    background: rgba(0, 0, 0, 0.85) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+    max-width: 90vw !important;
+}
+
+.player-bottom .player-info {
+    position: fixed !important;
+    bottom: 240px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 150 !important;
+}
+
+/* Przyciski akcji - style */
+.action-btn {
+    padding: 10px 18px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    border: 2px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    transition: all 0.2s !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    min-width: 100px !important;
+    white-space: nowrap !important;
+}
+
+.action-btn:hover:not(:disabled) {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4) !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.action-btn:disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+/* Kolory przycisków */
+.btn-normalna { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important; color: white !important; }
+.btn-bez-pytania { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important; color: white !important; }
+.btn-gorsza { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important; color: white !important; }
+.btn-lepsza { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important; color: white !important; }
+.btn-pytanie { background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important; color: white !important; }
+.btn-nie-pytam { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important; color: white !important; }
+.btn-graj-normalnie { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%) !important; color: white !important; }
+.btn-pas { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important; color: white !important; }
+.btn-przebicie-gorsza { background: linear-gradient(135deg, #fb923c 0%, #f97316 100%) !important; color: white !important; }
+.btn-przebicie-lepsza { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%) !important; color: white !important; }
+.btn-kontra { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%) !important; color: white !important; font-size: 15px !important; }
+.btn-lufa { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%) !important; color: white !important; font-size: 15px !important; }
+.btn-do-konca { 
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important; 
+    color: white !important; 
+    font-size: 17px !important; 
+    font-weight: 900 !important;
+    animation: pulse-glow 1.5s ease-in-out infinite !important;
+}
+.btn-pas-lufa { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important; color: white !important; }
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 2px 4px rgba(239, 68, 68, 0.5); }
+    50% { box-shadow: 0 4px 12px rgba(239, 68, 68, 0.8); }
+}
+
+/* Komunikaty */
+.waiting-message, .info-message {
+    color: #cbd5e1 !important;
+    font-size: 14px !important;
+    text-align: center !important;
+    padding: 10px !important;
+    width: 100% !important;
+}
+
+.waiting-message {
+    animation: pulse-opacity 2s ease-in-out infinite;
+}
+
+@keyframes pulse-opacity {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Responsywność */
+@media (max-width: 1200px) {
+    #action-buttons-container {
+        bottom: 140px !important;
+        padding: 12px 20px !important;
+    }
+    
+    .player-bottom .player-info {
+        bottom: 210px !important;
+    }
+    
+    .action-btn {
+        padding: 9px 16px !important;
+        font-size: 13px !important;
+        min-width: 90px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    #your-hand {
+        bottom: 15px !important;
+        gap: 5px !important;
+    }
+    
+    #action-buttons-container {
+        bottom: 120px !important;
+        padding: 10px 15px !important;
+        gap: 8px !important;
+    }
+    
+    .player-bottom .player-info {
+        bottom: 190px !important;
+    }
+    
+    .action-btn {
+        padding: 8px 14px !important;
+        font-size: 12px !important;
+        min-width: 80px !important;
+    }
+}
+#trump-suit {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 15px;
+    border-radius: 8px;
 }
