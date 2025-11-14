@@ -1,12 +1,13 @@
 """
 Router: Lobby
-Odpowiedzialność: Tworzenie, join, ready, kick, start gry
+Odpowiedzialność: Tworzenie, join, ready, kick, start gry, change slot, chat
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import uuid
 import time
+import json
 
 from services.redis_service import RedisService
 from services.game_service import GameService
@@ -18,10 +19,15 @@ from dependencies import get_current_user, get_redis
 
 class LobbyCreateRequest(BaseModel):
     """Request do stworzenia lobby"""
-    lobby_type: str = "66"
-    player_count: int = 4
-    ranked: bool = False
-    password: Optional[str] = None
+    nazwa: str = "Unnamed Game"      
+    typ_gry: str = "66"              # "66" lub "tysiac"
+    max_graczy: int = 4              # 2, 3 lub 4 (dla tysiąca też 2, 3, 4)
+    rankingowa: bool = False         
+    haslo: Optional[str] = None      
+
+class ChatMessageRequest(BaseModel):
+    """Request do wysłania wiadomości"""
+    message: str
 
 # ============================================
 # ROUTER
@@ -29,6 +35,35 @@ class LobbyCreateRequest(BaseModel):
 
 router = APIRouter()
 game_service = GameService()
+
+# ============================================
+# HELPER - Send System Message
+# ============================================
+
+async def send_system_message(lobby_id: str, message: str, redis: RedisService):
+    """
+    Wyślij wiadomość systemową do czatu
+    
+    Args:
+        lobby_id: ID lobby
+        message: Treść wiadomości systemowej
+        redis: Redis service
+    """
+    chat_message = {
+        "id": int(time.time() * 1000),
+        "user_id": None,
+        "username": "System",
+        "message": message,
+        "timestamp": time.time(),
+        "is_system": True
+    }
+    
+    chat_key = f"lobby:{lobby_id}:chat"
+    await redis.redis.rpush(chat_key, json.dumps(chat_message))
+    await redis.redis.ltrim(chat_key, -100, -1)
+    await redis.redis.expire(chat_key, 86400)
+    
+    print(f"📢 [SYSTEM] [{lobby_id}] {message}")
 
 # ============================================
 # LIST LOBBIES
@@ -78,18 +113,25 @@ async def create_lobby(
         HTTPException: 400 jeśli nieprawidłowe parametry
     """
     # Walidacja
-    if request.player_count not in [3, 4]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Liczba graczy musi być 3 lub 4"
-        )
+    if request.typ_gry == 'tysiac':
+        if request.max_graczy not in [2, 3, 4]:  
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Liczba graczy w Tysiącu musi być 2, 3 lub 4"
+            )
+    else:  # 66
+        if request.max_graczy not in [3, 4]:  
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Liczba graczy w 66 musi być 3 lub 4"
+            )
     
     # Wygeneruj ID
     game_id = str(uuid.uuid4())[:8]
     
     # Stwórz sloty
     slots = []
-    for i in range(request.player_count):
+    for i in range(request.max_graczy):  
         if i == 0:
             # Pierwszy slot = Host
             slots.append({
@@ -117,14 +159,15 @@ async def create_lobby(
     lobby_data = {
         "id_gry": game_id,
         "id": f"Lobby_{game_id[:4]}",
-        "max_graczy": request.player_count,
+        "nazwa": request.nazwa,          
+        "max_graczy": request.max_graczy,
         "status_partii": "LOBBY",
         "slots": slots,
         "opcje": {
-            "tryb_gry": f"{request.player_count}p",
-            "rankingowa": request.ranked,
-            "typ_gry": request.lobby_type,
-            "haslo": request.password
+            "tryb_gry": f"{request.max_graczy}p",
+            "rankingowa": request.rankingowa,  
+            "typ_gry": request.typ_gry,        
+            "haslo": request.haslo             
         },
         "host_id": current_user['id'],
         "tryb_lobby": "online",
@@ -134,6 +177,9 @@ async def create_lobby(
     
     # Zapisz w Redis
     await redis.save_lobby(game_id, lobby_data)
+    
+    # System message
+    await send_system_message(game_id, f"Lobby utworzone przez {current_user['username']}", redis)
     
     print(f"✅ Lobby utworzone: {game_id} przez {current_user['username']}")
     
@@ -234,6 +280,9 @@ async def join_lobby(
     # Zapisz
     await redis.save_lobby(lobby_id, lobby_data)
     
+    # System message
+    await send_system_message(lobby_id, f"{current_user['username']} dołączył do lobby", redis)
+    
     print(f"✅ {current_user['username']} dołączył do lobby {lobby_id}")
     
     return lobby_data
@@ -290,6 +339,9 @@ async def leave_lobby(
         print(f"✅ Host {current_user['username']} opuścił lobby {lobby_id} - lobby usunięte")
         return {"success": True, "message": "Lobby usunięte"}
     
+    # System message
+    await send_system_message(lobby_id, f"{current_user['username']} opuścił lobby", redis)
+    
     # Opróżnij slot
     player_slot['typ'] = 'pusty'
     player_slot['id_uzytkownika'] = None
@@ -304,8 +356,6 @@ async def leave_lobby(
     
     return {"success": True, "message": "Opuszczono lobby"}
 
-# Kontynuacja w następnym bloku...
-
 # ============================================
 # TOGGLE READY
 # ============================================
@@ -317,7 +367,7 @@ async def toggle_ready(
     redis: RedisService = Depends(get_redis)
 ):
     """
-    Zmień status gotowości
+    Toggle ready status
     
     Args:
         lobby_id: ID lobby
@@ -326,6 +376,9 @@ async def toggle_ready(
     
     Returns:
         dict: Zaktualizowane dane lobby
+    
+    Raises:
+        HTTPException: 400/404 jeśli błąd
     """
     lobby_data = await redis.get_lobby(lobby_id)
     
@@ -354,6 +407,10 @@ async def toggle_ready(
     
     # Zapisz
     await redis.save_lobby(lobby_id, lobby_data)
+    
+    # System message
+    status_text = "gotowy" if player_slot['ready'] else "nie gotowy"
+    await send_system_message(lobby_id, f"{current_user['username']} jest {status_text}", redis)
     
     print(f"✅ {current_user['username']} zmienił ready na {player_slot['ready']}")
     
@@ -430,6 +487,9 @@ async def kick_player(
     # Zapisz
     await redis.save_lobby(lobby_id, lobby_data)
     
+    # System message
+    await send_system_message(lobby_id, f"{player_name} został wyrzucony", redis)
+    
     print(f"✅ Host wyrzucił gracza {player_name} z lobby {lobby_id}")
     
     return lobby_data
@@ -504,9 +564,319 @@ async def add_bot(
     # Zapisz
     await redis.save_lobby(lobby_id, lobby_data)
     
+    # System message
+    await send_system_message(lobby_id, f"Bot #{next_bot_num} dołączył do lobby", redis)
+    
     print(f"✅ Dodano bota Bot #{next_bot_num} do lobby {lobby_id}")
     
     return lobby_data
+
+# ============================================
+# CHANGE SLOT - NOWE!
+# ============================================
+
+@router.post("/{lobby_id}/change-slot/{target_slot}")
+async def change_slot(
+    lobby_id: str,
+    target_slot: int,
+    current_user: dict = Depends(get_current_user),
+    redis: RedisService = Depends(get_redis)
+):
+    """
+    Gracz zmienia swój slot na inny (pusty)
+    
+    Args:
+        lobby_id: ID lobby
+        target_slot: Numer docelowego slotu (0-3)
+        current_user: Zalogowany użytkownik
+        redis: Redis service
+    
+    Returns:
+        dict: Zaktualizowane dane lobby
+    
+    Raises:
+        HTTPException: 400/404 jeśli błąd
+    """
+    lobby_data = await redis.get_lobby(lobby_id)
+    
+    if not lobby_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lobby nie znalezione"
+        )
+    
+    # Sprawdź czy gra nie rozpoczęta
+    if lobby_data.get('status_partii') == 'W_GRZE':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nie można zmieniać slotów podczas gry"
+        )
+    
+    slots = lobby_data.get('slots', [])
+    
+    # Znajdź obecny slot gracza
+    current_slot = None
+    current_slot_index = None
+    for i, slot in enumerate(slots):
+        if slot.get('id_uzytkownika') == current_user['id']:
+            current_slot = slot
+            current_slot_index = i
+            break
+    
+    if not current_slot:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nie jesteś w tym lobby"
+        )
+    
+    # Sprawdź czy to nie ten sam slot
+    if current_slot_index == target_slot:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Już jesteś na tym slocie"
+        )
+    
+    # Sprawdź czy target slot istnieje i jest pusty
+    if target_slot < 0 or target_slot >= len(slots):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nieprawidłowy numer slotu"
+        )
+    
+    target_slot_data = slots[target_slot]
+    
+    if target_slot_data['typ'] != 'pusty':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ten slot jest zajęty"
+        )
+    
+    # Zamień sloty
+    # Skopiuj dane gracza do target slotu
+    target_slot_data['typ'] = current_slot['typ']
+    target_slot_data['id_uzytkownika'] = current_slot['id_uzytkownika']
+    target_slot_data['nazwa'] = current_slot['nazwa']
+    target_slot_data['is_host'] = current_slot['is_host']
+    target_slot_data['ready'] = current_slot['ready']
+    target_slot_data['avatar_url'] = current_slot['avatar_url']
+    
+    # Opróżnij stary slot
+    current_slot['typ'] = 'pusty'
+    current_slot['id_uzytkownika'] = None
+    current_slot['nazwa'] = None
+    current_slot['is_host'] = False
+    current_slot['ready'] = False
+    current_slot['avatar_url'] = None
+    
+    # Zapisz
+    await redis.save_lobby(lobby_id, lobby_data)
+    
+    # System message
+    await send_system_message(lobby_id, f"{current_user['username']} zmienił miejsce", redis)
+    
+    print(f"🔄 {current_user['username']} zmienił slot na {target_slot} w lobby {lobby_id}")
+    
+    return lobby_data
+
+# ============================================
+# KICK BOT - NOWE!
+# ============================================
+
+@router.post("/{lobby_id}/kick-bot/{slot_number}")
+async def kick_bot(
+    lobby_id: str,
+    slot_number: int,
+    current_user: dict = Depends(get_current_user),
+    redis: RedisService = Depends(get_redis)
+):
+    """
+    Host wyrzuca bota z danego slotu
+    
+    Args:
+        lobby_id: ID lobby
+        slot_number: Numer slotu z botem (0-3)
+        current_user: Zalogowany użytkownik (musi być hostem)
+        redis: Redis service
+    
+    Returns:
+        dict: Zaktualizowane dane lobby
+    
+    Raises:
+        HTTPException: 400/403/404 jeśli błąd
+    """
+    lobby_data = await redis.get_lobby(lobby_id)
+    
+    if not lobby_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lobby nie znalezione"
+        )
+    
+    # Sprawdź czy jest hostem
+    if lobby_data.get('host_id') != current_user['id']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tylko host może wyrzucać boty"
+        )
+    
+    slots = lobby_data.get('slots', [])
+    
+    # Sprawdź czy slot istnieje
+    if slot_number < 0 or slot_number >= len(slots):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nieprawidłowy numer slotu"
+        )
+    
+    slot = slots[slot_number]
+    
+    # Sprawdź czy to bot
+    if slot.get('typ') != 'bot':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="W tym slocie nie ma bota"
+        )
+    
+    # Opróżnij slot
+    bot_name = slot['nazwa']
+    slot['typ'] = 'pusty'
+    slot['nazwa'] = None
+    slot['ready'] = False
+    slot['avatar_url'] = None
+    
+    # Zapisz
+    await redis.save_lobby(lobby_id, lobby_data)
+    
+    # System message
+    await send_system_message(lobby_id, f"{bot_name} został usunięty", redis)
+    
+    print(f"🤖❌ Host wyrzucił bota {bot_name} ze slotu {slot_number} w lobby {lobby_id}")
+    
+    return lobby_data
+
+# ============================================
+# CHAT - GET MESSAGES - NOWE!
+# ============================================
+
+@router.get("/{lobby_id}/chat")
+async def get_chat_messages(
+    lobby_id: str,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+    redis: RedisService = Depends(get_redis)
+):
+    """
+    Pobierz historię czatu w lobby
+    
+    Args:
+        lobby_id: ID lobby
+        limit: Max liczba wiadomości (default 50)
+        current_user: Zalogowany użytkownik
+        redis: Redis service
+    
+    Returns:
+        List[dict]: Lista wiadomości
+    """
+    # Sprawdź czy lobby istnieje
+    lobby_data = await redis.get_lobby(lobby_id)
+    if not lobby_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lobby nie znalezione"
+        )
+    
+    # Pobierz wiadomości z Redis
+    chat_key = f"lobby:{lobby_id}:chat"
+    messages = await redis.redis.lrange(chat_key, -limit, -1)
+    
+    # Parse JSON messages
+    parsed_messages = []
+    for msg in messages:
+        try:
+            parsed_messages.append(json.loads(msg))
+        except:
+            pass
+    
+    return parsed_messages
+
+# ============================================
+# CHAT - SEND MESSAGE - NOWE!
+# ============================================
+
+@router.post("/{lobby_id}/chat")
+async def send_chat_message(
+    lobby_id: str,
+    message: ChatMessageRequest,
+    current_user: dict = Depends(get_current_user),
+    redis: RedisService = Depends(get_redis)
+):
+    """
+    Wyślij wiadomość na czat lobby
+    
+    Args:
+        lobby_id: ID lobby
+        message: {"message": "treść"}
+        current_user: Zalogowany użytkownik
+        redis: Redis service
+    
+    Returns:
+        dict: Wysłana wiadomość
+    
+    Raises:
+        HTTPException: 400/404 jeśli błąd
+    """
+    # Sprawdź czy lobby istnieje
+    lobby_data = await redis.get_lobby(lobby_id)
+    if not lobby_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lobby nie znalezione"
+        )
+    
+    # Walidacja wiadomości
+    msg_text = message.message.strip()
+    
+    if not msg_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Wiadomość nie może być pusta"
+        )
+    
+    if len(msg_text) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Wiadomość za długa (max 500 znaków)"
+        )
+    
+    # Sprawdź czy użytkownik jest w lobby
+    slots = lobby_data.get('slots', [])
+    is_in_lobby = any(slot.get('id_uzytkownika') == current_user['id'] for slot in slots)
+    
+    if not is_in_lobby:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Musisz być w lobby aby wysyłać wiadomości"
+        )
+    
+    # Stwórz wiadomość
+    chat_message = {
+        "id": int(time.time() * 1000),  # Timestamp jako ID
+        "user_id": current_user['id'],
+        "username": current_user['username'],
+        "message": msg_text,
+        "timestamp": time.time(),
+        "is_system": False
+    }
+    
+    # Zapisz w Redis (lista)
+    chat_key = f"lobby:{lobby_id}:chat"
+    await redis.redis.rpush(chat_key, json.dumps(chat_message))
+    await redis.redis.ltrim(chat_key, -100, -1)
+    await redis.redis.expire(chat_key, 86400)
+    
+    print(f"💬 [{lobby_id}] {current_user['username']}: {msg_text}")
+    
+    return chat_message
 
 # ============================================
 # START GAME
@@ -552,6 +922,9 @@ async def start_game(
     lobby_data['status_partii'] = 'W_GRZE'
     await redis.save_lobby(lobby_id, lobby_data)
     
+    # System message
+    await send_system_message(lobby_id, "Gra rozpoczęta!", redis)
+    
     # Inicjalizuj silnik gry
     engine = await game_service.initialize_game(lobby_id, lobby_data, redis)
     
@@ -563,6 +936,238 @@ async def start_game(
         "game_id": lobby_id,
         "phase": engine.game_state.faza.name if hasattr(engine.game_state, 'faza') else 'UNKNOWN'
     }
+
+# ============================================
+# SWAP SLOTS
+# ============================================
+
+@router.post("/{lobby_id}/swap-slots")
+async def swap_slots(
+    lobby_id: str,
+    slot_a: int,
+    slot_b: int,
+    current_user: dict = Depends(get_current_user),
+    redis: RedisService = Depends(get_redis)
+):
+    """
+    Zamień miejscami 2 sloty (tylko host)
+    
+    Args:
+        lobby_id: ID lobby
+        slot_a: Numer pierwszego slotu (0-3)
+        slot_b: Numer drugiego slotu (0-3)
+        current_user: Zalogowany użytkownik (musi być hostem)
+        redis: Redis service
+    
+    Returns:
+        dict: Zaktualizowane dane lobby
+    
+    Raises:
+        HTTPException: 400/403/404 jeśli błąd
+    """
+    lobby_data = await redis.get_lobby(lobby_id)
+    
+    if not lobby_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lobby nie znalezione"
+        )
+    
+    # Sprawdź czy jest hostem
+    if lobby_data.get('host_id') != current_user['id']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tylko host może zamieniać sloty"
+        )
+    
+    # Sprawdź czy gra nie rozpoczęta
+    if lobby_data.get('status_partii') == 'W_GRZE':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nie można zamieniać slotów podczas gry"
+        )
+    
+    slots = lobby_data.get('slots', [])
+    
+    # Walidacja numerów slotów
+    if slot_a < 0 or slot_a >= len(slots):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Nieprawidłowy numer slotu A: {slot_a}"
+        )
+    
+    if slot_b < 0 or slot_b >= len(slots):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Nieprawidłowy numer slotu B: {slot_b}"
+        )
+    
+    if slot_a == slot_b:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nie można zamienić slotu samego ze sobą"
+        )
+    
+    # Pobierz dane slotów
+    slot_a_data = slots[slot_a]
+    slot_b_data = slots[slot_b]
+    
+    # Zamień zawartość (ale nie numery!)
+    # Zapisz numer_gracza przed zamianą
+    temp_numer_a = slot_a_data['numer_gracza']
+    temp_numer_b = slot_b_data['numer_gracza']
+    
+    # Zamień wszystkie pola OPRÓCZ numer_gracza
+    temp = {
+        'typ': slot_a_data['typ'],
+        'id_uzytkownika': slot_a_data.get('id_uzytkownika'),
+        'nazwa': slot_a_data.get('nazwa'),
+        'is_host': slot_a_data.get('is_host', False),
+        'ready': slot_a_data.get('ready', False),
+        'avatar_url': slot_a_data.get('avatar_url')
+    }
+    
+    slot_a_data['typ'] = slot_b_data['typ']
+    slot_a_data['id_uzytkownika'] = slot_b_data.get('id_uzytkownika')
+    slot_a_data['nazwa'] = slot_b_data.get('nazwa')
+    slot_a_data['is_host'] = slot_b_data.get('is_host', False)
+    slot_a_data['ready'] = slot_b_data.get('ready', False)
+    slot_a_data['avatar_url'] = slot_b_data.get('avatar_url')
+    
+    slot_b_data['typ'] = temp['typ']
+    slot_b_data['id_uzytkownika'] = temp['id_uzytkownika']
+    slot_b_data['nazwa'] = temp['nazwa']
+    slot_b_data['is_host'] = temp['is_host']
+    slot_b_data['ready'] = temp['ready']
+    slot_b_data['avatar_url'] = temp['avatar_url']
+    
+    # Zachowaj oryginalne numery slotów
+    slot_a_data['numer_gracza'] = temp_numer_a
+    slot_b_data['numer_gracza'] = temp_numer_b
+    
+    # Zapisz
+    await redis.save_lobby(lobby_id, lobby_data)
+    
+    # System message
+    names = []
+    if slot_a_data.get('nazwa'):
+        names.append(slot_a_data['nazwa'])
+    if slot_b_data.get('nazwa'):
+        names.append(slot_b_data['nazwa'])
+    
+    if len(names) == 2:
+        msg = f"{names[0]} i {names[1]} zamienili się miejscami"
+    elif len(names) == 1:
+        msg = f"{names[0]} zmienił pozycję"
+    else:
+        msg = "Host zamienił sloty"
+    
+    await send_system_message(lobby_id, msg, redis)
+    
+    print(f"🔄 Host zamienił sloty {slot_a} ↔ {slot_b} w lobby {lobby_id}")
+    
+    return lobby_data
+
+
+# ============================================
+# TRANSFER HOST
+# ============================================
+
+@router.post("/{lobby_id}/transfer-host/{new_host_user_id}")
+async def transfer_host(
+    lobby_id: str,
+    new_host_user_id: int,
+    current_user: dict = Depends(get_current_user),
+    redis: RedisService = Depends(get_redis)
+):
+    """
+    Przekaż hosta innemu graczowi (tylko obecny host)
+    
+    Args:
+        lobby_id: ID lobby
+        new_host_user_id: ID nowego hosta
+        current_user: Zalogowany użytkownik (musi być obecnym hostem)
+        redis: Redis service
+    
+    Returns:
+        dict: Zaktualizowane dane lobby
+    
+    Raises:
+        HTTPException: 400/403/404 jeśli błąd
+    """
+    lobby_data = await redis.get_lobby(lobby_id)
+    
+    if not lobby_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lobby nie znalezione"
+        )
+    
+    # Sprawdź czy jest obecnym hostem
+    if lobby_data.get('host_id') != current_user['id']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tylko host może przekazać role hosta"
+        )
+    
+    # Sprawdź czy próbuje przekazać samemu sobie
+    if new_host_user_id == current_user['id']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Już jesteś hostem"
+        )
+    
+    slots = lobby_data.get('slots', [])
+    
+    # Znajdź obecnego hosta i nowego hosta
+    old_host_slot = None
+    new_host_slot = None
+    
+    for slot in slots:
+        if slot.get('id_uzytkownika') == current_user['id']:
+            old_host_slot = slot
+        if slot.get('id_uzytkownika') == new_host_user_id:
+            new_host_slot = slot
+    
+    if not old_host_slot:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nie jesteś w lobby"
+        )
+    
+    if not new_host_slot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nowy host nie znaleziony w lobby"
+        )
+    
+    # Sprawdź czy nowy host to gracz (nie bot)
+    if new_host_slot.get('typ') != 'gracz':
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nie można przekazać hosta botowi"
+        )
+    
+    # Przekaż role
+    old_host_slot['is_host'] = False
+    new_host_slot['is_host'] = True
+    
+    # Zaktualizuj host_id w lobby
+    lobby_data['host_id'] = new_host_user_id
+    
+    # Zapisz
+    await redis.save_lobby(lobby_id, lobby_data)
+    
+    # System message
+    await send_system_message(
+        lobby_id, 
+        f"{new_host_slot['nazwa']} jest teraz hostem! 👑", 
+        redis
+    )
+    
+    print(f"👑 Host przekazany: {current_user['username']} → {new_host_slot['nazwa']} w lobby {lobby_id}")
+    
+    return lobby_data
 
 # ============================================
 # DELETE LOBBY

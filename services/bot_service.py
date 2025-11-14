@@ -5,19 +5,56 @@ Odpowiedzialność: Automatyczne wykonywanie akcji botów
 import asyncio
 import traceback
 from typing import Any
+from enum import Enum
 
 from services.redis_service import RedisService
 from routers.websocket_router import manager
 
 # Import funkcji z boty.py (istniejący plik)
 from boty import wybierz_akcje_dla_bota_testowego
+from boty_tysiac import wybierz_akcje_dla_bota_testowego_tysiac
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+def convert_enums_to_strings(obj):
+    """Konwertuje wszystkie Enumy i obiekty Karta w obiekcie na stringi dla JSON serialization"""
+    # Import klas Karta z obu silników
+    from silnik_gry import Karta as Karta66
+    from silnik_tysiac import Karta as KartaTysiac
+    
+    if isinstance(obj, dict):
+        return {k: convert_enums_to_strings(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_enums_to_strings(item) for item in obj]
+    elif isinstance(obj, Enum):
+        return obj.name
+    elif isinstance(obj, (Karta66, KartaTysiac)):
+        return str(obj)  # Konwertuj obiekt Karta na string
+    else:
+        return obj
 
 class BotService:
     """Service do obsługi botów"""
     
     def __init__(self):
         self.max_iterations = 20  # Zabezpieczenie przed nieskończoną pętlą
-        self.bot_delay = 0.5  # Opóźnienie między ruchami botów (sekundy)
+        self.bot_delay = 1.5  # Opóźnienie między ruchami botów (sekundy)
+    
+    def _convert_karty_w_akcji(self, akcja: Any) -> Any:
+        """Konwertuje obiekty Karta na stringi w akcji (rekurencyjnie)."""
+        from silnik_gry import Karta as Karta66
+        from silnik_tysiac import Karta as KartaTysiac
+        
+        if isinstance(akcja, (Karta66, KartaTysiac)):
+            return str(akcja)
+        elif isinstance(akcja, dict):
+            return {k: self._convert_karty_w_akcji(v) for k, v in akcja.items()}
+        elif isinstance(akcja, list):
+            return [self._convert_karty_w_akcji(item) for item in akcja]
+        else:
+            return akcja
     
     async def process_bot_actions(
         self,
@@ -35,6 +72,7 @@ class BotService:
             redis: Redis service
         """
         iteration = 0
+        first_action = True  # Flaga dla pierwszej akcji bota
         
         while iteration < self.max_iterations:
             iteration += 1
@@ -51,12 +89,20 @@ class BotService:
             current_player = state.gracze[kolej_idx]
             player_id = str(current_player.nazwa).strip()
             
-            # Jeśli to nie bot - zakończ
+            # Jeśli to nie bot - zakończ BEZ DELAY!
             if not player_id.startswith('Bot'):
                 print(f"[Bot] Kolej gracza {player_id} - koniec automatycznych ruchów")
                 break
             
             print(f"[Bot] Kolej bota {player_id}, faza: {state.faza.name}")
+            
+            # Delay PRZED akcją bota (nie po!) 
+            # Dzięki temu jeśli następna tura to gracz, to wychodzi BEZ czekania
+            if first_action:
+                await asyncio.sleep(0.8)
+                first_action = False
+            else:
+                await asyncio.sleep(self.bot_delay)
             
             # Pobierz dozwolone akcje
             try:
@@ -74,16 +120,29 @@ class BotService:
             
             # Bot wybiera akcję
             try:
-                typ_akcji, parametry = wybierz_akcje_dla_bota_testowego(
-                    current_player,
-                    state
-                )
+                # Wykryj typ gry na podstawie typu silnika
+                from engines.tysiac_engine import TysiacEngine
+                
+                if isinstance(engine, TysiacEngine):
+                    # Gra w Tysiąca
+                    typ_akcji, parametry = wybierz_akcje_dla_bota_testowego_tysiac(
+                        current_player,
+                        state
+                    )
+                else:
+                    # Gra w 66
+                    typ_akcji, parametry = wybierz_akcje_dla_bota_testowego(
+                        current_player,
+                        state
+                    )
                 
                 # Obsługa różnych typów akcji
                 if typ_akcji == 'karta':
                     # W fazie ROZGRYWKA zwraca obiekt Karta
-                    from silnik_gry import Karta
-                    if isinstance(parametry, Karta):
+                    from silnik_gry import Karta as Karta66
+                    from silnik_tysiac import Karta as KartaTysiac
+                    
+                    if isinstance(parametry, (Karta66, KartaTysiac)):
                         bot_action = {
                             'typ': 'zagraj_karte',
                             'karta': str(parametry)  # Zamień Karta na string
@@ -95,7 +154,8 @@ class BotService:
                         }
                 elif typ_akcji == 'licytacja':
                     # W fazie licytacji zwraca dict akcji
-                    bot_action = parametry
+                    # Musimy skonwertować obiekty Karta na stringi w parametrach
+                    bot_action = self._convert_karty_w_akcji(parametry)
                 elif typ_akcji == 'brak':
                     print(f"[Bot] Bot {player_id} nie ma akcji")
                     break
@@ -108,21 +168,47 @@ class BotService:
                 
                 print(f"[Bot] Bot {player_id} wykonuje: {bot_action}")
                 
-                # Wykonaj akcję bota
-                engine.perform_action(player_id, bot_action)
+                # Wykonaj akcję bota i zachowaj wynik
+                action_result = engine.perform_action(player_id, bot_action)
                 
                 # Zapisz silnik
                 await redis.save_game_engine(game_id, engine)
                 
-                # Broadcast przez WebSocket
+                # Pobierz stan dla pierwszego gracza (używamy go jako referencyjny)
+                # Frontend i tak dostaje tylko swoje karty, więc jeden stan wystarczy
+                first_player = state.gracze[0] if state.gracze else None
+                bot_state = None
+                if first_player:
+                    bot_state = convert_enums_to_strings(
+                        engine.get_state_for_player(first_player.nazwa)
+                    )
+                
+                # Broadcast przez WebSocket z pełnym stanem
                 await manager.broadcast(game_id, {
                     'type': 'bot_action',
                     'player': player_id,
-                    'action': bot_action
+                    'action': convert_enums_to_strings(bot_action),  # Konwertuj Enumy w akcji!
+                    'state': bot_state  # Dodaj stan!
                 })
                 
-                # Małe opóźnienie dla płynności
-                await asyncio.sleep(self.bot_delay)
+                # === BROADCAST MELDUNKU (jeśli był) ===
+                if action_result and action_result.get('meldunek_pkt', 0) > 0:
+                    meldunek_pkt = action_result.get('meldunek_pkt')
+                    print(f"[Bot] Meldunek {meldunek_pkt} pkt przez bota {player_id}")
+                    
+                    # Wyślij broadcast z informacją o meldunku
+                    await manager.broadcast(game_id, {
+                        'type': 'bot_action',
+                        'player': player_id,
+                        'action': convert_enums_to_strings({
+                            'typ': 'meldunek',
+                            'punkty': meldunek_pkt
+                        }),
+                        'state': bot_state
+                    })
+                # === KONIEC BROADCAST MELDUNKU ===
+                
+                # BEZ DELAY TUTAJ - delay jest na początku pętli!
                 
             except Exception as e:
                 print(f"[Bot] Błąd wykonywania akcji bota: {e}")

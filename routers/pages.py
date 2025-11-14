@@ -21,6 +21,12 @@ async def index_alt():
     """Strona główna (alternatywna ścieżka)"""
     return FileResponse("static/index.html")
 
+@router.get("/dashboard", response_class=FileResponse)
+@router.get("/dashboard.html", response_class=FileResponse)
+async def dashboard_page():
+    """Dashboard - lista lobby"""
+    return FileResponse("static/dashboard.html")
+
 @router.get("/lobby", response_class=FileResponse)
 @router.get("/lobby.html", response_class=FileResponse)
 async def lobby_page():
@@ -33,6 +39,12 @@ async def game_page():
     """Strona gry"""
     return FileResponse("static/game.html")
 
+@router.get("/zasady", response_class=FileResponse)
+@router.get("/zasady.html", response_class=FileResponse)
+async def zasady_page():
+    """Strona z zasadami"""
+    return FileResponse("static/zasady.html")
+
 # ============================================
 # ADDITIONAL PAGES (opcjonalnie)
 # ============================================
@@ -40,21 +52,8 @@ async def game_page():
 @router.get("/rules", response_class=FileResponse)
 @router.get("/rules.html", response_class=FileResponse)
 async def rules_page():
-    """Strona z zasadami gry"""
-    try:
-        return FileResponse("static/rules.html")
-    except:
-        # Fallback jeśli plik nie istnieje
-        return HTMLResponse(content="""
-        <html>
-            <head><title>Zasady - Gra w 66</title></head>
-            <body>
-                <h1>Zasady Gry w 66</h1>
-                <p>Strona w budowie...</p>
-                <a href="/">Powrót</a>
-            </body>
-        </html>
-        """)
+    """Strona z zasadami gry (alias)"""
+    return FileResponse("static/zasady.html")
 
 @router.get("/profile", response_class=FileResponse)
 @router.get("/profile.html", response_class=FileResponse)

@@ -1,7 +1,0 @@
-/* DROPDOWNS */
-.dropdown-menu {position: absolute; top: 100%; right: 0; margin-top: var(--space-2); min-width: 200px; background: var(--bg-surface); border-radius: var(--radius-xl); box-shadow: var(--shadow-xl); border: 1px solid var(--neutral-700); padding: var(--space-2); z-index: var(--z-dropdown); animation: dropdownFadeIn 0.2s ease;}
-@keyframes dropdownFadeIn {from {opacity: 0; transform: translateY(-10px);} to {opacity: 1; transform: translateY(0);}}
-.dropdown-item {display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); color: var(--text-primary); transition: all var(--transition-fast); cursor: pointer;}
-.dropdown-item:hover {background: var(--neutral-800);}
-.dropdown-item .icon {font-size: 1.2em;}
-.dropdown-divider {height: 1px; background: var(--neutral-700); margin: var(--space-2) 0;}

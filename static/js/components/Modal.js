@@ -1,1 +1,0 @@
-import{$,hide,show}from'../utils/dom.js';export class Modal{constructor(id){this.overlay=$(`#${id}`);this.closeBtn=this.overlay?.querySelector('.modal-close');if(this.closeBtn)this.closeBtn.onclick=()=>this.close()}open(){show(this.overlay)}close(){hide(this.overlay)}setContent(html){const body=this.overlay?.querySelector('.modal-body');if(body)body.innerHTML=html}}

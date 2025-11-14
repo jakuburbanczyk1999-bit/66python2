@@ -132,8 +132,15 @@ class SixtySixEngine(AbstractGameEngine):
         return self.game_state.gracze[index].nazwa
 
     def _serialize_enum(self, value: Optional[Any]) -> Optional[str]:
-        """Konwertuje Enum na jego nazwę (string)."""
-        return value.name if isinstance(value, (Kolor, Kontrakt, FazaGry)) else None
+        """Konwertuje Enum na jego nazwę (string), lub zwraca string jeśli już jest nazwą."""
+        # Jeśli to już string (z deserializacji/Redis), zwróć go bezpośrednio
+        if isinstance(value, str):
+            return value
+        # Jeśli to Enum, zwróć jego nazwę
+        if isinstance(value, (Kolor, Kontrakt, FazaGry)):
+            return value.name
+        # W przeciwnym razie None
+        return None
     
     def _serialize_action_dict(self, action: dict[str, Any]) -> dict[str, Any]:
         """Konwertuje Enumy w słowniku akcji na stringi (gotowe do JSON)."""
@@ -161,15 +168,18 @@ class SixtySixEngine(AbstractGameEngine):
 
     # --- Implementacja metod interfejsu AbstractGameEngine ---
 
-    def perform_action(self, player_id: str, action: dict[str, Any]) -> None:
+    def perform_action(self, player_id: str, action: dict[str, Any]) -> Optional[dict[str, Any]]:
         """
         Wykonuje akcję gracza, mapując ją na odpowiednią metodę silnika.
         Obsługuje dane karty jako string (od człowieka) lub dict (od bota).
+        
+        Returns:
+            Optional[dict]: Wynik akcji (np. {'meldunek_pkt': 20}) lub None
         """
         gracz_obj = self._map_player_id_to_obj(player_id)
         if not gracz_obj:
             print(f"BŁĄD (Adapter): Nie znaleziono gracza {player_id}")
-            return
+            return None
 
         action_type = action.get('typ')
         
@@ -187,17 +197,21 @@ class SixtySixEngine(AbstractGameEngine):
                     karta_obj = _karta_z_dicta(karta_data)
                 else:
                     raise ValueError(f"Nieznany format danych karty: {karta_data}")
-                    
-                self.game_state.zagraj_karte(gracz_obj, karta_obj)
+                
+                # ZMIANA: Zapisz i zwróć wynik (zawiera meldunek_pkt jeśli był)
+                result = self.game_state.zagraj_karte(gracz_obj, karta_obj)
+                return result
                 
             except Exception as e:
                 print(f"BŁĄD (Adapter): Błąd podczas zagrywania karty: {e}")
                 traceback.print_exc() # Dodaj pełny traceback, aby zobaczyć błąd
+                return None
         
         # Akcja: Finalizacja lewy (potrzebna dla klienta)
         elif action_type == 'finalizuj_lewe':
             if self.game_state.lewa_do_zamkniecia:
                 self.game_state.finalizuj_lewe()
+            return None
         
         # Inne akcje (licytacja, pas, lufa itp.)
         else:
@@ -207,6 +221,7 @@ class SixtySixEngine(AbstractGameEngine):
                 self.game_state.wykonaj_akcje(gracz_obj, action_with_enums)
             except Exception as e:
                 print(f"BŁĄD (Adapter): Błąd podczas wykonywania akcji licytacji: {e}")
+            return None
 
     def get_legal_actions(self, player_id: str) -> list[dict[str, Any]]:
         """
@@ -340,7 +355,16 @@ class SixtySixEngine(AbstractGameEngine):
             except Exception as e:
                 print(f"BŁĄD (Adapter): Nie można obliczyć aktualnej stawki: {e}")
                 aktualna_stawka_data = 0 # Fallback
-        # === KONIEC POPRAWKI ===
+        # === KON IEC POPRAWKI ===
+
+        # --- 9. punkty_meczowe (Map<string, number>) - PUNKTY W CAŁYM MECZU ---
+        punkty_meczowe_data = {}
+        if isinstance(gs, Rozdanie):  # 4p - punkty drużyn
+            for druzyna in gs.druzyny:
+                punkty_meczowe_data[druzyna.nazwa] = druzyna.punkty_meczu  # POPRAWKA: punkty_meczu zamiast punkty
+        elif isinstance(gs, RozdanieTrzyOsoby):  # 3p - punkty indywidualne
+            for gracz in gs.gracze:
+                punkty_meczowe_data[gracz.nazwa] = gracz.punkty_meczu
 
         # --- Zbuduj finalny obiekt stanu (zgodny z script.js) ---
         state = {
@@ -358,6 +382,7 @@ class SixtySixEngine(AbstractGameEngine):
             'mozliwe_akcje': mozliwe_akcje_data,
             'historia_rozdania': historia_rozdania_data,
             'punkty_w_rozdaniu': punkty_w_rozdaniu_data,
+            'punkty_meczowe': punkty_meczowe_data,  # <-- DODANO PUNKTY MECZU
             'aktualna_stawka': aktualna_stawka_data, # <-- DODANO KLUCZ
             
             # Dodatkowe dane (mogą być przydatne, choć script.js ich nie używa)

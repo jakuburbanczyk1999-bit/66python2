@@ -4,11 +4,11 @@ services:
   # 1. Serwer bazy danych PostgreSQL
   db:
     image: postgres:15-alpine
-    container_name: gra66_postgres
+    container_name: mk_postgres
     environment:
-      POSTGRES_USER: gra66user
-      POSTGRES_PASSWORD: gra66password
-      POSTGRES_DB: gra66db
+      POSTGRES_USER: mkuser
+      POSTGRES_PASSWORD: mkpassword
+      POSTGRES_DB: mkdb
     ports:
       - "5432:5432" # Udostępnij port 5432 na localhost
     volumes:
@@ -17,14 +17,6 @@ services:
   # 2. Serwer Redis
   redis:
     image: redis:7-alpine
-    container_name: gra66_redis
+    container_name: mk_redis
     ports:
       - "6379:6379" # Udostępnij port 6379 na localhost
-
-volumes:
-  postgres-data:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '${PWD}/postgres-data'

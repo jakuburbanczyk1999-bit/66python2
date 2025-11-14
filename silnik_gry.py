@@ -650,7 +650,7 @@ class Rozdanie:
                 "wygrana_druzyna": druzyna_wygrana.nazwa,
                 "przyznane_punkty": punkty_meczu,
                 "kontrakt": self.kontrakt.name if self.kontrakt else "Brak",
-                "atut": self.atut.name if self.atut else "Brak",
+                "atut": self.atut.name if hasattr(self.atut, 'name') else (self.atut if self.atut else "Brak"),
                 "mnoznik_gry": mnoznik_gry,
                 "mnoznik_lufy": self.mnoznik_lufy,
                 "wynik_w_kartach": self.punkty_w_rozdaniu,
@@ -691,8 +691,20 @@ class Rozdanie:
 
             # Sprawdź, czy ktoś już przebił atutem (jeśli kolor wiodący nie jest atutem)
             zostalo_przebite_atutem = False
-            if kolor_wiodacy != self.atut and self.atut and any(k.kolor == self.atut for _, k in self.aktualna_lewa):
-                zostalo_przebite_atutem = True
+            # Normalizuj atut dla porównania - uppercase
+            if hasattr(self.atut, 'name'):
+                atut_do_porownania = self.atut.name.upper()
+            else:
+                atut_do_porownania = str(self.atut).upper() if self.atut else None
+            
+            kolor_wiodacy_str = kolor_wiodacy.name.upper() if hasattr(kolor_wiodacy, 'name') else str(kolor_wiodacy).upper()
+            
+            if kolor_wiodacy_str != atut_do_porownania and self.atut and atut_do_porownania:
+                for _, k in self.aktualna_lewa:
+                    k_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                    if k_kolor == atut_do_porownania:
+                        zostalo_przebite_atutem = True
+                        break
 
             if zostalo_przebite_atutem:
                 # Jeśli przebito atutem, gracz musi tylko dołożyć do koloru (nie musi przebijać w kolorze)
@@ -713,12 +725,30 @@ class Rozdanie:
                 else: # Jeśli nie ma wyższych kart, może zagrać dowolną do koloru
                     return True
         else: # Gracz NIE MA kart do koloru wiodącego
-            atuty_w_rece = [k for k in reka_gracza if k.kolor == self.atut]
+            # Normalizuj atut dla porównania - uppercase
+            if hasattr(self.atut, 'name'):
+                atut_do_porownania = self.atut.name.upper()
+            else:
+                atut_do_porownania = str(self.atut).upper() if self.atut else None
+            
+            atuty_w_rece = []
+            if atut_do_porownania:
+                for k in reka_gracza:
+                    k_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                    if k_kolor == atut_do_porownania:
+                        atuty_w_rece.append(k)
+            
             if self.atut and atuty_w_rece: # Ma atuty
-                if karta.kolor != self.atut: return False # Musi dać atut
+                karta_kolor_str = karta.kolor.name.upper() if hasattr(karta.kolor, 'name') else str(karta.kolor).upper()
+                if karta_kolor_str != atut_do_porownania: return False # Musi dać atut
 
                 # Sprawdź, czy musi przebić wyższym atutem
-                atuty_na_stole = [k for _, k in self.aktualna_lewa if k.kolor == self.atut]
+                atuty_na_stole = []
+                for _, k in self.aktualna_lewa:
+                    k_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                    if k_kolor == atut_do_porownania:
+                        atuty_na_stole.append(k)
+                
                 if not atuty_na_stole: return True # Jest pierwszym przebiciem atutem
 
                 najwyzszy_atut_na_stole = max(atuty_na_stole, key=lambda c: c.ranga.value)
@@ -738,19 +768,42 @@ class Rozdanie:
         if not self.aktualna_lewa: return
 
         kolor_wiodacy = self.aktualna_lewa[0][1].kolor
-        karty_atutowe = [(g, k) for g, k in self.aktualna_lewa if k.kolor == self.atut]
+        
+        # Normalizuj atut - może być Enumem lub stringiem, zawsze uppercase
+        if hasattr(self.atut, 'name'):
+            atut_do_porownania = self.atut.name.upper()
+        else:
+            atut_do_porownania = str(self.atut).upper() if self.atut else None
+        
+        # Znajdź karty atutowe - porównuj uppercase
+        karty_atutowe = []
+        if atut_do_porownania:
+            for g, k in self.aktualna_lewa:
+                karta_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                if karta_kolor == atut_do_porownania:
+                    karty_atutowe.append((g, k))
+        
+        # DEBUG: Wypisz stan lewy
+        print(f"🔍 [_zakoncz_lewe] Lewa: {[(g.nazwa, str(k)) for g, k in self.aktualna_lewa]}")
+        print(f"🔍 [_zakoncz_lewe] Kolor wiodący: {kolor_wiodacy}")
+        print(f"🔍 [_zakoncz_lewe] Atut: {self.atut} (typ: {type(self.atut).__name__})")
+        print(f"🔍 [_zakoncz_lewe] Atut do porównania: {atut_do_porownania}")
+        print(f"🔍 [_zakoncz_lewe] Karty atutowe: {[(g.nazwa, str(k)) for g, k in karty_atutowe]}")
 
         zwyciezca_pary = None
         if karty_atutowe: # Jeśli zagrano atuty, wygrywa najwyższy atut
              zwyciezca_pary = max(karty_atutowe, key=lambda p: p[1].ranga.value)
+             print(f"🔍 [_zakoncz_lewe] Wygrywa atut: {zwyciezca_pary[0].nazwa} - {zwyciezca_pary[1]}")
         else: # W przeciwnym razie wygrywa najwyższa karta w kolorze wiodącym
              karty_wiodace = [p for p in self.aktualna_lewa if p[1].kolor == kolor_wiodacy]
              if karty_wiodace: zwyciezca_pary = max(karty_wiodace, key=lambda p: p[1].ranga.value)
+             print(f"🔍 [_zakoncz_lewe] Wygrywa w kolorze: {zwyciezca_pary[0].nazwa if zwyciezca_pary else 'BRAK'}")
 
         # Awaryjnie - jeśli coś poszło nie tak, pierwszy gracz wygrywa (nie powinno się zdarzyć)
         if not zwyciezca_pary: zwyciezca_pary = self.aktualna_lewa[0]
 
         zwyciezca_lewy = zwyciezca_pary[0]
+        print(f"✅ [_zakoncz_lewe] ZWYCIĘZCA: {zwyciezca_lewy.nazwa}")
 
         # Ustaw flagę do finalizacji, zapisz tymczasowego zwycięzcę i zablokuj ruchy
         self.lewa_do_zamkniecia = True
@@ -792,6 +845,7 @@ class Rozdanie:
         if not self.zwyciezca_lewy_tymczasowy: return # Zabezpieczenie
 
         zwyciezca_lewy = self.zwyciezca_lewy_tymczasowy
+        print(f"📦 [finalizuj_lewe] Finalizuję lewę, zwycięzca: {zwyciezca_lewy.nazwa}")
         punkty_w_lewie = sum(k.wartosc for _, k in self.aktualna_lewa) # Oblicz punkty przed czyszczeniem
 
         # Dodaj log o zakończeniu lewy
@@ -855,7 +909,14 @@ class Rozdanie:
                     # Sprawdź, czy ten meldunek nie był już zadeklarowany
                     if (gracz, karta.kolor) not in self.zadeklarowane_meldunki:
                         # Oblicz punkty za meldunek (40 za atutowy, 20 za zwykły)
-                        punkty_z_meldunku = 40 if karta.kolor == self.atut else 20
+                        # Normalizuj atut dla porównania - uppercase
+                        if hasattr(self.atut, 'name'):
+                            atut_do_porownania = self.atut.name.upper()
+                        else:
+                            atut_do_porownania = str(self.atut).upper() if self.atut else None
+                        
+                        karta_kolor_str = karta.kolor.name.upper() if hasattr(karta.kolor, 'name') else str(karta.kolor).upper()
+                        punkty_z_meldunku = 40 if (atut_do_porownania and karta_kolor_str == atut_do_porownania) else 20
                         # Dodaj punkty i zapisz meldunek
                         if gracz.druzyna:
                              self.punkty_w_rozdaniu[gracz.druzyna.nazwa] += punkty_z_meldunku
@@ -1358,18 +1419,50 @@ class RozdanieTrzyOsoby:
         karty_do_koloru = [k for k in reka_gracza if k.kolor == kolor_wiodacy]
         if karty_do_koloru:
             if karta.kolor != kolor_wiodacy: return False
+            # Normalizuj atut dla porównania - uppercase
+            if hasattr(self.atut, 'name'):
+                atut_do_porownania = self.atut.name.upper()
+            else:
+                atut_do_porownania = str(self.atut).upper() if self.atut else None
+            
             zostalo_przebite = False
-            if kolor_wiodacy != self.atut and self.atut and any(k.kolor == self.atut for _, k in self.aktualna_lewa): zostalo_przebite = True
+            if kolor_wiodacy != self.atut and self.atut and atut_do_porownania:
+                for _, k in self.aktualna_lewa:
+                    k_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                    if k_kolor == atut_do_porownania:
+                        zostalo_przebite = True
+                        break
+            
             if zostalo_przebite: return True
             naj_karta_wiodaca_p = max([p for p in self.aktualna_lewa if p[1].kolor == kolor_wiodacy], key=lambda p: p[1].ranga.value, default=None)
             if not naj_karta_wiodaca_p: return True
             naj_karta_wiodaca = naj_karta_wiodaca_p[1]
             wyzsze_karty = [k for k in karty_do_koloru if k.ranga.value > naj_karta_wiodaca.ranga.value]
             return karta in wyzsze_karty if wyzsze_karty else True
-        atuty_w_rece = [k for k in reka_gracza if k.kolor == self.atut]
+        
+        # Normalizuj atut dla porównania - uppercase
+        if hasattr(self.atut, 'name'):
+            atut_do_porownania = self.atut.name.upper()
+        else:
+            atut_do_porownania = str(self.atut).upper() if self.atut else None
+        
+        atuty_w_rece = []
+        if atut_do_porownania:
+            for k in reka_gracza:
+                k_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                if k_kolor == atut_do_porownania:
+                    atuty_w_rece.append(k)
+        
         if self.atut and atuty_w_rece:
-            if karta.kolor != self.atut: return False
-            atuty_na_stole = [k for _, k in self.aktualna_lewa if k.kolor == self.atut]
+            karta_kolor_str = karta.kolor.name.upper() if hasattr(karta.kolor, 'name') else str(karta.kolor).upper()
+            if karta_kolor_str != atut_do_porownania: return False
+            
+            atuty_na_stole = []
+            for _, k in self.aktualna_lewa:
+                k_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                if k_kolor == atut_do_porownania:
+                    atuty_na_stole.append(k)
+            
             if not atuty_na_stole: return True
             naj_atut_na_stole = max(atuty_na_stole, key=lambda c: c.ranga.value)
             wyzsze_atuty = [k for k in atuty_w_rece if k.ranga.value > naj_atut_na_stole.ranga.value]
@@ -1386,7 +1479,14 @@ class RozdanieTrzyOsoby:
                 szukana_ranga = Ranga.DAMA if karta.ranga == Ranga.KROL else Ranga.KROL
                 if any(k.ranga == szukana_ranga and k.kolor == karta.kolor for k in gracz.reka):
                     if (gracz, karta.kolor) not in self.zadeklarowane_meldunki:
-                        punkty_z_meldunku = 40 if karta.kolor == self.atut else 20
+                        # Normalizuj atut dla porównania - uppercase
+                        if hasattr(self.atut, 'name'):
+                            atut_do_porownania = self.atut.name.upper()
+                        else:
+                            atut_do_porownania = str(self.atut).upper() if self.atut else None
+                        
+                        karta_kolor_str = karta.kolor.name.upper() if hasattr(karta.kolor, 'name') else str(karta.kolor).upper()
+                        punkty_z_meldunku = 40 if (atut_do_porownania and karta_kolor_str == atut_do_porownania) else 20
                         self.punkty_w_rozdaniu[gracz.nazwa] += punkty_z_meldunku
                         self.zadeklarowane_meldunki.append((gracz, karta.kolor))
                         self._dodaj_log('meldunek', gracz=gracz.nazwa, punkty=punkty_z_meldunku)
@@ -1412,7 +1512,21 @@ class RozdanieTrzyOsoby:
         """Rozpoczyna zamykanie lewy w grze 3-osobowej."""
         if not self.aktualna_lewa: return
         kolor_wiodacy = self.aktualna_lewa[0][1].kolor
-        karty_atutowe = [(g, k) for g, k in self.aktualna_lewa if k.kolor == self.atut]
+        
+        # Normalizuj atut dla porównania - zawsze uppercase
+        if hasattr(self.atut, 'name'):
+            atut_do_porownania = self.atut.name.upper()
+        else:
+            atut_do_porownania = str(self.atut).upper() if self.atut else None
+        
+        # Znajdź karty atutowe - porównuj uppercase
+        karty_atutowe = []
+        if atut_do_porownania:
+            for g, k in self.aktualna_lewa:
+                karta_kolor = k.kolor.name.upper() if hasattr(k.kolor, 'name') else str(k.kolor).upper()
+                if karta_kolor == atut_do_porownania:
+                    karty_atutowe.append((g, k))
+        
         zwyciezca_pary = None
         if karty_atutowe: zwyciezca_pary = max(karty_atutowe, key=lambda p: p[1].ranga.value)
         else:

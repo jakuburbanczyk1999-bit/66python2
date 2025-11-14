@@ -137,10 +137,16 @@ class RedisService:
             List[dict]: Lista lobby
         """
         try:
-            # Pobierz wszystkie klucze lobby:*
+            # Pobierz wszystkie klucze lobby:* (ale bez :chat)
             pattern = f"{REDIS_PREFIX_LOBBY}*"
             keys = []
             async for key in self.redis.scan_iter(match=pattern):
+                key_str = key.decode('utf-8') if isinstance(key, bytes) else key
+                
+                # ✅ POPRAWIONE - Pomiń klucze czatu
+                if ':chat' in key_str:
+                    continue
+                
                 keys.append(key)
             
             # Pobierz dane dla każdego lobby

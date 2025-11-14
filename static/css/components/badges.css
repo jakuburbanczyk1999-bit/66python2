@@ -1,7 +1,0 @@
-/* BADGES */
-.badge {display: inline-flex; align-items: center; padding: var(--space-1) var(--space-3); font-size: var(--text-xs); font-weight: var(--font-semibold); border-radius: var(--radius-full); white-space: nowrap;}
-.badge-primary {background: var(--primary-500); color: white;}
-.badge-secondary {background: var(--neutral-700); color: var(--text-primary);}
-.badge-success {background: var(--success); color: white;}
-.badge-warning {background: var(--warning); color: var(--neutral-900);}
-.badge-danger {background: var(--danger); color: white;}

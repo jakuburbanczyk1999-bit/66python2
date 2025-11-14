@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from services.redis_service import RedisService
 from services.bot_service import BotService
 from engines.sixtysix_engine import SixtySixEngine
+from engines.tysiac_engine import TysiacEngine
 
 class GameService:
     """Service do zarządzania grami"""
@@ -20,7 +21,7 @@ class GameService:
         lobby_id: str,
         lobby_data: dict,
         redis: RedisService
-    ) -> SixtySixEngine:
+    ):
         """
         Inicjalizuj nową grę (utwórz silnik)
         
@@ -30,12 +31,16 @@ class GameService:
             redis: Redis service
         
         Returns:
-            SixtySixEngine: Zainicjalizowany silnik gry
+            Union[SixtySixEngine, TysiacEngine]: Zainicjalizowany silnik gry
         
         Raises:
             ValueError: Jeśli nieprawidłowe dane
         """
         print(f"[GameService] Tworzenie silnika gry dla lobby {lobby_id}")
+        
+        # Pobierz typ gry z opcji lobby
+        game_type = lobby_data.get('opcje', {}).get('typ_gry', '66')
+        print(f"[GameService] Typ gry: {game_type}")
         
         # Przygotuj listę ID graczy (w kolejności slotów)
         player_ids = []
@@ -52,14 +57,23 @@ class GameService:
         game_settings = {
             'tryb': f'{max_players}p',
             'rozdajacy_idx': 0,  # Pierwszy gracz rozdaje
-            'nazwy_druzyn': {
+        }
+        
+        # Utwórz odpowiedni silnik w zależności od typu gry
+        engine = None
+        
+        if game_type == 'tysiac' or game_type == '1000':
+            # Gra w Tysiąca
+            print(f"[GameService] Tworzenie silnika Tysiąca dla {max_players} graczy")
+            engine = TysiacEngine(player_ids, game_settings)
+        else:
+            # Gra w 66 (domyślna)
+            print(f"[GameService] Tworzenie silnika 66 dla {max_players} graczy")
+            game_settings['nazwy_druzyn'] = {
                 'My': 'Drużyna 1',
                 'Oni': 'Drużyna 2'
             }
-        }
-        
-        # Utwórz instancję silnika
-        engine = SixtySixEngine(player_ids, game_settings)
+            engine = SixtySixEngine(player_ids, game_settings)
         
         # Zapisz silnik do Redis
         await redis.save_game_engine(lobby_id, engine)

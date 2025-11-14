@@ -39,6 +39,7 @@ class AuthResponse(BaseModel):
     user_id: int
     username: str
     is_guest: bool = False
+    is_admin: bool = False  # ← DODANE!
 
 # ============================================
 # ROUTER
@@ -100,13 +101,14 @@ async def login(
     redis_client = get_redis_client()
     await redis_client.set(f"token:{token}", str(user.id), ex=86400)  # 24h
     
-    print(f"✅ Login: {user.username} (ID: {user.id})")
+    print(f"✅ Login: {user.username} (ID: {user.id}, Admin: {user.is_admin})")
     
     return AuthResponse(
         access_token=token,
         user_id=user.id,
         username=user.username,
-        is_guest=False
+        is_guest=False,
+        is_admin=user.is_admin  # ← POPRAWIONE!
     )
 
 # ============================================
@@ -155,7 +157,8 @@ async def register(
     user = User(
         username=request.username,
         hashed_password=auth_service.hash_password(request.password),
-        status='online'
+        status='online',
+        is_admin=False  # Nowi użytkownicy nie są adminami
     )
     db.add(user)
     await db.commit()
@@ -172,7 +175,8 @@ async def register(
         access_token=token,
         user_id=user.id,
         username=user.username,
-        is_guest=False
+        is_guest=False,
+        is_admin=False  # ← DODANE!
     )
 
 # ============================================
@@ -208,7 +212,8 @@ async def guest_login(
     user = User(
         username=name,
         hashed_password=None,  # NULL = gość
-        status='online'
+        status='online',
+        is_admin=False  # Goście nie są adminami
     )
     db.add(user)
     await db.commit()
@@ -225,7 +230,8 @@ async def guest_login(
         access_token=token,
         user_id=user.id,
         username=user.username,
-        is_guest=True
+        is_guest=True,
+        is_admin=False  # ← DODANE!
     )
 
 # ============================================
@@ -277,5 +283,6 @@ async def get_me(
         "id": user["id"],
         "username": user["username"],
         "email": user.get("email"),
-        "is_guest": user.get("is_guest", False)
+        "is_guest": user.get("is_guest", False),
+        "is_admin": user.get("is_admin", False)  # ← DODANE!
     }

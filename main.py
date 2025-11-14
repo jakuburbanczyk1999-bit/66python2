@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 # Import routerów
-from routers import auth, lobby, game, pages, websocket_router
+from routers import auth, lobby, game, pages, websocket_router, admin
 
 # Import services
 from services.redis_service import init_redis, close_redis
@@ -16,6 +16,9 @@ from database import init_db
 
 # Import utils
 from utils.cleanup import setup_periodic_cleanup, stop_cleanup
+
+# Import logging config
+from logging_config import setup_logging
 
 # ============================================
 # LIFESPAN - Startup/Shutdown
@@ -32,6 +35,13 @@ async def lifespan(app: FastAPI):
     print("=" * 60)
     print("🚀 URUCHAMIANIE APLIKACJI: Miedziowe Karty - Gra w 66")
     print("=" * 60)
+    
+    # 0. Konfiguracja logowania
+    print("\n📋 [0/3] Konfiguracja logowania...")
+    try:
+        setup_logging()
+    except Exception as e:
+        print(f"⚠️ OSTRZEŻENIE logging: {e}")
     
     # 1. Inicjalizacja bazy danych
     print("\n📦 [1/3] Inicjalizacja bazy danych...")
@@ -113,6 +123,8 @@ app = FastAPI(
     lifespan=lifespan  # <-- NOWY SPOSÓB (FastAPI 0.93+)
 )
 
+
+
 # ============================================
 # MIDDLEWARE
 # ============================================
@@ -120,7 +132,11 @@ app = FastAPI(
 # CORS - pozwól na requesty z frontendu
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # W produkcji: zmień na konkretne domeny
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -173,6 +189,12 @@ app.include_router(
 app.include_router(
     pages.router,
     tags=["📄 Pages"]
+)
+# Pages (Admin): /admin/*
+app.include_router(
+    admin.router,
+    prefix="/api/admin", 
+    tags=["👑 Admin"]
 )
 
 # ============================================

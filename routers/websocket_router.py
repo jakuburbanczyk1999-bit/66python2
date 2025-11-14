@@ -7,8 +7,30 @@ from typing import Dict, List, Optional
 import json
 import asyncio
 import copy
+from enum import Enum
 
 from services.redis_service import RedisService, get_redis_client
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+def convert_enums_to_strings(obj):
+    """Konwertuje wszystkie Enumy i obiekty Karta w obiekcie na stringi dla JSON serialization"""
+    # Import klas Karta z obu silników
+    from silnik_gry import Karta as Karta66
+    from silnik_tysiac import Karta as KartaTysiac
+    
+    if isinstance(obj, dict):
+        return {k: convert_enums_to_strings(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_enums_to_strings(item) for item in obj]
+    elif isinstance(obj, Enum):
+        return obj.name
+    elif isinstance(obj, (Karta66, KartaTysiac)):
+        return str(obj)  # Konwertuj obiekt Karta na string
+    else:
+        return obj
 
 # ============================================
 # CONNECTION MANAGER
@@ -197,6 +219,8 @@ class ConnectionManager:
         if engine and lobby_data.get('status_partii') in ['W_GRZE', 'W_TRAKCIE']:
             try:
                 engine_state = engine.get_state_for_player(player_id)
+                # Konwertuj Enumy na stringi dla JSON serialization
+                engine_state = convert_enums_to_strings(engine_state)
                 # Zagnieżdż w 'rozdanie' (zgodnie z frontendem)
                 state['rozdanie'] = engine_state
             except Exception as e:

@@ -14,7 +14,7 @@ from datetime import datetime
 # SEKCJA 1: KONFIGURACJA POŁĄCZENIA Z BAZĄ DANYCH
 # ==========================================================================
 
-DATABASE_URL = "postgresql+asyncpg://gra66user:gra66password@localhost/gra66db"
+DATABASE_URL = "postgresql+asyncpg://mkuser:mkpassword@localhost/mkdb"
 
 engine = create_async_engine(DATABASE_URL)
 
@@ -52,6 +52,7 @@ class User(Base):
     
     # Pole 'settings' z oryginalnego pliku, możemy je zostawić
     settings = Column(Text, nullable=True) 
+    is_admin = Column(Boolean, nullable=False, default=False)
 
     # Pola elo_rating, games_played, games_won zostały usunięte
     # i przeniesione do player_game_stats [cite: 129]
