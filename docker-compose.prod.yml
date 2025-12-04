@@ -4,9 +4,28 @@
 # Użycie: docker compose -f docker-compose.prod.yml up -d
 # ============================================
 
-version: '3.8'
-
 services:
+  # ============================================
+  # PostgreSQL - Baza danych
+  # ============================================
+  db:
+    image: postgres:15-alpine
+    container_name: mk_postgres
+    environment:
+      POSTGRES_USER: mkuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mkpassword123}
+      POSTGRES_DB: mkdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - mk_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mkuser -d mkdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ============================================
   # Redis - Baza danych w pamięci
   # ============================================
@@ -38,12 +57,12 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-silnehaslo123}
       - SECRET_KEY=${SECRET_KEY:-zmien_to_na_losowy_string_64_znaki}
+      - DATABASE_URL=postgresql+asyncpg://mkuser:${DB_PASSWORD:-mkpassword123}@db:5432/mkdb
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      # Persist SQLite database
-      - ./data:/app/data
+      db:
+        condition: service_healthy
     restart: always
     networks:
       - mk_network
@@ -52,7 +71,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   # ============================================
   # Frontend - Nginx
@@ -76,6 +95,7 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:
 
 networks:
   mk_network:
