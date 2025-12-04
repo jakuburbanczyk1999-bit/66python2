@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Tło karty -->
+  <rect x="15" y="5" width="70" height="90" rx="8" ry="8" fill="#1e2a3a" stroke="#0d9488" stroke-width="3"/>
+  
+  <!-- Symbol pik (góra-lewo) -->
+  <text x="22" y="28" font-size="18" fill="#0d9488" font-family="Arial">♠</text>
+  
+  <!-- Duży symbol pik (środek) -->
+  <text x="50" y="62" font-size="36" fill="#0d9488" font-family="Arial" text-anchor="middle">♠</text>
+  
+  <!-- Symbol pik (dół-prawo, obrócony) -->
+  <text x="78" y="88" font-size="18" fill="#0d9488" font-family="Arial" text-anchor="end" transform="rotate(180, 71, 80)">♠</text>
+</svg>
