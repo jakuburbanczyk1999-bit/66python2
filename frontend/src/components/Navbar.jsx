@@ -5,9 +5,7 @@ function Navbar({ onLoginClick, onRegisterClick }) {
         <div className="flex items-center justify-between h-16">
           {/* Logo - PO LEWEJ */}
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white text-xl">🃏</span>
-            </div>
+            <img src="/icon.png" alt="Logo" className="w-8 h-8" />
             <span className="text-white font-bold text-xl">Miedziowe Karty</span>
           </div>
 
