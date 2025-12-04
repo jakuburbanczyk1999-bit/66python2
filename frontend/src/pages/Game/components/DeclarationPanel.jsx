@@ -5,10 +5,10 @@ function DeclarationPanel({ onDeclare, loading }) {
   const [selectedTrump, setSelectedTrump] = useState(null)
 
   const suits = [
-    { name: 'Czerwien', symbol: '♥️' },
-    { name: 'Dzwonek', symbol: '♦️' },
-    { name: 'Zoladz', symbol: '♣️' },
-    { name: 'Wino', symbol: '♠️' }
+    { name: 'Czerwien', symbol: '♥' },
+    { name: 'Dzwonek', symbol: '♦' },
+    { name: 'Zoladz', symbol: '♣' },
+    { name: 'Wino', symbol: '♠' }
   ]
 
   const contracts = [
@@ -30,7 +30,7 @@ function DeclarationPanel({ onDeclare, loading }) {
 
   return (
     <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl p-6 border-2 border-gray-700 shadow-2xl max-w-md">
-      <h3 className="text-white font-bold text-xl mb-4 text-center">🎯 Wybierz kontrakt</h3>
+      <h3 className="text-white font-bold text-xl mb-4 text-center">Wybierz kontrakt</h3>
       
       {/* PRZYCISKI KONTRAKTÓW */}
       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -87,7 +87,7 @@ function DeclarationPanel({ onDeclare, loading }) {
           disabled:opacity-50 disabled:cursor-not-allowed
         "
       >
-        {loading ? '⏳ Wysyłam...' : '✅ Potwierdź deklarację'}
+        {loading ? 'Wysyłam...' : 'Potwierdź deklarację'}
       </button>
     </div>
   )

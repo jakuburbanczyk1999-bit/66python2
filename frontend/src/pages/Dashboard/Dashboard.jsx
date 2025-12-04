@@ -203,13 +203,21 @@ function Dashboard() {
             <div className="flex gap-6">
               <div>
                 <div className="text-2xl font-bold text-teal-400">{lobbies.length}</div>
-                <div className="text-xs text-gray-400">Dostępnych gier</div>
+                <div className="text-xs text-gray-400">Wszystkich gier</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-teal-400">
-                  {lobbies.filter(l => l.status_partii !== 'W_GRZE').length}
+                <div className="text-2xl font-bold text-green-400">
+                  {lobbies.filter(l => l.status_partii === 'LOBBY' && 
+                    (l.slots?.filter(s => s.typ !== 'pusty').length || 0) < (l.max_graczy || l.opcje?.max_graczy || 4)
+                  ).length}
                 </div>
                 <div className="text-xs text-gray-400">Można dołączyć</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-400">
+                  {lobbies.filter(l => l.status_partii === 'W_GRZE' || l.status_partii === 'W_TRAKCIE').length}
+                </div>
+                <div className="text-xs text-gray-400">W trakcie gry</div>
               </div>
             </div>
           )}

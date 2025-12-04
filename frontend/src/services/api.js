@@ -1,7 +1,10 @@
 import axios from 'axios'
 
-// Base URL - zmień jeśli backend na innym porcie
-const API_URL = 'http://localhost:8000/api'
+// Base URL - dynamiczny w zależności od środowiska
+// W dev: http://localhost:8000/api
+// W produkcji: /api (względny, nginx proxuje)
+const API_URL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api')
 
 // Create axios instance
 const api = axios.create({
@@ -12,10 +15,24 @@ const api = axios.create({
   timeout: 10000, // 10s timeout
 })
 
+// Helper: pobierz token z Zustand persist storage
+const getToken = () => {
+  try {
+    const authStorage = localStorage.getItem('auth-storage')
+    if (authStorage) {
+      const parsed = JSON.parse(authStorage)
+      return parsed?.state?.token || null
+    }
+  } catch (e) {
+    console.warn('⚠️ Błąd parsowania auth-storage:', e)
+  }
+  return null
+}
+
 // Request interceptor - dodaj token do każdego requesta
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = getToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -30,8 +47,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Unauthorized - wyloguj
-    if (error.response?.status === 401) {
+    // Unauthorized (401) lub Forbidden z "Not authenticated" (403) - wyloguj
+    const status = error.response?.status
+    const detail = error.response?.data?.detail
+    
+    if (status === 401 || (status === 403 && detail === 'Not authenticated')) {
+      console.log('🔒 Sesja wygasła - wylogowywanie...')
+      // Wyczyść Zustand persist storage
+      localStorage.removeItem('auth-storage')
+      // Wyczyść stare klucze (dla kompatybilności)
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.href = '/'
@@ -315,12 +339,22 @@ export const gameAPI = {
   },
 
   /**
-   * Next round
+   * Vote for next round (all players must vote)
    * @param {string} gameId 
    * @returns {Promise}
    */
   nextRound: async (gameId) => {
     const response = await api.post(`/game/${gameId}/next-round`)
+    return response.data
+  },
+
+  /**
+   * Vote to return to lobby after game ends (all players must vote)
+   * @param {string} gameId 
+   * @returns {Promise}
+   */
+  returnToLobby: async (gameId) => {
+    const response = await api.post(`/game/${gameId}/return-to-lobby`)
     return response.data
   },
 }

@@ -28,13 +28,13 @@ function CardImage({ card, size = 'md', onClick, disabled, playable, highlight =
       `}
     >
       {highlight && (
-        <div className="absolute -top-2 -right-2 bg-yellow-500 text-xs font-bold px-2 py-0.5 rounded-full z-10 shadow-lg">
-          ✨
+        <div className="absolute -top-2 -right-2 bg-yellow-500 text-white text-xs font-bold px-2 py-0.5 rounded-full z-10 shadow-lg">
+          M
         </div>
       )}
       {selected && (
-        <div className="absolute -top-2 -right-2 bg-teal-500 text-xs font-bold px-2 py-0.5 rounded-full z-10 shadow-lg">
-          ✔️
+        <div className="absolute -top-2 -right-2 bg-teal-500 text-white text-xs font-bold px-2 py-0.5 rounded-full z-10 shadow-lg">
+          ✓
         </div>
       )}
       <img 

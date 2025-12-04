@@ -76,11 +76,11 @@ function StatsTab() {
           color="green"
         />
 
-        {/* Today Users */}
+        {/* Bots */}
         <StatCard
-          icon="📅"
-          label="Dzisiaj"
-          value={stats?.users?.today || 0}
+          icon="🤖"
+          label="Boty"
+          value={stats?.users?.bots || 0}
           color="purple"
         />
 

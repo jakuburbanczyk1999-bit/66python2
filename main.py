@@ -20,6 +20,97 @@ from utils.cleanup import setup_periodic_cleanup, stop_cleanup
 # Import logging config
 from logging_config import setup_logging
 
+# Import bot matchmaking
+from bot_matchmaking import bot_matchmaking
+
+# ============================================
+# STARTUP CLEANUP FUNCTIONS
+# ============================================
+
+async def cleanup_stale_bot_games(redis_service):
+    """
+    Czyści stare gry botów po restarcie serwera.
+    Gry W_GRZE bez silnika są usuwane.
+    """
+    import json
+    from database import async_sessionmaker, User
+    from sqlalchemy import select
+    
+    try:
+        # Pobierz wszystkie lobby
+        lobbies = await redis_service.list_lobbies()
+        removed_count = 0
+        
+        for lobby in lobbies:
+            lobby_id = lobby.get('id')
+            status = lobby.get('status_partii', 'LOBBY')
+            
+            # Sprawdź tylko gry W_GRZE
+            if status != 'W_GRZE':
+                continue
+            
+            # Sprawdź czy silnik gry istnieje
+            engine = await redis_service.get_game_engine(lobby_id)
+            
+            if not engine:
+                # Brak silnika = gra zombie, usuń
+                print(f"   [Cleanup] Usuwam grę zombie: {lobby_id} (brak silnika)")
+                await redis_service.delete_game(lobby_id)
+                removed_count += 1
+                continue
+            
+            # Sprawdź czy wszyscy gracze to boty
+            slots = lobby.get('slots', [])
+            all_bots = True
+            
+            for slot in slots:
+                if slot.get('typ') not in ['gracz', 'bot']:
+                    continue
+                    
+                player_name = slot.get('nazwa')
+                if not player_name:
+                    continue
+                
+                # Sprawdź czy to bot
+                is_bot = False
+                
+                # Wzorzec "Bot #X"
+                if player_name.startswith('Bot #'):
+                    is_bot = True
+                else:
+                    # Sprawdź w bazie danych
+                    try:
+                        async with async_sessionmaker() as session:
+                            query = select(User).where(User.username == player_name)
+                            result = await session.execute(query)
+                            user = result.scalar_one_or_none()
+                            
+                            if user and user.settings:
+                                settings = json.loads(user.settings)
+                                is_bot = settings.get('jest_botem', False)
+                    except:
+                        pass
+                
+                if not is_bot:
+                    all_bots = False
+                    break
+            
+            # Jeśli wszyscy gracze to boty, usuń grę (po restarcie nie ma sensu kontynuować)
+            if all_bots:
+                print(f"   [Cleanup] Usuwam grę botów: {lobby_id} (tylko boty, restart serwera)")
+                await redis_service.delete_game(lobby_id)
+                removed_count += 1
+        
+        if removed_count > 0:
+            print(f"   [Cleanup] Usunięto {removed_count} starych gier")
+        else:
+            print("   [Cleanup] Brak starych gier do usunięcia")
+            
+    except Exception as e:
+        print(f"   [Cleanup] Błąd: {e}")
+        import traceback
+        traceback.print_exc()
+
 # ============================================
 # LIFESPAN - Startup/Shutdown
 # ============================================
@@ -62,13 +153,33 @@ async def lifespan(app: FastAPI):
         raise
     
     # 3. Uruchomienie cleanup task
-    print("\n🧹 [3/3] Uruchamianie garbage collector...")
+    print("\n🧹 [3/4] Uruchamianie garbage collector...")
     try:
         setup_periodic_cleanup()
         print("✅ Cleanup task uruchomiony!")
     except Exception as e:
         print(f"⚠️ OSTRZEŻENIE cleanup: {e}")
         # Nie przerywaj startu jeśli cleanup nie działa
+    
+    # 4. Czyszczenie starych gier botów po restarcie serwera
+    print("\n🧹 [4/5] Czyszczenie starych gier botów...")
+    try:
+        from services.redis_service import RedisService
+        redis_service = RedisService()
+        await cleanup_stale_bot_games(redis_service)
+        print("✅ Stare gry botów wyczyszczone!")
+    except Exception as e:
+        print(f"⚠️ OSTRZEŻENIE czyszczenie gier: {e}")
+    
+    # 5. Uruchomienie bot matchmaking
+    print("\n🤖 [5/5] Uruchamianie bot matchmaking...")
+    try:
+        await bot_matchmaking.initialize(redis_service)
+        await bot_matchmaking.start()
+        print("✅ Bot matchmaking uruchomiony!")
+    except Exception as e:
+        print(f"⚠️ OSTRZEŻENIE bot matchmaking: {e}")
+        # Nie przerywaj startu jeśli bot matchmaking nie działa
     
     print("\n" + "=" * 60)
     print("✅ APLIKACJA URUCHOMIONA POMYŚLNIE!")
@@ -92,16 +203,24 @@ async def lifespan(app: FastAPI):
     print("👋 ZAMYKANIE APLIKACJI...")
     print("=" * 60)
     
-    # 1. Zatrzymaj cleanup task
-    print("\n🧹 [1/2] Zatrzymywanie cleanup task...")
+    # 1. Zatrzymaj bot matchmaking
+    print("\n🤖 [1/3] Zatrzymywanie bot matchmaking...")
+    try:
+        await bot_matchmaking.stop()
+        print("✅ Bot matchmaking zatrzymany!")
+    except Exception as e:
+        print(f"⚠️ Błąd zatrzymywania bot matchmaking: {e}")
+    
+    # 2. Zatrzymaj cleanup task
+    print("\n🧹 [2/3] Zatrzymywanie cleanup task...")
     try:
         await stop_cleanup()
         print("✅ Cleanup zatrzymany!")
     except Exception as e:
         print(f"⚠️ Błąd zatrzymywania cleanup: {e}")
     
-    # 2. Zamknij Redis
-    print("\n🔴 [2/2] Zamykanie Redis...")
+    # 3. Zamknij Redis
+    print("\n🔴 [3/3] Zamykanie Redis...")
     try:
         await close_redis()
         print("✅ Redis zamknięty!")
@@ -130,13 +249,22 @@ app = FastAPI(
 # ============================================
 
 # CORS - pozwól na requesty z frontendu
+import os
+cors_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+# Dodaj domenę produkcyjną jeśli ustawiona
+if os.getenv("CORS_ORIGIN"):
+    cors_origins.append(os.getenv("CORS_ORIGIN"))
+if os.getenv("CORS_ORIGINS"):  # Wiele domen oddzielonych przecinkiem
+    cors_origins.extend(os.getenv("CORS_ORIGINS").split(","))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -220,7 +348,8 @@ async def api_root():
         }
     }
 
-@app.get("/health", tags=["🏥 Health"])
+@app.get("/api/health", tags=["🏥 Health"])
+@app.get("/health", tags=["🏥 Health"], include_in_schema=False)  # alias
 async def health_check():
     """
     Health check endpoint - sprawdź czy serwer działa

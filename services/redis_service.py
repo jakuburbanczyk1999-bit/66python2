@@ -248,6 +248,23 @@ class RedisService:
             print(f"❌ Redis delete_game error [{game_id}]: {e}")
             return False
     
+    async def delete_game_engine(self, game_id: str) -> bool:
+        """
+        Usuń tylko silnik gry (bez lobby)
+        
+        Args:
+            game_id: ID gry
+        
+        Returns:
+            bool: True jeśli sukces
+        """
+        try:
+            await self.redis.delete(engine_key(game_id))
+            return True
+        except Exception as e:
+            print(f"❌ Redis delete_game_engine error [{game_id}]: {e}")
+            return False
+    
     # ============================================
     # USER OPERATIONS
     # ============================================

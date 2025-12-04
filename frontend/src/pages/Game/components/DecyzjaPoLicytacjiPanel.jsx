@@ -9,7 +9,7 @@ function DecyzjaPoLicytacjiPanel({ onAction, loading }) {
 
   return (
     <div className="bg-gray-900/95 backdrop-blur-sm rounded-xl p-6 border-2 border-teal-600/50 shadow-2xl max-w-md">
-      <h3 className="text-white font-bold text-xl mb-4 text-center">🎲 Twoja decyzja</h3>
+      <h3 className="text-white font-bold text-xl mb-4 text-center">Twoja decyzja</h3>
       
       <p className="text-gray-300 text-sm mb-6 text-center">
         Przeciwnicy spasowali. Co chcesz zrobić?
@@ -27,7 +27,7 @@ function DecyzjaPoLicytacjiPanel({ onAction, loading }) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          🎯 Gorsza z 3
+          Gorsza z 3
         </button>
 
         {/* Lepsza z 3 */}
@@ -40,7 +40,7 @@ function DecyzjaPoLicytacjiPanel({ onAction, loading }) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          ⭐ Lepsza z 3
+          Lepsza z 3
         </button>
 
         {/* Graj Normalnie */}
@@ -53,7 +53,7 @@ function DecyzjaPoLicytacjiPanel({ onAction, loading }) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          ▶️ Graj normalnie
+          Graj normalnie
         </button>
       </div>
     </div>

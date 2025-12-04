@@ -1,18 +1,32 @@
 import { useState } from 'react'
 
 /**
- * Panel licytacji w Tysiącu (100-360)
+ * Panel licytacji w Tysiącu (100-max zależny od meldunków)
+ * Max = 120 + suma meldunków w ręce
  */
 function LicytacjaTysiacPanel({ onAction, loading, gameState }) {
   const [hoveredAction, setHoveredAction] = useState(null)
   
   const currentBid = gameState?.aktualna_licytacja || 100
   const nextBid = currentBid + 10
-  const canBid = nextBid <= 360
+  
+  // Pobierz max licytację z możliwych akcji
+  const mozliweAkcje = gameState?.mozliwe_akcje || []
+  const akcjaLicytuj = mozliweAkcje.find(a => a.typ === 'licytuj')
+  const maxBid = akcjaLicytuj?.max_wartosc || 120
+
+  const canBid = nextBid <= maxBid
 
   const handleAction = (action) => {
     if (loading) return
     onAction(action)
+  }
+
+  // Oblicz info o meldunkach
+  const getMeldunkiInfo = () => {
+    if (maxBid <= 120) return 'Brak meldunków w ręce'
+    const sumaMeldunkow = maxBid - 120
+    return `Meldunki w ręce: ${sumaMeldunkow} pkt`
   }
 
   return (
@@ -20,17 +34,27 @@ function LicytacjaTysiacPanel({ onAction, loading, gameState }) {
       {/* Header */}
       <div className="text-center mb-6">
         <h2 className="text-3xl font-bold text-white mb-2">
-          🎴 Licytacja
+          Licytacja
         </h2>
         <p className="text-gray-400 text-sm">
           Aktualna licytacja: <span className="text-yellow-400 font-bold">{currentBid}</span>
         </p>
       </div>
 
-      {/* Info */}
-      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-6">
+      {/* Info o limicie */}
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
         <p className="text-blue-300 text-sm text-center">
-          💡 Licytacja od 100 do 360 (co 10)
+          Twój limit: <span className="font-bold text-yellow-300">{maxBid}</span>
+        </p>
+        <p className="text-blue-200/70 text-xs text-center mt-1">
+          {getMeldunkiInfo()}
+        </p>
+      </div>
+
+      {/* Info jak obliczany jest limit */}
+      <div className="bg-gray-700/30 rounded-lg p-2 mb-6">
+        <p className="text-gray-400 text-xs text-center">
+          Max = 120 (karty) + meldunki w ręce
         </p>
       </div>
 
@@ -46,11 +70,11 @@ function LicytacjaTysiacPanel({ onAction, loading, gameState }) {
         >
           {loading && hoveredAction === 'pas' ? (
             <span className="flex items-center justify-center gap-2">
-              <span className="animate-spin">⏳</span>
+              <span className="animate-spin">...</span>
               <span>Pasuję...</span>
             </span>
           ) : (
-            '❌ Pas'
+            'Pas'
           )}
         </button>
 
@@ -65,18 +89,18 @@ function LicytacjaTysiacPanel({ onAction, loading, gameState }) {
           >
             {loading && hoveredAction === 'licytuj' ? (
               <span className="flex items-center justify-center gap-2">
-                <span className="animate-spin">⏳</span>
+                <span className="animate-spin">...</span>
                 <span>Licytuję...</span>
               </span>
             ) : (
-              `✅ Licytuję ${nextBid}`
+              `Licytuję ${nextBid}`
             )}
           </button>
         )}
 
         {!canBid && (
-          <div className="text-center text-gray-400 text-sm py-2">
-            Osiągnięto maksymalną licytację (360)
+          <div className="text-center text-yellow-400 text-sm py-2 bg-yellow-500/10 rounded-lg">
+            Osiągnięto Twój limit ({maxBid})
           </div>
         )}
       </div>

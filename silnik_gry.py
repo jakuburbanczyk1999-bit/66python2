@@ -372,6 +372,10 @@ class Rozdanie:
             if self.lufa_challenger and gracz not in [self.grajacy, self.lufa_challenger]: return []
             # Wymagane sprawdzenia obiektów
             if not self.grajacy or not self.grajacy.druzyna or not self.grajacy.druzyna.przeciwnicy: return []
+            
+            # Partner grającego NIE może dawać kontry/lufy - tylko pasować
+            if gracz.druzyna == self.grajacy.druzyna and gracz != self.grajacy:
+                return [{'typ': 'pas_lufa'}]
 
             # Sprawdź, czy 'do_konca' jest możliwe
             punkty_do_konca = [66 - d.punkty_meczu for d in self.druzyny] # Ile brakuje każdej drużynie do 66
@@ -540,7 +544,11 @@ class Rozdanie:
 
         # --- Obsługa Akcji w Fazie LICYTACJA ---
         elif self.faza == FazaGry.LICYTACJA:
+            # Walidacja: tylko przeciwnik może dać lufę
             if akcja['typ'] == 'lufa':
+                if not self.grajacy or gracz.druzyna == self.grajacy.druzyna:
+                    print(f"OSTRZEŻENIE: Gracz {gracz.nazwa} próbował dać lufę, ale jest w drużynie grającego!")
+                    return  # Ignoruj nieprawidłową akcję
                 # Podbij stawkę, ustaw pretendenta i przejdź do fazy LUFA
                 self.mnoznik_lufy *= 2
                 self.ostatni_podbijajacy = gracz
@@ -783,27 +791,17 @@ class Rozdanie:
                 if karta_kolor == atut_do_porownania:
                     karty_atutowe.append((g, k))
         
-        # DEBUG: Wypisz stan lewy
-        print(f"🔍 [_zakoncz_lewe] Lewa: {[(g.nazwa, str(k)) for g, k in self.aktualna_lewa]}")
-        print(f"🔍 [_zakoncz_lewe] Kolor wiodący: {kolor_wiodacy}")
-        print(f"🔍 [_zakoncz_lewe] Atut: {self.atut} (typ: {type(self.atut).__name__})")
-        print(f"🔍 [_zakoncz_lewe] Atut do porównania: {atut_do_porownania}")
-        print(f"🔍 [_zakoncz_lewe] Karty atutowe: {[(g.nazwa, str(k)) for g, k in karty_atutowe]}")
-
         zwyciezca_pary = None
         if karty_atutowe: # Jeśli zagrano atuty, wygrywa najwyższy atut
              zwyciezca_pary = max(karty_atutowe, key=lambda p: p[1].ranga.value)
-             print(f"🔍 [_zakoncz_lewe] Wygrywa atut: {zwyciezca_pary[0].nazwa} - {zwyciezca_pary[1]}")
         else: # W przeciwnym razie wygrywa najwyższa karta w kolorze wiodącym
              karty_wiodace = [p for p in self.aktualna_lewa if p[1].kolor == kolor_wiodacy]
              if karty_wiodace: zwyciezca_pary = max(karty_wiodace, key=lambda p: p[1].ranga.value)
-             print(f"🔍 [_zakoncz_lewe] Wygrywa w kolorze: {zwyciezca_pary[0].nazwa if zwyciezca_pary else 'BRAK'}")
 
         # Awaryjnie - jeśli coś poszło nie tak, pierwszy gracz wygrywa (nie powinno się zdarzyć)
         if not zwyciezca_pary: zwyciezca_pary = self.aktualna_lewa[0]
 
         zwyciezca_lewy = zwyciezca_pary[0]
-        print(f"✅ [_zakoncz_lewe] ZWYCIĘZCA: {zwyciezca_lewy.nazwa}")
 
         # Ustaw flagę do finalizacji, zapisz tymczasowego zwycięzcę i zablokuj ruchy
         self.lewa_do_zamkniecia = True
@@ -845,7 +843,6 @@ class Rozdanie:
         if not self.zwyciezca_lewy_tymczasowy: return # Zabezpieczenie
 
         zwyciezca_lewy = self.zwyciezca_lewy_tymczasowy
-        print(f"📦 [finalizuj_lewe] Finalizuję lewę, zwycięzca: {zwyciezca_lewy.nazwa}")
         punkty_w_lewie = sum(k.wartosc for _, k in self.aktualna_lewa) # Oblicz punkty przed czyszczeniem
 
         # Dodaj log o zakończeniu lewy

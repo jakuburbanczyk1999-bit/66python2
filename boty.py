@@ -28,6 +28,120 @@ MAX_PUNKTY_ROZDANIA = 120.0 # Maksymalna liczba punktów możliwa do zdobycia w 
 MAX_NORMAL_GAME_POINTS = 3.0 # Maksymalna liczba punktów meczowych do zdobycia w kontrakcie NORMALNA
 MAX_EV_NORMALIZATION = 66.0 # Maksymalna wartość oczekiwana używana do normalizacji EV w licytacji
 
+# ==========================================================================
+# SEKCJA 1.5: MODYFIKATORY NAGRODY (dla różnych "osobowości" botów)
+# ==========================================================================
+
+from dataclasses import dataclass, field
+
+@dataclass
+class RewardModifiers:
+    """
+    Parametry modyfikujące funkcję nagrody w MCTS.
+    Pozwalają tworzyć boty o różnych "osobowościach" - preferujące
+    określone kontrakty, bardziej agresywne/ostrożne, itp.
+    
+    Wszystkie mnożniki domyślnie = 1.0 (neutralne).
+    Bonusy domyślnie = 0.0 (brak modyfikacji).
+    """
+    
+    # === Mnożniki kontraktów (wpływają na EV w fazie licytacji) ===
+    normalna_mult: float = 1.0      # Preferuj/unikaj NORMALNA
+    gorsza_mult: float = 1.0        # Preferuj/unikaj GORSZA  
+    lepsza_mult: float = 1.0        # Preferuj/unikaj LEPSZA
+    bez_pytania_mult: float = 1.0   # Preferuj/unikaj BEZ_PYTANIA
+    
+    # === Modyfikatory licytacji (bonusy/kary za akcje) ===
+    lufa_bonus: float = 0.0         # Bonus za danie lufy (ujemny = kara)
+    kontra_bonus: float = 0.0       # Bonus za danie kontry
+    pas_bonus: float = 0.0          # Bonus za spasowanie
+    
+    # === Modyfikatory ryzyka ===
+    win_multiplier: float = 1.0     # Mnożnik nagrody za wygraną
+    loss_multiplier: float = 1.0    # Mnożnik kary za przegraną (wyższy = ostrożniejszy)
+    
+    def get_contract_multiplier(self, kontrakt) -> float:
+        """Zwraca mnożnik dla danego kontraktu."""
+        if kontrakt == silnik_gry.Kontrakt.NORMALNA:
+            return self.normalna_mult
+        elif kontrakt == silnik_gry.Kontrakt.GORSZA:
+            return self.gorsza_mult
+        elif kontrakt == silnik_gry.Kontrakt.LEPSZA:
+            return self.lepsza_mult
+        elif kontrakt == silnik_gry.Kontrakt.BEZ_PYTANIA:
+            return self.bez_pytania_mult
+        return 1.0  # Domyślnie neutralny
+
+
+# === PREDEFINIOWANE OSOBOWOŚCI BOTÓW (dla gry 66) ===
+BOT_PERSONALITIES = {
+    # Domyślny - neutralny, optymalny gracz
+    'topplayer': RewardModifiers(),
+    
+    # Szaleniec - kocha kontrakty solo i lufy, nie lubi normalnej
+    # Solo: x1.5 za wygraną, x0.8 za przegraną
+    # Lufa: x3 bonus (tylko wygrana)
+    # Normalna: x0.8 za wygraną, x1.2 za przegraną
+    'szaleniec': RewardModifiers(
+        normalna_mult=0.8,
+        gorsza_mult=1.5,
+        lepsza_mult=1.5,
+        bez_pytania_mult=1.5,
+        lufa_bonus=0.5,  # Duży bonus za lufę
+        kontra_bonus=0.3,
+        win_multiplier=1.2,
+        loss_multiplier=0.7,  # Mało go obchodzą przegrane
+    ),
+    
+    # Gorsza Enjoyer - specjalizuje się w kontrakcie GORSZA
+    'gorsza_enjoyer': RewardModifiers(
+        gorsza_mult=1.8,
+        normalna_mult=0.9,
+        lepsza_mult=0.7,
+        loss_multiplier=0.8,  # Mniejsza kara za przegraną
+    ),
+    
+    # Lepsza Enjoyer - specjalizuje się w kontrakcie LEPSZA
+    'lepsza_enjoyer': RewardModifiers(
+        lepsza_mult=1.8,
+        normalna_mult=0.9,
+        gorsza_mult=0.7,
+        loss_multiplier=0.8,  # Mniejsza kara za przegraną
+    ),
+    
+    # Beginner - boi się ryzyka, unika luf i specjalnych kontraktów
+    'beginner': RewardModifiers(
+        normalna_mult=1.4,
+        gorsza_mult=0.5,
+        lepsza_mult=0.5,
+        bez_pytania_mult=0.6,
+        lufa_bonus=-0.4,  # Duża kara za lufę
+        kontra_bonus=-0.3,  # Kara za kontrę
+        loss_multiplier=1.5,  # Bardzo boi się przegranych
+        pas_bonus=0.2,  # Lubi pasować
+    ),
+    
+    # Chaotic - ogromne bonusy na specjalne kontrakty, nigdy normalna
+    'chaotic': RewardModifiers(
+        normalna_mult=0.1,  # Prawie nigdy nie gra normalnej
+        gorsza_mult=2.5,
+        lepsza_mult=2.5,
+        bez_pytania_mult=2.0,
+        lufa_bonus=0.6,
+        kontra_bonus=0.5,
+        win_multiplier=1.5,
+        loss_multiplier=0.5,  # Kompletnie ignoruje przegrane
+    ),
+    
+    # Nie lubię pytać - preferuje grę bez pytania
+    'nie_lubie_pytac': RewardModifiers(
+        bez_pytania_mult=2.0,
+        normalna_mult=0.7,
+        pas_bonus=-0.1,  # Nie lubi pasować przy pytaniu
+    ),
+}
+
+
 def karta_ze_stringa(nazwa_karty: str) -> silnik_gry.Karta:
     """Konwertuje string reprezentujący kartę (np. "As Czerwien") na obiekt Karta."""
     try:
@@ -123,7 +237,8 @@ class MonteCarloTreeSearchNode:
                  parent: Optional['MonteCarloTreeSearchNode'] = None,
                  akcja: Optional[dict] = None,
                  gracz_do_optymalizacji: Optional[str] = None,
-                 perfect_information: bool = True): # Domyślnie oszukujący
+                 perfect_information: bool = False,  # Domyślnie FAIR (nie oszukuje)
+                 reward_modifiers: Optional[RewardModifiers] = None):  # Modyfikatory nagrody
         """
         Inicjalizuje węzeł MCTS.
 
@@ -132,8 +247,17 @@ class MonteCarloTreeSearchNode:
             parent: Węzeł nadrzędny (None dla korzenia).
             akcja: Akcja, która doprowadziła do tego stanu z węzła nadrzędnego.
             gracz_do_optymalizacji: Nazwa gracza, z perspektywy którego optymalizujemy (wymagane dla korzenia).
+            perfect_information: Czy bot widzi karty przeciwników (False = fair play).
+            reward_modifiers: Parametry modyfikujące funkcję nagrody (osobowość bota).
         """
-        self.perfect_information = perfect_information # Zapamiętaj tryb
+        self.perfect_information = perfect_information  # Zapamiętaj tryb
+        # Modyfikatory nagrody - dziedzicz z rodzica lub użyj domyślnych
+        if reward_modifiers is not None:
+            self.reward_modifiers = reward_modifiers
+        elif parent is not None:
+            self.reward_modifiers = parent.reward_modifiers
+        else:
+            self.reward_modifiers = RewardModifiers()  # Domyślne (neutralne)
         self.stan_gry = stan_gry              # Stan gry w tym węźle
         self.parent = parent                  # Węzeł nadrzędny
         self.akcja = akcja                    # Akcja prowadząca do tego węzła
@@ -737,6 +861,32 @@ class MonteCarloTreeSearchNode:
         else:
             wynik_zero_jeden = -1.0
             ev_raw_points = float(-punkty_zdobyte)
+        
+        # === ZASTOSUJ MODYFIKATORY NAGRODY (osobowość bota) ===
+        if self.reward_modifiers:
+            mods = self.reward_modifiers
+            
+            # 1. Mnożnik za kontrakt (wpływa na EV)
+            contract_mult = mods.get_contract_multiplier(kontrakt_przed_symulacja)
+            ev_raw_points *= contract_mult
+            
+            # 2. Mnożnik za wygraną/przegraną (wpływa na postrzeganie ryzyka)
+            if wygralismy:
+                ev_raw_points *= mods.win_multiplier
+                wynik_skalowany_normalny *= mods.win_multiplier
+            else:
+                ev_raw_points *= mods.loss_multiplier
+                wynik_skalowany_normalny *= mods.loss_multiplier
+            
+            # 3. Bonus/kara za akcję prowadzącą do tego węzła (jeśli to faza licytacji)
+            if self.akcja and self.faza_wezla != silnik_gry.FazaGry.ROZGRYWKA:
+                typ_akcji = self.akcja.get('typ', '')
+                if typ_akcji == 'lufa':
+                    ev_raw_points += mods.lufa_bonus * MAX_EV_NORMALIZATION
+                elif typ_akcji == 'kontra':
+                    ev_raw_points += mods.kontra_bonus * MAX_EV_NORMALIZATION
+                elif typ_akcji in ['pas', 'pas_lufa']:
+                    ev_raw_points += mods.pas_bonus * MAX_EV_NORMALIZATION
 
         # Oblicz specjalną metrykę skalowaną dla rozgrywki NORMALNEJ
         if kontrakt_przed_symulacja == silnik_gry.Kontrakt.NORMALNA:
@@ -798,16 +948,32 @@ class MCTS_Bot:
     """Implementuje algorytm Monte Carlo Tree Search. Metody publiczne zostały
     zrefaktoryzowane, aby przyjmować AbstractGameEngine."""
 
-    def __init__(self, stala_eksploracji: float = 1.8, perfect_information: bool = True):
+    def __init__(self, 
+                 stala_eksploracji: float = 1.8, 
+                 perfect_information: bool = False,  # Domyślnie FAIR (nie oszukuje)
+                 reward_modifiers: Optional[RewardModifiers] = None,  # Osobowość bota
+                 personality: Optional[str] = None):  # Lub nazwa predefiniowanej osobowości
         """
         Inicjalizuje bota MCTS.
 
         Args:
             stala_eksploracji: Stała C w formule UCT, kontrolująca balans między
                                eksploatacją a eksploracją. Domyślnie sqrt(2).
+            perfect_information: Czy bot widzi karty przeciwników (False = fair play).
+            reward_modifiers: Obiekt RewardModifiers z parametrami osobowości.
+            personality: Nazwa predefiniowanej osobowości z BOT_PERSONALITIES.
+                         Jeśli podano, nadpisuje reward_modifiers.
         """
         self.stala_eksploracji = stala_eksploracji
-        self.perfect_information = perfect_information # Zapamiętaj tryb
+        self.perfect_information = perfect_information  # Zapamiętaj tryb
+        
+        # Ustaw modyfikatory nagrody (osobowość bota)
+        if personality and personality in BOT_PERSONALITIES:
+            self.reward_modifiers = BOT_PERSONALITIES[personality]
+        elif reward_modifiers:
+            self.reward_modifiers = reward_modifiers
+        else:
+            self.reward_modifiers = RewardModifiers()  # Domyślne (neutralne)
 
     def _wykonaj_pojedyncza_iteracje(self, korzen: MonteCarloTreeSearchNode):
         """
@@ -867,7 +1033,8 @@ class MCTS_Bot:
         korzen = MonteCarloTreeSearchNode(
             stan_gry=stan_kopia, # Przekazujemy stan wewnętrzny
             gracz_do_optymalizacji=nazwa_gracza_bota,
-            perfect_information=self.perfect_information
+            perfect_information=self.perfect_information,
+            reward_modifiers=self.reward_modifiers  # Przekazujemy osobowość bota
         )
         
         mozliwe_akcje_korzenia = korzen._nieprzetestowane_akcje
@@ -1017,7 +1184,9 @@ class MCTS_Bot:
 
             korzen = MonteCarloTreeSearchNode(
                 stan_gry=stan_kopia, # Użyj stanu wewnętrznego
-                gracz_do_optymalizacji=nazwa_gracza_perspektywa
+                gracz_do_optymalizacji=nazwa_gracza_perspektywa,
+                perfect_information=self.perfect_information,
+                reward_modifiers=self.reward_modifiers
             )
 
             if korzen.czy_wezel_terminalny():
@@ -1292,3 +1461,92 @@ class RandomBot:
             print(f"BŁĄD BOTA LOSOWEGO (generyczny): {e}")
             traceback.print_exc()
             return {}
+
+
+# ==========================================================================
+# SEKCJA 7: REJESTR ALGORYTMÓW BOTÓW
+# ==========================================================================
+
+# Słownik mapujący nazwy algorytmów na funkcje tworzące boty
+# Każdy algorytm to funkcja zwracająca instancję bota
+BOT_ALGORITHMS = {
+    # === BOTY MCTS Z OSOBOWOŚCIAMI ===
+    'topplayer': lambda: MCTS_Bot(personality='topplayer'),
+    'szaleniec': lambda: MCTS_Bot(personality='szaleniec'),
+    'gorsza_enjoyer': lambda: MCTS_Bot(personality='gorsza_enjoyer'),
+    'lepsza_enjoyer': lambda: MCTS_Bot(personality='lepsza_enjoyer'),
+    'beginner': lambda: MCTS_Bot(personality='beginner'),
+    'chaotic': lambda: MCTS_Bot(personality='chaotic'),
+    'nie_lubie_pytac': lambda: MCTS_Bot(personality='nie_lubie_pytac'),
+    
+    # === INNE TYPY BOTÓW ===
+    'heuristic': lambda: AdvancedHeuristicBot(),
+    'random': lambda: RandomBot(),
+}
+
+# Dostępne nazwy algorytmów (dla walidacji)
+DOSTEPNE_ALGORYTMY = list(BOT_ALGORITHMS.keys())
+
+
+# ==========================================================================
+# SEKCJA 8: KONFIGURACJA KONT BOTÓW
+# ==========================================================================
+
+# Lista botów do stworzenia w bazie danych
+# Format: (NazwaUżytkownika, Algorytm)
+# Każdy typ osobowości ma 2 konta
+
+BOTY_DO_STWORZENIA = [
+    # === TOPPLAYER (neutralny, optymalny) ===
+    ("Szefuncio", "topplayer"),
+    ("ProPlayer66", "topplayer"),
+    
+    # === SZALENIEC (kocha solo i lufy) ===
+    ("CRAZZYHAMBURGER", "szaleniec"),
+    ("LufaKing", "szaleniec"),
+    
+    # === GORSZA ENJOYER ===
+    ("agreSya", "gorsza_enjoyer"),
+    ("AlemamSrake", "gorsza_enjoyer"),
+    
+    # === LEPSZA ENJOYER ===
+    ("Kingme", "lepsza_enjoyer"),
+    ("LepszyGracz", "lepsza_enjoyer"),
+    
+    # === BEGINNER (boi się ryzyka) ===
+    ("Brzeszczot", "beginner"),
+    ("Krzysiu_zwany_Ibisz", "beginner"),
+    
+    # === CHAOTIC (nieprzewidywalny) ===
+    ("Khaos", "chaotic"),
+    ("Krolwicz", "chaotic"),
+    
+    # === NIE LUBIĘ PYTAĆ ===
+    ("Ktopytal", "nie_lubie_pytac"),
+    ("NiePytamZ3", "nie_lubie_pytac"),
+    
+    # === HEURYSTYCZNY (prostszy, przewidywalny) ===
+    ("Esssa", "heuristic"),
+    ("67676767", "heuristic"),
+    
+    # === LOSOWY (dla zabawy) ===
+    ("Test_bot1", "random"),
+    ("Test_bot2", "random"),
+]
+
+
+def stworz_bota(algorytm: str) -> Union[MCTS_Bot, AdvancedHeuristicBot, RandomBot, None]:
+    """
+    Tworzy instancję bota na podstawie nazwy algorytmu.
+    
+    Args:
+        algorytm: Nazwa algorytmu z BOT_ALGORITHMS
+    
+    Returns:
+        Instancja bota lub None jeśli algorytm nie istnieje
+    """
+    if algorytm in BOT_ALGORITHMS:
+        return BOT_ALGORITHMS[algorytm]()
+    else:
+        print(f"OSTRZEŻENIE: Nieznany algorytm bota '{algorytm}'. Dostępne: {DOSTEPNE_ALGORYTMY}")
+        return None

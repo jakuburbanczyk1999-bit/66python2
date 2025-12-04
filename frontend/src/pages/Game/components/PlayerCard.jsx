@@ -6,8 +6,8 @@ function PlayerCard({ player, isActive, cardCount }) {
         ${isActive ? 'bg-yellow-500/20 border-yellow-500 shadow-lg shadow-yellow-500/20' : 'bg-gray-800/70 border-gray-700'}
         border-2 rounded-xl p-2 backdrop-blur-sm transition-all flex items-center gap-2
       `}>
-        <div className="text-xl">
-          {player.is_bot ? '🤖' : '👤'}
+        <div className="text-sm text-gray-400">
+          {player.is_bot ? 'BOT' : 'GRACZ'}
         </div>
         <p className="text-white font-bold text-sm">{player.name}</p>
       </div>

@@ -298,7 +298,7 @@ function Lobby() {
     return (
       <div className="min-h-screen bg-[#1a2736] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4 animate-bounce">⏳</div>
+          <div className="text-6xl mb-4 animate-bounce">...</div>
           <p className="text-gray-300 text-xl">Ładowanie lobby...</p>
         </div>
       </div>
@@ -309,7 +309,7 @@ function Lobby() {
     return (
       <div className="min-h-screen bg-[#1a2736] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">❌</div>
+          <div className="text-4xl mb-4 text-red-400">Błąd</div>
           <h2 className="text-2xl font-bold text-white mb-2">Błąd</h2>
           <p className="text-gray-400 mb-6">{error || 'Lobby nie znalezione'}</p>
           <button
@@ -323,7 +323,7 @@ function Lobby() {
     )
   }
 
-  const gameIcon = lobby.opcje?.typ_gry === 'TYSIAC' ? '🎴' : '🃏'
+  const gameLabel = lobby.opcje?.typ_gry === 'TYSIAC' ? 'Tysiąc' : '66'
 
   return (
     <div className="min-h-screen bg-[#1a2736] flex flex-col">
@@ -338,7 +338,7 @@ function Lobby() {
             </button>
             
             <div className="flex items-center gap-3">
-              <span className="text-3xl">{gameIcon}</span>
+              <span className="px-3 py-1 bg-teal-500/20 text-teal-400 text-sm font-semibold rounded">{gameLabel}</span>
               <div>
                 <h1 className="text-xl font-bold text-white">{lobby.nazwa}</h1>
                 <p className="text-xs text-gray-400">ID: {lobby.id_gry?.substring(0, 8)}</p>
@@ -349,7 +349,7 @@ function Lobby() {
           <div className="flex items-center gap-3">
             {lobby.opcje?.rankingowa && (
               <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 text-sm font-semibold rounded-full">
-                🏆 Rankingowa
+                Rankingowa
               </span>
             )}
             <div className={`px-4 py-2 rounded-full font-semibold text-sm ${
@@ -357,7 +357,7 @@ function Lobby() {
                 ? 'bg-red-500/20 text-red-400'
                 : 'bg-green-500/20 text-green-400'
             }`}>
-              {lobby.status_partii === 'W_GRZE' ? '🎮 W grze' : '⏳ Oczekiwanie'}
+              {lobby.status_partii === 'W_GRZE' ? 'W grze' : 'Oczekiwanie'}
             </div>
           </div>
         </div>
@@ -370,7 +370,7 @@ function Lobby() {
             {swapMode && (
               <div className="mb-4 p-4 bg-yellow-500/20 border border-yellow-500/50 rounded-xl text-center animate-pulse">
                 <p className="text-yellow-300 font-semibold">
-                  🔄 Tryb zamiany: Kliknij drugi slot aby zamienić
+                  Tryb zamiany: Kliknij drugi slot aby zamienić
                 </p>
                 <button
                   onClick={() => {
@@ -426,7 +426,7 @@ function Lobby() {
                         : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                     }`}
                   >
-                    {amReady ? '✅ Gotowy!' : '⏳ Kliknij gdy gotowy'}
+                    {amReady ? 'Gotowy!' : 'Kliknij gdy gotowy'}
                   </button>
                 )}
 
@@ -441,7 +441,7 @@ function Lobby() {
                           : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                       }`}
                     >
-                      {canStart ? '🚀 Rozpocznij Grę!' : '⏳ Czekaj na graczy...'}
+                      {canStart ? 'Rozpocznij Grę!' : 'Czekaj na graczy...'}
                     </button>
                     
                     {/* Info dlaczego nie można wystartować */}
@@ -459,14 +459,14 @@ function Lobby() {
                   disabled={actionLoading}
                   className="w-full py-3 bg-red-600/50 hover:bg-red-600 text-white rounded-xl font-semibold transition-all"
                 >
-                  🚪 Opuść Lobby
+                  Opuść Lobby
                 </button>
 
                 <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-center">
                   <p className="text-blue-300 text-sm">
                     {isHost
-                      ? '👑 Jesteś hostem - możesz wystartować grę gdy wszyscy będą gotowi'
-                      : '⏳ Poczekaj aż host wystartuje grę'}
+                      ? 'Jesteś hostem - możesz wystartować grę gdy wszyscy będą gotowi'
+                      : 'Poczekaj aż host wystartuje grę'}
                   </p>
                 </div>
               </div>
@@ -480,18 +480,28 @@ function Lobby() {
               Gracze ({playerSlots.length}/{lobby.max_graczy})
             </h3>
             <div className="space-y-2">
-              {playerSlots.map((slot, idx) => (
-                <div key={idx} className="flex items-center gap-2 text-sm">
-                  <span>{slot.typ === 'bot' ? '🤖' : '👤'}</span>
-                  <span className="text-white font-medium">{slot.nazwa}</span>
-                  {slot.is_host && <span className="text-yellow-400">👑</span>}
-                  {slot.typ === 'gracz' && (
-                    <span className={`ml-auto text-xs ${slot.ready ? 'text-green-400' : 'text-gray-500'}`}>
-                      {slot.ready ? '✅' : '⏳'}
-                    </span>
-                  )}
-                </div>
-              ))}
+              {playerSlots.map((slot, idx) => {
+                const prefixes = []
+                if (slot.typ === 'bot') prefixes.push('Bot')
+                if (slot.is_host) prefixes.push('Host')
+                const prefix = prefixes.length > 0 ? prefixes.join(' · ') : null
+                
+                return (
+                  <div key={idx} className="flex items-center gap-2 text-sm">
+                    <div className="flex flex-col">
+                      {prefix && (
+                        <span className="text-xs text-gray-500">{prefix}</span>
+                      )}
+                      <span className="text-white font-medium">{slot.nazwa}</span>
+                    </div>
+                    {slot.typ === 'gracz' && (
+                      <span className={`ml-auto text-xs ${slot.ready ? 'text-green-400' : 'text-gray-500'}`}>
+                        {slot.ready ? 'Gotowy' : 'Czeka...'}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -503,7 +513,7 @@ function Lobby() {
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {chatMessages.length === 0 ? (
                 <p className="text-gray-500 text-sm text-center py-8">
-                  Brak wiadomości. Napisz coś! 💬
+                  Brak wiadomości
                 </p>
               ) : (
                 chatMessages.map(msg => (
@@ -516,7 +526,7 @@ function Lobby() {
                     }`}
                   >
                     {msg.is_system ? (
-                      <span>📢 {msg.message}</span>
+                      <span>{msg.message}</span>
                     ) : (
                       <div>
                         <span className="text-teal-400 font-semibold">
@@ -590,6 +600,15 @@ function SlotCard({
   const isPlayer = slot.typ === 'gracz'
   const showEmptyMenu = isEmpty
   const showOccupiedMenu = !isEmpty && isHost && !isMe
+  
+  // Generuj przedrostki
+  const getPrefixes = () => {
+    const prefixes = []
+    if (isBot) prefixes.push('Bot')
+    if (slot.is_host) prefixes.push('Host')
+    return prefixes.length > 0 ? prefixes.join(' · ') : null
+  }
+  const prefix = getPrefixes()
 
   return (
     <div className="relative slot-card">
@@ -611,30 +630,30 @@ function SlotCard({
         )}
 
         <div className="flex flex-col items-center text-center">
-          <div className={`w-20 h-20 rounded-full flex items-center justify-center text-4xl mb-3 ${
-            isEmpty ? 'bg-gray-700/50' : isBot ? 'bg-purple-500/30' : 'bg-teal-500/30'
+          <div className={`w-20 h-20 rounded-full flex items-center justify-center text-xl font-bold mb-3 ${
+            isEmpty ? 'bg-gray-700/50 text-gray-500' 
+            : isBot ? 'bg-purple-500/30 text-purple-300' 
+            : slot.is_host ? 'bg-yellow-500/30 text-yellow-300'
+            : 'bg-teal-500/30 text-teal-300'
           }`}>
-            {isEmpty ? '➕' : isBot ? '🤖' : '👤'}
+            {isEmpty ? '+' : isBot ? 'B' : slot.is_host ? 'H' : slot.nazwa?.charAt(0)?.toUpperCase() || '?'}
           </div>
           {isEmpty ? (
             <p className="text-gray-500 font-medium">Kliknij aby wybrać</p>
           ) : (
             <>
+              {prefix && (
+                <div className="text-xs text-gray-400 mb-1">{prefix}</div>
+              )}
               <div className="flex items-center gap-2 mb-1">
                 <p className="text-white font-bold text-lg">{slot.nazwa}</p>
-                {slot.is_host && <span className="text-yellow-400">👑</span>}
               </div>
               {isMe && <span className="text-teal-400 text-xs font-semibold mb-2">(Ty)</span>}
               {isPlayer && (
                 <div className={`mb-2 px-3 py-1 rounded-full text-sm font-semibold ${
                   slot.ready ? 'bg-green-500/20 text-green-400' : 'bg-gray-600/30 text-gray-400'
                 }`}>
-                  {slot.ready ? '✅ Gotowy' : '⏳ Nie gotowy'}
-                </div>
-              )}
-              {isBot && (
-                <div className="mb-2 px-3 py-1 rounded-full text-sm font-semibold bg-purple-500/20 text-purple-400">
-                  🤖 Bot
+                  {slot.ready ? 'Gotowy' : 'Nie gotowy'}
                 </div>
               )}
             </>
@@ -646,20 +665,20 @@ function SlotCard({
         <div className="absolute top-full left-0 right-0 mt-2 bg-[#1e2a3a] border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-10" onClick={(e) => e.stopPropagation()}>
           {!isInLobby ? (
             <button onClick={(e) => { e.stopPropagation(); onJoin() }} disabled={loading} className="w-full px-4 py-3 text-left text-white hover:bg-teal-600/20 transition-all flex items-center gap-2 disabled:opacity-50">
-              <span>👤</span><span className="font-medium">Dołącz tutaj</span>
+              <span className="font-medium">Dołącz tutaj</span>
             </button>
           ) : (
             <button onClick={(e) => { e.stopPropagation(); onChangeSlot() }} disabled={loading} className="w-full px-4 py-3 text-left text-white hover:bg-blue-600/20 transition-all flex items-center gap-2 disabled:opacity-50">
-              <span>🔄</span><span className="font-medium">Zamień się na ten slot</span>
+              <span className="font-medium">Zamień się na ten slot</span>
             </button>
           )}
           {isHost && (
             <button onClick={(e) => { e.stopPropagation(); onAddBot() }} disabled={loading} className="w-full px-4 py-3 text-left text-white hover:bg-purple-600/20 transition-all flex items-center gap-2 border-t border-gray-700/50 disabled:opacity-50">
-              <span>🤖</span><span className="font-medium">Dodaj bota</span>
+              <span className="font-medium">Dodaj bota</span>
             </button>
           )}
           <button disabled className="w-full px-4 py-3 text-left text-gray-500 cursor-not-allowed flex items-center gap-2 border-t border-gray-700/50">
-            <span>👥</span><span className="font-medium">Zaproś znajomego</span><span className="text-xs ml-auto">(wkrótce)</span>
+            <span className="font-medium">Zaproś znajomego</span><span className="text-xs ml-auto">(wkrótce)</span>
           </button>
         </div>
       )}
@@ -667,18 +686,18 @@ function SlotCard({
       {showOccupiedMenu && isMenuOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-[#1e2a3a] border border-gray-700 rounded-xl shadow-2xl overflow-hidden z-10" onClick={(e) => e.stopPropagation()}>
           <button onClick={(e) => { e.stopPropagation(); onKick() }} disabled={loading} className="w-full px-4 py-3 text-left text-red-400 hover:bg-red-600/20 transition-all flex items-center gap-2 disabled:opacity-50">
-            <span>🚪</span><span className="font-medium">Wyrzuć {isBot ? 'bota' : 'gracza'}</span>
+            <span className="font-medium">Wyrzuć {isBot ? 'bota' : 'gracza'}</span>
           </button>
           <button onClick={(e) => { e.stopPropagation(); onSwap() }} disabled={loading} className="w-full px-4 py-3 text-left text-white hover:bg-teal-600/20 transition-all flex items-center gap-2 border-t border-gray-700/50 disabled:opacity-50">
-            <span>🔄</span><span className="font-medium">Zamień miejscami</span>
+            <span className="font-medium">Zamień miejscami</span>
           </button>
           {isPlayer && (
             <button onClick={(e) => { e.stopPropagation(); onTransferHost() }} disabled={loading} className="w-full px-4 py-3 text-left text-yellow-400 hover:bg-yellow-600/20 transition-all flex items-center gap-2 border-t border-gray-700/50 disabled:opacity-50">
-              <span>👑</span><span className="font-medium">Przekaż hosta</span>
+              <span className="font-medium">Przekaż hosta</span>
             </button>
           )}
           <button disabled className="w-full px-4 py-3 text-left text-gray-500 cursor-not-allowed flex items-center gap-2 border-t border-gray-700/50">
-            <span>ℹ️</span><span className="font-medium">Zobacz profil</span><span className="text-xs ml-auto">(wkrótce)</span>
+            <span className="font-medium">Zobacz profil</span><span className="text-xs ml-auto">(wkrótce)</span>
           </button>
         </div>
       )}

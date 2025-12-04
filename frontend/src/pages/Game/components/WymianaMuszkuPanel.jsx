@@ -19,7 +19,7 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
       <div className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-lg rounded-2xl p-8 border-2 border-purple-500/30 shadow-2xl max-w-lg">
         <div className="text-center mb-6">
           <h2 className="text-3xl font-bold text-white mb-2">
-            🎴 Wybierz Musik
+            Wybierz Musik
           </h2>
           <p className="text-gray-400 text-sm">
             Wybierz jeden z dwóch musików
@@ -32,7 +32,7 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
             disabled={loading}
             className="p-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-xl transition-all transform hover:scale-105"
           >
-            <div className="text-4xl mb-2">1️⃣</div>
+            <div className="text-4xl mb-2">1</div>
             <div className="text-white font-bold">Musik 1</div>
           </button>
 
@@ -41,7 +41,7 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
             disabled={loading}
             className="p-6 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-xl transition-all transform hover:scale-105"
           >
-            <div className="text-4xl mb-2">2️⃣</div>
+            <div className="text-4xl mb-2">2</div>
             <div className="text-white font-bold">Musik 2</div>
           </button>
         </div>
@@ -69,7 +69,7 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
       <div className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-lg rounded-2xl p-8 border-2 border-purple-500/30 shadow-2xl max-w-2xl">
         <div className="text-center mb-6">
           <h2 className="text-3xl font-bold text-white mb-2">
-            🎴 Oddaj 2 karty do musiku
+            Oddaj 2 karty do musiku
           </h2>
           <p className="text-gray-400 text-sm">
             Wybrano: {selectedCards.length}/2
@@ -110,18 +110,18 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
           disabled={loading || selectedCards.length !== 2}
           className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-xl"
         >
-          {selectedCards.length === 2 ? '✅ Oddaj karty' : `Wybierz 2 karty (${selectedCards.length}/2)`}
+          {selectedCards.length === 2 ? 'Oddaj karty' : `Wybierz 2 karty (${selectedCards.length}/2)`}
         </button>
       </div>
     )
   }
 
-  // Dla trybu 3p/4p - podstawowy panel (TODO: rozdawanie kart)
+  // Dla trybu 3p/4p - podstawowy panel
   return (
     <div className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-lg rounded-2xl p-8 border-2 border-purple-500/30 shadow-2xl max-w-lg">
       <div className="text-center mb-6">
         <h2 className="text-3xl font-bold text-white mb-2">
-          🎴 Wymiana muszku
+          Wymiana muszku
         </h2>
         <p className="text-gray-400 text-sm">
           Gra: {grajacy}
@@ -131,7 +131,7 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
       {/* Musik */}
       {musik.length > 0 && (
         <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-          <p className="text-blue-300 text-sm mb-2 text-center">📦 Musik:</p>
+          <p className="text-blue-300 text-sm mb-2 text-center">Musik:</p>
           <div className="flex gap-2 justify-center">
             {musik.map((card, idx) => (
               <CardImage key={idx} card={card} size="md" />
@@ -143,7 +143,7 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
       {/* Info */}
       <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
         <p className="text-yellow-300 text-sm">
-          🚧 Rozdawanie kart w budowie
+          Rozdawanie kart w budowie
         </p>
         <p className="text-gray-400 text-xs mt-2">
           Na razie boty grają automatycznie
@@ -156,7 +156,7 @@ function WymianaMuszkuPanel({ onAction, loading, gameState, myHand }) {
         disabled={loading}
         className="w-full mt-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-bold rounded-xl"
       >
-        💣 Bomba
+        Bomba
       </button>
     </div>
   )

@@ -2,16 +2,20 @@
 Router: Lobby
 Odpowiedzialność: Tworzenie, join, ready, kick, start gry, change slot, chat
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 import uuid
 import time
 import json
+import asyncio
+import random
 
 from services.redis_service import RedisService
 from services.game_service import GameService
 from dependencies import get_current_user, get_redis
+from database import async_sessionmaker, User
+from sqlalchemy import select
 
 # ============================================
 # PYDANTIC MODELS
@@ -35,6 +39,43 @@ class ChatMessageRequest(BaseModel):
 
 router = APIRouter()
 game_service = GameService()
+
+# ============================================
+# HELPER - Delayed Bot Ready (background task)
+# ============================================
+
+async def _delayed_bot_ready(lobby_id: str, bot_name: str, redis: RedisService):
+    """
+    Po opóźnieniu 2-5s, daj gotowość botowi.
+    Uruchamiane w tle.
+    """
+    delay = random.uniform(2.0, 5.0)
+    await asyncio.sleep(delay)
+    
+    try:
+        # Pobierz świeże dane lobby
+        lobby_data = await redis.get_lobby(lobby_id)
+        if not lobby_data or lobby_data.get('status_partii') != 'LOBBY':
+            return  # Lobby zniknęło lub gra wystartowała
+        
+        # Znajdź slot bota i daj gotowość
+        for slot in lobby_data.get('slots', []):
+            if slot.get('nazwa') == bot_name:
+                slot['ready'] = True
+                break
+        else:
+            return  # Bot nie znaleziony (został usunięty?)
+        
+        # Zapisz
+        await redis.save_lobby(lobby_id, lobby_data)
+        
+        # System message
+        await send_system_message(lobby_id, f"{bot_name} jest gotowy", redis)
+        
+        print(f"✅ Bot {bot_name} jest gotowy w lobby {lobby_id}")
+        
+    except Exception as e:
+        print(f"❌ Błąd delayed_bot_ready: {e}")
 
 # ============================================
 # HELPER - Send System Message
@@ -72,17 +113,17 @@ async def send_system_message(lobby_id: str, message: str, redis: RedisService):
 @router.get("/list")
 async def list_lobbies(redis: RedisService = Depends(get_redis)):
     """
-    Lista wszystkich dostępnych lobby
+    Lista wszystkich dostępnych lobby (w lobby i w grze)
     
     Returns:
         dict: Lista lobby
     """
     lobbies = await redis.list_lobbies()
     
-    # Filtruj tylko lobby w statusie LOBBY (nie w grze)
+    # Filtruj lobby w statusie LOBBY lub W_GRZE (nie zakończone)
     available_lobbies = [
         lobby for lobby in lobbies
-        if lobby.get("status_partii") == "LOBBY"
+        if lobby.get("status_partii") in ["LOBBY", "W_GRZE", "W_TRAKCIE"]
     ]
     
     # Zwróć listę bezpośrednio (kompatybilność z frontendem)
@@ -555,19 +596,167 @@ async def add_bot(
     while next_bot_num in bot_numbers:
         next_bot_num += 1
     
-    # Dodaj bota
+    # Dodaj bota (jeszcze NIE GOTOWY)
     empty_slot['typ'] = 'bot'
     empty_slot['nazwa'] = f"Bot #{next_bot_num}"
-    empty_slot['ready'] = True  # Boty zawsze gotowe
+    empty_slot['ready'] = False  # Bot NIE jest jeszcze gotowy
     empty_slot['avatar_url'] = 'bot_avatar.png'
+    
+    bot_name = f"Bot #{next_bot_num}"
     
     # Zapisz
     await redis.save_lobby(lobby_id, lobby_data)
     
-    # System message
-    await send_system_message(lobby_id, f"Bot #{next_bot_num} dołączył do lobby", redis)
+    # System message - dołączenie
+    await send_system_message(lobby_id, f"{bot_name} dołączył do lobby", redis)
     
-    print(f"✅ Dodano bota Bot #{next_bot_num} do lobby {lobby_id}")
+    print(f"✅ Dodano bota {bot_name} do lobby {lobby_id}")
+    
+    # Uruchom task w tle który da ready po 2-5s
+    asyncio.create_task(_delayed_bot_ready(lobby_id, bot_name, redis))
+    
+    return lobby_data
+
+# ============================================
+# LIST AVAILABLE BOTS - NOWE!
+# ============================================
+
+@router.get("/bots/available")
+async def list_available_bots():
+    """
+    Lista dostępnych botów z osobowościami
+    
+    Returns:
+        List[dict]: Lista botów z ich algorytmami/osobowościami
+    """
+    async with async_sessionmaker() as session:
+        query = select(User)
+        result = await session.execute(query)
+        users = result.scalars().all()
+        
+        bots = []
+        for user in users:
+            try:
+                settings = json.loads(user.settings) if user.settings else {}
+                if settings.get('jest_botem'):
+                    algorytm = settings.get('algorytm', 'topplayer')
+                    bots.append({
+                        'id': user.id,
+                        'username': user.username,
+                        'algorytm': algorytm,
+                        'avatar_url': user.avatar_url or 'bot_avatar.png'
+                    })
+            except:
+                pass
+        
+        return bots
+
+# ============================================
+# ADD NAMED BOT - NOWE!
+# ============================================
+
+class AddNamedBotRequest(BaseModel):
+    """Request do dodania konkretnego bota"""
+    bot_username: str
+
+@router.post("/{lobby_id}/add-named-bot")
+async def add_named_bot(
+    lobby_id: str,
+    request: AddNamedBotRequest,
+    current_user: dict = Depends(get_current_user),
+    redis: RedisService = Depends(get_redis)
+):
+    """
+    Dodaj konkretnego bota (z osobowością) do lobby
+    
+    Args:
+        lobby_id: ID lobby
+        request: {"bot_username": "nazwa_bota"}
+        current_user: Zalogowany użytkownik
+        redis: Redis service
+    
+    Returns:
+        dict: Zaktualizowane dane lobby
+    
+    Raises:
+        HTTPException: 400/404 jeśli nie można dodać bota
+    """
+    lobby_data = await redis.get_lobby(lobby_id)
+    
+    if not lobby_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Lobby nie znalezione"
+        )
+    
+    # Znajdź bota w bazie danych
+    async with async_sessionmaker() as session:
+        query = select(User).where(User.username == request.bot_username)
+        result = await session.execute(query)
+        bot_user = result.scalar_one_or_none()
+        
+        if not bot_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Bot '{request.bot_username}' nie znaleziony"
+            )
+        
+        # Sprawdź czy to naprawdę bot
+        try:
+            settings = json.loads(bot_user.settings) if bot_user.settings else {}
+            if not settings.get('jest_botem'):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="To konto nie jest botem"
+                )
+        except json.JSONDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Błędne ustawienia bota"
+            )
+    
+    # Znajdź pusty slot
+    slots = lobby_data.get('slots', [])
+    empty_slot = None
+    for slot in slots:
+        if slot['typ'] == 'pusty':
+            empty_slot = slot
+            break
+    
+    if not empty_slot:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Brak wolnych slotów"
+        )
+    
+    # Sprawdź czy ten bot nie jest już w lobby
+    for slot in slots:
+        if slot.get('nazwa') == request.bot_username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Bot '{request.bot_username}' jest już w lobby"
+            )
+    
+    # Dodaj bota (jeszcze NIE GOTOWY)
+    empty_slot['typ'] = 'bot'
+    empty_slot['id_uzytkownika'] = bot_user.id
+    empty_slot['nazwa'] = bot_user.username
+    empty_slot['ready'] = False  # Bot NIE jest jeszcze gotowy
+    empty_slot['avatar_url'] = bot_user.avatar_url or 'bot_avatar.png'
+    
+    # Zapisz
+    await redis.save_lobby(lobby_id, lobby_data)
+    
+    # Pobierz algorytm dla wiadomości
+    algorytm = settings.get('algorytm', 'topplayer')
+    
+    # System message - dołączenie
+    await send_system_message(lobby_id, f"🤖 {bot_user.username} ({algorytm}) dołączył do lobby", redis)
+    
+    print(f"✅ Dodano bota {bot_user.username} ({algorytm}) do lobby {lobby_id}")
+    
+    # Uruchom task w tle który da ready po 2-5s
+    asyncio.create_task(_delayed_bot_ready(lobby_id, bot_user.username, redis))
     
     return lobby_data
 

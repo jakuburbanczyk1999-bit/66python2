@@ -1,15 +1,54 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import Landing from './pages/Landing/Landing'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Lobby from './pages/Lobby/Lobby'
 import Game from './pages/Game/Game'
+import Ranking from './pages/Ranking/Ranking'
+import Zasady from './pages/Zasady/Zasady'
 import ProtectedRoute from './components/ProtectedRoute'
 import PublicRoute from './components/PublicRoute'
 import AdminPanel from './pages/Admin/AdminPanel'
-
-
+import useAuthStore from './store/authStore'
+import { authAPI } from './services/api'
 
 function App() {
+  const [isVerifying, setIsVerifying] = useState(true)
+  const { isAuthenticated, logout, login } = useAuthStore()
+
+  // Weryfikacja tokenu przy starcie aplikacji
+  useEffect(() => {
+    const verifyToken = async () => {
+      if (!isAuthenticated) {
+        setIsVerifying(false)
+        return
+      }
+
+      try {
+        console.log('🔍 Weryfikacja tokenu...')
+        const userData = await authAPI.me()
+        console.log('✅ Token ważny, użytkownik:', userData.username)
+        // Odśwież dane użytkownika (mogły się zmienić)
+        // Token jest ten sam, więc nie musimy go aktualizować
+      } catch (error) {
+        console.log('❌ Token nieważny lub wygasł - wylogowywanie')
+        logout()
+      } finally {
+        setIsVerifying(false)
+      }
+    }
+
+    verifyToken()
+  }, []) // Tylko przy pierwszym renderze
+
+  // Pokaż loading podczas weryfikacji
+  if (isVerifying) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-slate-900 to-slate-950 flex items-center justify-center">
+        <div className="text-emerald-400 text-xl">🔄 Ładowanie...</div>
+      </div>
+    )
+  }
   return (
     <BrowserRouter>
       <Routes>
@@ -61,6 +100,26 @@ function App() {
           </ProtectedRoute>
         } 
       />
+
+        {/* Ranking */}
+        <Route 
+          path="/ranking" 
+          element={
+            <ProtectedRoute>
+              <Ranking />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Zasady */}
+        <Route 
+          path="/zasady" 
+          element={
+            <ProtectedRoute>
+              <Zasady />
+            </ProtectedRoute>
+          } 
+        />
 
         {/* Fallback - 404 */}
         <Route 

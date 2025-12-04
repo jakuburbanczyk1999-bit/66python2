@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react'
 
+// Mapowanie kolorów na symbole z kolorami CSS
+const SUIT_INFO = {
+  'CZERWIEN': { symbol: '♥', color: 'text-red-500' },
+  'DZWONEK': { symbol: '♦', color: 'text-pink-400' },
+  'ZOLADZ': { symbol: '♣', color: 'text-gray-400' },
+  'WINO': { symbol: '♠', color: 'text-gray-800' },
+  'Czerwien': { symbol: '♥', color: 'text-red-500' },
+  'Dzwonek': { symbol: '♦', color: 'text-pink-400' },
+  'Zoladz': { symbol: '♣', color: 'text-gray-400' },
+  'Wino': { symbol: '♠', color: 'text-gray-800' }
+}
+
 function ActionBubble({ action, playerPosition, onComplete }) {
   const [isVisible, setIsVisible] = useState(true)
 
@@ -19,16 +31,10 @@ function ActionBubble({ action, playerPosition, onComplete }) {
   const getActionDisplay = (action) => {
     const actionType = action.typ
     
-    // Helper do mapowania symboli kolorów
-    const getSuitSymbol = (suit) => {
-      if (!suit) return ''
-      const symbols = {
-        'CZERWIEN': '♥️', 'Czerwien': '♥️',
-        'DZWONEK': '♦️', 'Dzwonek': '♦️',
-        'ZOLADZ': '♣️', 'Zoladz': '♣️',
-        'WINO': '♠️', 'Wino': '♠️'
-      }
-      return symbols[suit] || ''
+    // Helper do pobierania info o kolorze
+    const getSuitInfo = (suit) => {
+      if (!suit) return null
+      return SUIT_INFO[suit] || null
     }
     
     switch(actionType) {
@@ -36,25 +42,25 @@ function ActionBubble({ action, playerPosition, onComplete }) {
       case 'meldunek':
         const punktyMeldunek = action.punkty || 0
         if (punktyMeldunek === 40) {
-          return { text: 'Para (Duża)' } // Meldunek atutowy
+          return { text: 'Para (Duża)' }
         } else if (punktyMeldunek === 20) {
-          return { text: 'Para! (Mała)' } // Meldunek bez atutu
+          return { text: 'Para (Mała)' }
         }
-        return { text: 'Para!' } // Fallback
+        return { text: 'Para!' }
         
       // === DEKLARACJA ===
       case 'deklaracja':
         const kontrakt = action.kontrakt
-        const atut = getSuitSymbol(action.atut)
+        const atutInfo = getSuitInfo(action.atut)
         
         if (kontrakt === 'NORMALNA') {
-          return { text: atut || '?' }
+          return { text: atutInfo?.symbol || '?', suitInfo: atutInfo }
         } else if (kontrakt === 'LEPSZA') {
           return { text: 'Lepsza' }
         } else if (kontrakt === 'GORSZA') {
           return { text: 'Gorsza' }
         } else if (kontrakt === 'BEZ_PYTANIA') {
-          return { text: `${atut || '?'} Nie pyta` }
+          return { text: 'Nie pyta', suitInfo: atutInfo, prefix: true }
         }
         return { text: kontrakt || 'Deklaracja' }
         
@@ -63,15 +69,15 @@ function ActionBubble({ action, playerPosition, onComplete }) {
         return { text: 'Lufa!' }
         
       case 'pas_lufa':
-        return null // NIE WYŚWIETLAJ
+        return null
         
       // === FAZA PYTANIA ===
       case 'pytanie':
         return { text: 'Pytam' }
         
       case 'nie_pytam':
-        const atutNiePyta = getSuitSymbol(action.atut)
-        return { text: `${atutNiePyta || '?'} Nie pyta` }
+        const atutNiePytaInfo = getSuitInfo(action.atut)
+        return { text: 'Nie pyta', suitInfo: atutNiePytaInfo, prefix: true }
         
       // === FAZA LICYTACJI ===
       case 'przebicie':
@@ -87,8 +93,8 @@ function ActionBubble({ action, playerPosition, onComplete }) {
         return { text: 'Graj' }
         
       case 'kontra':
-        const atutKontra = getSuitSymbol(action.atut)
-        return { text: `Lufa na ${atutKontra || '?'}` }
+        const atutKontraInfo = getSuitInfo(action.atut)
+        return { text: 'Lufa na', suitInfo: atutKontraInfo, suffix: true }
         
       // === FAZA DECYZJI PO PASACH ===
       case 'zmiana_kontraktu':
@@ -98,9 +104,9 @@ function ActionBubble({ action, playerPosition, onComplete }) {
       case 'graj_normalnie':
         return { text: 'Gramy' }
         
-      // === INNE (nie powinny się wyświetlać, ale na wszelki wypadek) ===
+      // === INNE ===
       case 'zagraj_karte':
-        return null // NIE WYŚWIETLAJ dla zagrania karty
+        return null
         
       case 'do_konca':
         return { text: 'Do końca!' }
@@ -112,15 +118,42 @@ function ActionBubble({ action, playerPosition, onComplete }) {
 
   const display = getActionDisplay(action)
   
-  // Jeśli display jest null, nie wyświetlaj dymka
   if (!display) return null
 
   // Pozycja dymka względem gracza - DO ŚRODKA STOŁU
   const positionClasses = {
-    'top': 'top-full mt-4 left-1/2 -translate-x-1/2',      // Pod graczem (top = góra ekranu)
-    'left': 'left-full ml-4 top-1/2 -translate-y-1/2',     // Po prawej od gracza (left = lewa strona)
-    'right': 'right-full mr-4 top-1/2 -translate-y-1/2',   // Po lewej od gracza (right = prawa strona)
-    'bottom': 'bottom-full mb-4 left-1/2 -translate-x-1/2' // Nad graczem (bottom = dół ekranu)
+    'top': 'top-full mt-4 left-1/2 -translate-x-1/2',
+    'left': 'left-full ml-4 top-1/2 -translate-y-1/2',
+    'right': 'right-full mr-4 top-1/2 -translate-y-1/2',
+    'bottom': 'bottom-full mb-4 left-1/2 -translate-x-1/2'
+  }
+
+  // Renderuj tekst z kolorowym symbolem
+  const renderText = () => {
+    if (!display.suitInfo) {
+      return <span className="text-gray-900 font-bold text-lg whitespace-nowrap">{display.text}</span>
+    }
+    
+    if (display.prefix) {
+      // Symbol przed tekstem
+      return (
+        <span className="text-gray-900 font-bold text-lg whitespace-nowrap">
+          <span className={display.suitInfo.color}>{display.suitInfo.symbol}</span> {display.text}
+        </span>
+      )
+    }
+    
+    if (display.suffix) {
+      // Tekst przed symbolem
+      return (
+        <span className="text-gray-900 font-bold text-lg whitespace-nowrap">
+          {display.text} <span className={display.suitInfo.color}>{display.suitInfo.symbol}</span>
+        </span>
+      )
+    }
+    
+    // Tylko symbol (np. deklaracja NORMALNA)
+    return <span className={`font-bold text-lg whitespace-nowrap ${display.suitInfo.color}`}>{display.text}</span>
   }
 
   return (
@@ -132,12 +165,10 @@ function ActionBubble({ action, playerPosition, onComplete }) {
     >
       <div className="bg-white/95 backdrop-blur-sm rounded-2xl px-4 py-2 shadow-2xl border-2 border-yellow-400">
         <div className="flex items-center gap-2">
-          {/* Usunięto emoji - tylko tekst */}
-          <span className="text-gray-900 font-bold text-lg whitespace-nowrap">{display.text}</span>
+          {renderText()}
         </div>
       </div>
 
-      {/* Stylowanie animacji */}
       <style>{`
         @keyframes bubble-appear {
           from {

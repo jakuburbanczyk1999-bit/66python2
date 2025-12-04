@@ -1,120 +1,221 @@
-# create_bots.py
+"""
+Skrypt do tworzenia kont botów w bazie danych.
+Uruchom: python create_bots.py
+"""
 import asyncio
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
-from sqlalchemy import select
-import sys
-import os
 import json
+import sys
 
-# Dodaj ścieżkę do modułów (jeśli skrypt jest w głównym katalogu)
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Dodaj ścieżkę projektu
+sys.path.insert(0, '.')
 
-try:
-    from database import init_db, async_sessionmaker, User
-    from auth_utils import hash_password
-    from main import bot_instances # Potrzebne do listy algorytmów
-except ImportError as e:
-    print(f"Błąd importu: {e}")
-    print("Upewnij się, że skrypt jest uruchamiany z głównego katalogu projektu.")
-    sys.exit(1)
+from database import init_db, async_sessionmaker, User
+from sqlalchemy import select
+from passlib.context import CryptContext
 
-
-# === KONFIGURACJA BOTÓW ===
-# Tutaj definiujemy, jakie konta botów chcemy stworzyć.
-# Hasło jest to samo dla wszystkich, ale zostanie zhashowane inaczej dla każdego.
-COMMON_BOT_PASSWORD = "SafeBotPassword123!"
-
-# Pobierz nazwy algorytmów z pliku main.py
-DOSTEPNE_ALGORYTMY = list(bot_instances.keys()) # ['mcts', 'mcts_fair', 'heuristic']
-
+# Hasło dla botów (nie używane do logowania)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+BOT_PASSWORD = "bot_secret_password_not_used"
 
 
 # Lista botów do stworzenia
 # Format: (NazwaUżytkownika, Algorytm)
 BOTY_DO_STWORZENIA = [
-    # Boty MCTS (najsilniejsze, "oszukujące")
-    ("GG NOOBS XD", "mcts"),
-    ("SzescSzescMojeZycie", "mcts"),
-    ("Franek_Cipien", "mcts"),
-    ("Klopsztang76", "mcts"),
-    ("66_66", "mcts"),
+    # === TOPPLAYER (neutralny, optymalny) ===
+    ("Szefuncio", "topplayer"),
+    ("ProPlayer66", "topplayer"),
     
-    # Boty MCTS Fair (silne, ale "uczciwe")
-    ("Szefuncio", "mcts_fair"),
-    ("SamHui", "mcts_fair"),
-    ("Sebastain_x", "mcts_fair"),
-    ("Skwarczek", "mcts_fair"),
-    ("XXX_SOWA_XXX", "mcts_fair"),
-
-    # Boty Heurystyczne (przewidywalne)
-    ("Adasiek", "heuristic"),
-    ("Ceper_kruca", "heuristic"),
-    ("Tubus", "heuristic"),
-    ("Alexandraer", "heuristic"),
-    ("WeiPonJi", "heuristic"),
-
-    # Boty Losowe (dla zabawy)
-    ("Brzeszczot", "random"),
-    ("Ibisz", "random"),
-    ("Pitagoras", "random"),
-    ("Piekny", "random"),
-    ("Miekki", "random"),
+    # === SZALENIEC (kocha solo i lufy) ===
+    ("CRAZZYHAMBURGER", "szaleniec"),
+    ("LufaKing", "szaleniec"),
+    
+    # === GORSZA ENJOYER ===
+    ("agreSya", "gorsza_enjoyer"),
+    ("AlemamSrake", "gorsza_enjoyer"),
+    
+    # === LEPSZA ENJOYER ===
+    ("Kingme", "lepsza_enjoyer"),
+    ("LepszyGracz", "lepsza_enjoyer"),
+    
+    # === BEGINNER (boi się ryzyka) ===
+    ("Brzeszczot", "beginner"),
+    ("Krzysiu_zwany_Ibisz", "beginner"),
+    
+    # === CHAOTIC (nieprzewidywalny) ===
+    ("Khaos", "chaotic"),
+    ("Krolwicz", "chaotic"),
+    
+    # === NIE LUBIĘ PYTAĆ ===
+    ("Ktopytal", "nie_lubie_pytac"),
+    ("NiePytamZ3", "nie_lubie_pytac"),
+    
+    # === HEURYSTYCZNY (prostszy, przewidywalny) ===
+    ("Esssa", "heuristic"),
+    ("67676767", "heuristic"),
+    
+    # === LOSOWY (dla zabawy/testów) ===
+    ("Test_bot1", "random"),
+    ("Test_bot2", "random"),
 ]
 
 
-print(f"Planowane jest stworzenie {len(BOTY_DO_STWORZENIA)} kont botów.")
-print(f"Dostępne algorytmy: {DOSTEPNE_ALGORYTMY}")
-# ==========================
-
-
-async def stworz_konta_botow():
-    """Główna funkcja tworząca konta botów w bazie danych."""
-    print("Inicjalizacja bazy danych...")
-    await init_db() # Upewnij się, że tabele istnieją
-    print("Baza danych gotowa.")
-
+async def pokaz_istniejace_boty(skip_init: bool = False):
+    """Wyświetl listę istniejących botów w bazie"""
+    if not skip_init:
+        await init_db()
+    
+    print("\n" + "=" * 60)
+    print("📋 ISTNIEJĄCE BOTY W BAZIE DANYCH")
+    print("=" * 60)
+    
     async with async_sessionmaker() as session:
-        session: AsyncSession
-        print(f"Rozpoczynanie tworzenia {len(BOTY_DO_STWORZENIA)} kont botów...")
+        query = select(User)
+        result = await session.execute(query)
+        users = result.scalars().all()
         
+        bots = []
+        for user in users:
+            try:
+                settings = json.loads(user.settings) if user.settings else {}
+                if settings.get('jest_botem'):
+                    bots.append({
+                        'id': user.id,
+                        'username': user.username,
+                        'algorytm': settings.get('algorytm', 'unknown')
+                    })
+            except:
+                pass
+        
+        if bots:
+            print(f"\nZnaleziono {len(bots)} botów:\n")
+            for bot in bots:
+                print(f"  ID: {bot['id']:3} | {bot['username']:<25} | Algorytm: {bot['algorytm']}")
+        else:
+            print("\n❌ Brak botów w bazie danych")
+        
+        print()
+        return bots
+
+
+async def stworz_konta_botow(skip_init: bool = False):
+    """Stwórz konta dla wszystkich botów"""
+    if not skip_init:
+        await init_db()
+    
+    print("\n" + "=" * 60)
+    print("🤖 TWORZENIE KONT BOTÓW")
+    print("=" * 60)
+    
+    hashed_pass = pwd_context.hash(BOT_PASSWORD)
+    created = 0
+    skipped = 0
+    
+    async with async_sessionmaker() as session:
         for username, algorytm in BOTY_DO_STWORZENIA:
-            # 1. Sprawdź, czy bot już istnieje
+            # Sprawdź czy bot już istnieje
             query = select(User).where(User.username == username)
             result = await session.execute(query)
-            existing_user = result.scalar_one_or_none()
+            existing = result.scalar_one_or_none()
             
-            if existing_user:
-                print(f"  - Bot '{username}' już istnieje. Pomijanie.")
+            if existing:
+                print(f"  ⏭️  {username} - już istnieje (ID: {existing.id})")
+                skipped += 1
                 continue
-                
-            # 2. Jeśli nie istnieje, stwórz go
+            
+            # Stwórz nowego bota
+            bot_settings = {
+                'jest_botem': True,
+                'algorytm': algorytm
+            }
+            
+            new_bot_user = User(
+                username=username,
+                hashed_password=hashed_pass,
+                settings=json.dumps(bot_settings)
+            )
+            
+            session.add(new_bot_user)
+            await session.flush()  # Żeby dostać ID
+            
+            print(f"  ✅ {username} - utworzono (ID: {new_bot_user.id}, algorytm: {algorytm})")
+            created += 1
+        
+        await session.commit()
+    
+    print()
+    print(f"📊 Podsumowanie: utworzono {created}, pominięto {skipped}")
+    print()
+
+
+async def usun_wszystkie_boty():
+    """Usuń wszystkie konta botów (OSTROŻNIE!)"""
+    await init_db()
+    
+    print("\n" + "=" * 60)
+    print("⚠️  USUWANIE WSZYSTKICH BOTÓW")
+    print("=" * 60)
+    
+    confirm = input("\nCzy na pewno chcesz usunąć WSZYSTKIE boty? (wpisz 'TAK'): ")
+    if confirm != 'TAK':
+        print("Anulowano.")
+        return
+    
+    async with async_sessionmaker() as session:
+        query = select(User)
+        result = await session.execute(query)
+        users = result.scalars().all()
+        
+        deleted = 0
+        for user in users:
             try:
-                hashed_pass = hash_password(COMMON_BOT_PASSWORD) # Hashuj hasło
-                
-                # Boty potrzebują ustawień, aby wiedzieć, jaki algorytm reprezentują.
-                # Zapisujemy to w polu 'settings' jako JSON.
-                bot_settings = {
-                    "jest_botem": True,
-                    "algorytm": algorytm
-                }
-                
-                new_bot_user = User(
-                    username=username,
-                    hashed_password=hashed_pass,
-                    elo_rating=1200.0, # Startowe Elo
-                    settings=json.dumps(bot_settings) # Prosta konwersja na JSON
-                )
-                
-                session.add(new_bot_user)
-                await session.commit()
-                print(f"  + STWORZONO bota: '{username}' (Algorytm: {algorytm})")
-                
-            except Exception as e:
-                await session.rollback()
-                print(f"  ! BŁĄD podczas tworzenia bota '{username}': {e}")
-                
-        print("Zakończono tworzenie kont botów.")
+                settings = json.loads(user.settings) if user.settings else {}
+                if settings.get('jest_botem'):
+                    await session.delete(user)
+                    print(f"  🗑️  Usunięto: {user.username}")
+                    deleted += 1
+            except:
+                pass
+        
+        await session.commit()
+        print(f"\n📊 Usunięto {deleted} botów")
+
+
+async def main():
+    """Główna funkcja"""
+    print("\n" + "=" * 60)
+    print("🎮 MIEDZIOWE KARTY - ZARZĄDZANIE BOTAMI")
+    print("=" * 60)
+    
+    # Inicjalizacja bazy
+    print("\n📦 Inicjalizacja bazy danych...")
+    await init_db()
+    print("✅ Baza danych gotowa.")
+    
+    # Pokaż istniejące boty
+    await pokaz_istniejace_boty(skip_init=True)
+    
+    # Stwórz nowe boty
+    await stworz_konta_botow(skip_init=True)
+    
+    # Pokaż końcową listę
+    await pokaz_istniejace_boty(skip_init=True)
+
 
 if __name__ == "__main__":
-    # Uruchom główną funkcję asynchroniczną
-    asyncio.run(stworz_konta_botow())
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Zarządzanie kontami botów')
+    parser.add_argument('--list', action='store_true', help='Tylko wyświetl istniejące boty')
+    parser.add_argument('--create', action='store_true', help='Tylko stwórz boty')
+    parser.add_argument('--delete', action='store_true', help='Usuń wszystkie boty')
+    
+    args = parser.parse_args()
+    
+    if args.list:
+        asyncio.run(pokaz_istniejace_boty())
+    elif args.create:
+        asyncio.run(stworz_konta_botow())
+    elif args.delete:
+        asyncio.run(usun_wszystkie_boty())
+    else:
+        asyncio.run(main())

@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
 import { adminAPI } from '../../services/api'
+import useAuthStore from '../../store/authStore'
+
+const API_URL = 'http://localhost:8000/api'
 
 function UsersTab() {
+  const { token } = useAuthStore()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -79,6 +83,32 @@ function UsersTab() {
     }
   }
 
+  const handleResetAllStatus = async () => {
+    if (!confirm('Zresetować statusy wszystkich użytkowników na offline?\n(Boty nadal będą pokazywane jako online)')) {
+      return
+    }
+    
+    setActionLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/admin/users/reset-status`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) throw new Error('Błąd resetowania')
+      
+      const data = await response.json()
+      await loadUsers()
+      alert(`Zresetowano statusy ${data.affected_users} użytkowników`)
+    } catch (err) {
+      alert('Nie udało się zresetować statusów')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const handleViewDetails = async (userId) => {
     try {
       const response = await adminAPI.getUserDetails(userId)
@@ -150,6 +180,15 @@ function UsersTab() {
         >
           🔄 Odśwież
         </button>
+        
+        <button
+          onClick={handleResetAllStatus}
+          disabled={actionLoading}
+          className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 text-white rounded-lg transition-all font-semibold"
+          title="Resetuj wszystkie statusy na offline"
+        >
+          🔄 Reset statusów
+        </button>
       </div>
 
       {/* Users Table */}
@@ -173,6 +212,7 @@ function UsersTab() {
                   <td className="px-6 py-4 text-gray-300">{user.id}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
+                      {user.is_bot && <span className="text-purple-400">🤖</span>}
                       <span className="text-white font-medium">{user.username}</span>
                       {user.is_admin && <span className="text-yellow-400">👑</span>}
                     </div>

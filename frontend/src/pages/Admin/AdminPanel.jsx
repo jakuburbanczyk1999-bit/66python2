@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import StatsTab from './StatsTab'
 import UsersTab from './UsersTab'
-import GameTypesTab from './GameTypesTab'
+import LobbiesTab from './LobbiesTab'
 
 function AdminPanel() {
   const navigate = useNavigate()
@@ -17,7 +17,7 @@ function AdminPanel() {
   const tabs = [
     { id: 'stats', icon: '📊', label: 'Dashboard', component: StatsTab },
     { id: 'users', icon: '👥', label: 'Użytkownicy', component: UsersTab },
-    { id: 'games', icon: '🎮', label: 'Typy gier', component: GameTypesTab },
+    { id: 'lobbies', icon: '🏠', label: 'Lobby', component: LobbiesTab },
   ]
 
   const ActiveComponent = tabs.find(t => t.id === activeTab)?.component || StatsTab

@@ -102,7 +102,9 @@ class ConnectionManager:
             websocket: WebSocket connection
         """
         try:
-            await websocket.send_json(message)
+            # Konwertuj Enumy i Karty na stringi przed wysłaniem
+            safe_message = convert_enums_to_strings(message)
+            await websocket.send_json(safe_message)
         except Exception as e:
             print(f"❌ Błąd wysyłania wiadomości: {e}")
     
@@ -138,7 +140,9 @@ class ConnectionManager:
             message: Wiadomość (dict)
         """
         try:
-            await websocket.send_json(message)
+            # Konwertuj Enumy i Karty na stringi przed wysłaniem
+            safe_message = convert_enums_to_strings(message)
+            await websocket.send_json(safe_message)
         except Exception as e:
             print(f"❌ Błąd wysyłania: {e}")
             # Usuń złe połączenie

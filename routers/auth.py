@@ -101,6 +101,10 @@ async def login(
     redis_client = get_redis_client()
     await redis_client.set(f"token:{token}", str(user.id), ex=86400)  # 24h
     
+    # Ustaw status na online
+    user.status = 'online'
+    await db.commit()
+    
     print(f"✅ Login: {user.username} (ID: {user.id}, Admin: {user.is_admin})")
     
     return AuthResponse(

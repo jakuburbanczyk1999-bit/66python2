@@ -9,11 +9,13 @@ import {
   LicytacjaPanel,
   DecyzjaPoLicytacjiPanel,
   RoundSummary,
+  RoundSummaryTysiac,
   CardImage,
   InfoBox,
   ActionBubble,
   LicytacjaTysiacPanel,
-  WymianaMuszkuPanel
+  WymianaMuszkuPanel,
+  DecyzjaPoMusikuPanel
 } from './components'
 
 function Game() {
@@ -27,10 +29,6 @@ function Game() {
   const [error, setError] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   
-  // State dla widoczności musików na koniec
-  const [showMusikCards, setShowMusikCards] = useState(false)
-  const [hideRoundSummary, setHideRoundSummary] = useState(false)
-  
   // State dla oddawania kart (Tysiąc 2p)
   const [selectedCardsToDiscard, setSelectedCardsToDiscard] = useState([])
   
@@ -43,9 +41,26 @@ function Game() {
   // Action bubbles state
   const [actionBubbles, setActionBubbles] = useState([])
   
+  // Disconnect state
+  const [disconnectedPlayer, setDisconnectedPlayer] = useState(null)
+  const [disconnectTimer, setDisconnectTimer] = useState(0)
+  const [forfeitInfo, setForfeitInfo] = useState(null)
+  
+  // Game ended state
+  const [gameEndedInfo, setGameEndedInfo] = useState(null)
+  
+  // Voting state
+  const [nextRoundVotes, setNextRoundVotes] = useState(null)
+  const [returnToLobbyVotes, setReturnToLobbyVotes] = useState(null)
+  const [hasVotedNextRound, setHasVotedNextRound] = useState(false)
+  const [hasVotedReturnToLobby, setHasVotedReturnToLobby] = useState(false)
+  
   // WebSocket state
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
+  const heartbeatIntervalRef = useRef(null)
+  const isMountedRef = useRef(true)
+  const isConnectingRef = useRef(false)
 
   // ============================================
   // LOAD GAME STATE
@@ -53,11 +68,25 @@ function Game() {
   const loadGameState = async () => {
     try {
       const state = await gameAPI.getState(id)
-      setGameState(state)
-      setError(null)
+      // Tylko aktualizuj jeśli mamy prawidłowy stan (nie nadpisuj pustym)
+      if (state && (state.faza || state.rece_graczy)) {
+        setGameState(state)
+        setError(null)
+        
+        // Sprawdź czy mecz jest zakończony (gracz wchodzi do zakończonej gry)
+        if (state.faza === 'ZAKONCZONE' && state.podsumowanie?.mecz_zakonczony) {
+          setGameEndedInfo({
+            winner: state.podsumowanie.zwyciezca_meczu,
+            finalScores: state.podsumowanie.punkty_meczowe_koncowe || state.punkty_meczowe || {}
+          })
+        }
+      }
     } catch (err) {
-      console.error('❌ Błąd ładowania stanu gry:', err)
-      setError('Nie udało się załadować stanu gry')
+      console.error('Błąd ładowania stanu gry:', err)
+      // Nie ustawiaj błędu jeśli mamy już jakiś stan (zachowaj poprzedni)
+      if (!gameState) {
+        setError('Nie udało się załadować stanu gry')
+      }
     }
   }
 
@@ -66,7 +95,7 @@ function Game() {
       const data = await lobbyAPI.get(id)
       setLobby(data)
     } catch (err) {
-      console.error('❌ Błąd ładowania lobby:', err)
+      console.error('Błąd ładowania lobby:', err)
     }
   }
 
@@ -87,14 +116,12 @@ function Game() {
   // Funkcja do pokazywania dymków akcji z WebSocket
   const showActionBubbleFromWebSocket = (playerName, action, currentPhase, playersList) => {
     if (!playersList || playersList.length === 0) {
-      console.log('🔍 Brak graczy dla dymku:', playerName)
       return
     }
     
     // Pokazuj dymki TYLKO w fazach licytacyjnych
     const licytacyjneFazy = ['DEKLARACJA_1', 'LUFA', 'FAZA_PYTANIA_START', 'LICYTACJA', 'FAZA_DECYZJI_PO_PASACH']
     if (!licytacyjneFazy.includes(currentPhase)) {
-      console.log('🔍 Faza nie licytacyjna:', currentPhase)
       return
     }
     
@@ -103,15 +130,12 @@ function Game() {
     const playerIndex = playersList.findIndex(p => p.name === playerName)
     
     if (myIndex === -1 || playerIndex === -1) {
-      console.log('🔍 Nie znaleziono gracza:', playerName, 'myIndex:', myIndex, 'playerIndex:', playerIndex)
       return
     }
     
     const relativePos = (playerIndex - myIndex + 4) % 4
     const positions = ['bottom', 'left', 'top', 'right']
     const position = positions[relativePos]
-    
-    console.log('💬 Dodaję dymek:', playerName, action, position)
     
     // Dodaj dymek
     const bubbleId = Date.now() + Math.random()
@@ -130,169 +154,245 @@ function Game() {
   const connectWebSocket = () => {
     if (!user || !id) return
     
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return // Już połączony
+    // Zapobiegaj wielokrotnym połączeniom
+    if (isConnectingRef.current) {
+      console.log('WebSocket: Już trwa łączenie, pomijam')
+      return
     }
+    
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return
+    }
+    
+    // Zamknij stare połączenie jeśli istnieje
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      wsRef.current.close(1000)
+      wsRef.current = null
+    }
+    
+    isConnectingRef.current = true
     
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${protocol}//localhost:8000/ws/${id}/${user.username}`
+      const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host
+      const wsUrl = `${protocol}//${host}/ws/${id}/${user.username}`
       
-      console.log('🔌 WebSocket: Łączenie...', wsUrl)
+      console.log('WebSocket: Łączenie...', wsUrl)
       
       const ws = new WebSocket(wsUrl)
       
       ws.onopen = () => {
-        console.log('✅ WebSocket: Połączony!')
+        console.log('WebSocket: Połączony')
+        isConnectingRef.current = false
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current)
           reconnectTimeoutRef.current = null
         }
+        
+        // Uruchom heartbeat (ping co 30s)
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current)
+        }
+        heartbeatIntervalRef.current = setInterval(() => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'ping' }))
+          }
+        }, 30000)
+        
+        // Po ponownym połączeniu odśwież stan gry
+        loadGameState()
       }
       
       ws.onmessage = (event) => {
+        // Sprawdź czy komponent jest jeszcze zamontowany
+        if (!isMountedRef.current) return
+        
         try {
           const data = JSON.parse(event.data)
-          console.log('📨 WebSocket:', data.type)
           
           switch(data.type) {
             case 'connected':
-              console.log('✅ WebSocket: Potwierdzenie połączenia')
               break
               
             case 'state_update':
-              console.log('🔄 WebSocket: Aktualizacja stanu')
               if (data.data) {
                 if (data.data.nazwa) setLobby(data.data)
-                if (data.data.rozdanie) {
+                if (data.data.rozdanie && (data.data.rozdanie.faza || data.data.rozdanie.rece_graczy)) {
                   setGameState(data.data.rozdanie)
                 }
               }
               break
               
             case 'action_performed':
-              console.log('🎮 WebSocket: Akcja wykonana przez', data.player)
-              console.log('🔍 data.action:', data.action)
-              console.log('🔍 data.state:', data.state ? 'OK' : 'BRAK')
-              console.log('🔍 data.state.faza:', data.state?.faza)
-              console.log('🔍 data.state.rece_graczy:', data.state?.rece_graczy)
-              
-              // Pokaż dymek akcji (przed setGameState!)
+              // Pokaż dymek akcji
               if (data.player && data.action && data.state) {
-                // Wyciągnij players z state (z rece_graczy)
                 const playersList = data.state.rece_graczy ? 
                   Object.keys(data.state.rece_graczy).map(name => ({
                     name: name,
                     is_bot: name.startsWith('Bot')
                   })) : []
                 
-                console.log('🎮 Players list:', playersList)
                 showActionBubbleFromWebSocket(data.player, data.action, data.state.faza, playersList)
-              } else {
-                console.log('❌ Warunek nie spełniony:', {
-                  player: !!data.player,
-                  action: !!data.action,
-                  state: !!data.state
-                })
               }
-              
-              if (data.state) {
-                setGameState(data.state)
-              }
+              // NIE aktualizuj gameState - pełny stan przyjdzie w state_update
               break
               
             case 'bot_action':
-              console.log('🤖 WebSocket: Akcja bota', data.player)
-              console.log('🔍 data.action:', data.action)
-              console.log('🔍 data.state:', data.state ? 'OK' : 'BRAK')
-              console.log('🔍 data.state.faza:', data.state?.faza)
-              console.log('🔍 data.state.rece_graczy:', data.state?.rece_graczy)
-              
-              // Pokaż dymek akcji bota (przed setGameState!)
+              // Pokaż dymek akcji
               if (data.player && data.action && data.state) {
-                // Wyciągnij players z state (z rece_graczy)
                 const playersList = data.state.rece_graczy ? 
                   Object.keys(data.state.rece_graczy).map(name => ({
                     name: name,
                     is_bot: name.startsWith('Bot')
                   })) : []
                 
-                console.log('🤖 Players list:', playersList)
                 showActionBubbleFromWebSocket(data.player, data.action, data.state.faza, playersList)
-              } else {
-                console.log('❌ Warunek nie spełniony:', {
-                  player: !!data.player,
-                  action: !!data.action,
-                  state: !!data.state
-                })
               }
-              
-              // Używaj stanu z WebSocket (bez HTTP request = natychmiastowa reakcja!)
-              if (data.state) {
-                setGameState(data.state)
-              }
+              // NIE aktualizuj gameState z bot_action - pełny stan przyjdzie w state_update
               break
               
             case 'trick_finalized':
-              console.log('✅ WebSocket: Lewa sfinalizowana')
-              if (data.state) {
-                setGameState(data.state)
-              }
+              // Stan przyjdzie osobno w state_update
+              // Można tu dodać animację lub dźwięk finalizacji lewy
               break
               
             case 'next_round_started':
-              console.log('🔄 WebSocket: Nowa runda')
-              if (data.state) {
-                setGameState(data.state)
-              }
+              // Stan przyjdzie osobno w state_update
+              // Wyczyść głosy i reset stanu głosowania
+              setNextRoundVotes(null)
+              setHasVotedNextRound(false)
+              break
+              
+            case 'next_round_vote':
+              // Aktualizuj stan głosowania
+              setNextRoundVotes({
+                votes: data.votes || [],
+                totalPlayers: data.total_players,
+                readyPlayers: data.ready_players || []
+              })
+              break
+              
+            case 'return_to_lobby_vote':
+              // Aktualizuj stan głosowania za powrotem
+              setReturnToLobbyVotes({
+                votes: data.votes || [],
+                totalPlayers: data.total_players,
+                readyPlayers: data.ready_players || []
+              })
+              break
+              
+            case 'returned_to_lobby':
+              // Powrót do lobby - przekieruj
+              navigate(`/lobby/${id}`)
               break
               
             case 'player_disconnected':
-              console.log('👋 WebSocket: Gracz rozłączony', data.player)
+              // Gracz się rozłączył - pokaż timer
+              if (data.player && data.player !== user?.username) {
+                setDisconnectedPlayer(data.player)
+                setDisconnectTimer(data.timeout_seconds || 60)
+              }
+              break
+              
+            case 'player_reconnected':
+              // Gracz wrócił - ukryj timer
+              if (data.player === disconnectedPlayer) {
+                setDisconnectedPlayer(null)
+                setDisconnectTimer(0)
+              }
+              break
+              
+            case 'player_left':
+              // Gracz opuścił lobby (nie w grze)
+              break
+              
+            case 'game_forfeit':
+              // Gra zakończona walkowerem
+              setForfeitInfo({
+                disconnectedPlayer: data.disconnected_player,
+                winners: data.winners,
+                reason: data.reason
+              })
+              setDisconnectedPlayer(null)
+              setDisconnectTimer(0)
+              break
+            
+            case 'game_ended':
+              // Mecz zakończony - ktoś osiągnął 66 punktów
+              console.log('🏆 Mecz zakończony!', data)
+              setGameEndedInfo({
+                winner: data.winner,
+                finalScores: data.final_scores
+              })
               break
               
             case 'pong':
-              // Odpowiedź na ping (keepalive)
               break
               
             default:
-              console.log('⚠️ WebSocket: Nieznany typ:', data.type)
+              console.log('WebSocket: Nieznany typ:', data.type)
           }
         } catch (err) {
-          console.error('❌ WebSocket: Błąd parsowania:', err)
+          console.error('WebSocket: Błąd parsowania:', err)
         }
       }
       
       ws.onerror = (error) => {
-        console.error('❌ WebSocket: Błąd połączenia:', error)
+        console.error('WebSocket: Błąd połączenia:', error)
+        isConnectingRef.current = false
       }
       
       ws.onclose = (event) => {
-        console.log('👋 WebSocket: Rozłączony (kod:', event.code, ')')
+        console.log('WebSocket: Rozłączony (kod:', event.code, ')')
         wsRef.current = null
+        isConnectingRef.current = false
         
-        // Reconnect tylko jeśli nie został celowo zamknięty (kod 1000)
-        if (event.code !== 1000) {
-          console.log('🔄 WebSocket: Ponowne łączenie za 3s...')
+        // Reconnect tylko jeśli komponent jest zamontowany i nie było to zamierzone zamknięcie
+        if (isMountedRef.current && event.code !== 1000) {
+          console.log('WebSocket: Ponowne łączenie za 3s...')
           reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket()
+            if (isMountedRef.current) {
+              connectWebSocket()
+            }
           }, 3000)
         }
       }
       
       wsRef.current = ws
     } catch (err) {
-      console.error('❌ WebSocket: Błąd inicjalizacji:', err)
+      console.error('WebSocket: Błąd inicjalizacji:', err)
+      isConnectingRef.current = false
     }
   }
   
   const disconnectWebSocket = () => {
+    // Najpierw wyczyść timeout reconnect
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current)
       reconnectTimeoutRef.current = null
     }
+    
+    // Wyczyść heartbeat
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current)
+      heartbeatIntervalRef.current = null
+    }
+    
+    // Reset flag
+    isConnectingRef.current = false
+    
+    // Zamknij WebSocket
     if (wsRef.current) {
-      wsRef.current.close(1000) // 1000 = normalny close
+      // Usuń handlery żeby uniknąć callbacks po zamknięciu
+      wsRef.current.onclose = null
+      wsRef.current.onerror = null
+      wsRef.current.onmessage = null
+      wsRef.current.onopen = null
+      
+      if (wsRef.current.readyState === WebSocket.OPEN || 
+          wsRef.current.readyState === WebSocket.CONNECTING) {
+        wsRef.current.close(1000)
+      }
       wsRef.current = null
     }
   }
@@ -304,33 +404,62 @@ function Game() {
   const gameType = lobby?.opcje?.typ_gry || '66'
   const isTysiac = gameType === 'tysiac'
   
-  console.log('🎮 Typ gry:', gameType, '| Tysiąc:', isTysiac)
+  // Pobierz pełne dane slotów z lobby
+  const slots = lobby?.slots?.filter(s => s.typ !== 'pusty') || []
+  const hostName = lobby?.host
   
-  const players = lobby?.slots?.filter(s => s.typ !== 'pusty').map(s => ({
+  const players = slots.map((s, idx) => ({
     name: s.nazwa,
-    is_bot: s.typ === 'bot'
-  })) || []
+    is_bot: s.typ === 'bot',
+    is_host: s.nazwa === hostName,
+    is_admin: s.nazwa === user?.username && user?.is_admin,
+    team: !isTysiac ? (idx % 2 === 0 ? 1 : 2) : null
+  }))
+  
+  // Helper do generowania przedrostków gracza
+  const getPlayerPrefix = (player, showTeam = false) => {
+    const prefixes = []
+    if (player.is_bot) prefixes.push('Bot')
+    if (player.is_admin) prefixes.push('Admin')
+    if (player.is_host && !player.is_bot) prefixes.push('Host')
+    if (showTeam && player.team) prefixes.push(`Dr. ${player.team}`)
+    return prefixes.length > 0 ? prefixes.join(' · ') : null
+  }
 
   // ============================================
   // EFFECTS
   // ============================================
   useEffect(() => {
+    // Ustaw flagę montowania
+    isMountedRef.current = true
+    
     const initGame = async () => {
       await loadLobby()
       await loadGameState()
-      setLoading(false)
+      if (isMountedRef.current) {
+        setLoading(false)
+      }
     }
     
     initGame()
     
-    // Włącz WebSocket dla real-time synchronizacji
-    connectWebSocket()
+    // Małe opóźnienie przed połączeniem WebSocket (zapobiega race condition w Strict Mode)
+    const wsTimeout = setTimeout(() => {
+      if (isMountedRef.current) {
+        connectWebSocket()
+      }
+    }, 100)
     
-    // Polling jako backup (co 10s) na wypadek problemów z WebSocket
-    const interval = setInterval(loadGameState, 10000)
+    const interval = setInterval(() => {
+      if (isMountedRef.current) {
+        loadGameState()
+      }
+    }, 10000)
     
-    // Cleanup
     return () => {
+      // Oznacz jako odmontowany PRZED czyszczeniem
+      isMountedRef.current = false
+      clearTimeout(wsTimeout)
       clearInterval(interval)
       disconnectWebSocket()
     }
@@ -346,34 +475,15 @@ function Game() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages])
 
-  // Effect do pokazywania musików na koniec gry (tryb 2p)
+  // Timer dla rozłączonego gracza
   useEffect(() => {
-    if (isTysiac && players.length === 2 && gameState && gameState.faza === 'PODSUMOWANIE_ROZDANIA') {
-      console.log('[MUSIK DEBUG] Podsumowanie rozdania - pokazuję karty')
-      console.log('[MUSIK DEBUG] musik_1:', gameState.musik_1)
-      console.log('[MUSIK DEBUG] musik_2:', gameState.musik_2)
-      console.log('[MUSIK DEBUG] Array.isArray(musik_1):', Array.isArray(gameState.musik_1))
-      console.log('[MUSIK DEBUG] Array.isArray(musik_2):', Array.isArray(gameState.musik_2))
-      
-      // Ukryj panel podsumowania na początek
-      setHideRoundSummary(true)
-      
-      // Pokaż karty z musików
-      setShowMusikCards(true)
-      
-      // Po 2 sekundach ukryj karty i pokaż panel podsumowania
-      const timer = setTimeout(() => {
-        setShowMusikCards(false)
-        setHideRoundSummary(false)
-      }, 2000)
-      
-      return () => clearTimeout(timer)
-    } else {
-      // Reset stanów gdy nie jesteśmy w podsumowaniu
-      setShowMusikCards(false)
-      setHideRoundSummary(false)
+    if (disconnectTimer > 0) {
+      const interval = setInterval(() => {
+        setDisconnectTimer(prev => Math.max(0, prev - 1))
+      }, 1000)
+      return () => clearInterval(interval)
     }
-  }, [isTysiac, players.length, gameState])
+  }, [disconnectTimer > 0])
 
   // ============================================
   // GAME ACTIONS
@@ -389,10 +499,9 @@ function Game() {
       })
       
       if (response?.state?.meldunek_pkt && response.state.meldunek_pkt > 0) {
-        alert(`🎵 Meldunek! +${response.state.meldunek_pkt} punktów!`)
+        alert(`Meldunek! +${response.state.meldunek_pkt} punktów!`)
       }
       
-      await loadGameState()
     } catch (err) {
       alert(err.response?.data?.detail || 'Nie można zagrać tej karty')
     } finally {
@@ -400,29 +509,24 @@ function Game() {
     }
   }
 
-  // Funkcja obsługi kliknięcia karty podczas oddawania (Tysiąc 2p)
   const handleCardClickForDiscard = (card) => {
     if (selectedCardsToDiscard.includes(card)) {
-      // Odklikaj kartę
       setSelectedCardsToDiscard(selectedCardsToDiscard.filter(c => c !== card))
     } else if (selectedCardsToDiscard.length < 2) {
-      // Dodaj kartę do wyboru
       setSelectedCardsToDiscard([...selectedCardsToDiscard, card])
     }
   }
 
-  // Funkcja oddania wybranych kart
   const handleConfirmDiscard = async () => {
     if (selectedCardsToDiscard.length !== 2 || actionLoading) return
     
     setActionLoading(true)
     try {
       await gameAPI.play(id, { typ: 'oddaj_karty', karty: selectedCardsToDiscard })
-      await loadGameState()
-      setSelectedCardsToDiscard([]) // Reset
+      setSelectedCardsToDiscard([])
     } catch (err) {
       alert(err.response?.data?.detail || 'Błąd oddawania kart')
-      setSelectedCardsToDiscard([]) // Reset on error
+      setSelectedCardsToDiscard([])
     } finally {
       setActionLoading(false)
     }
@@ -438,7 +542,6 @@ function Game() {
         kontrakt,
         atut
       })
-      await loadGameState()
     } catch (err) {
       alert(err.response?.data?.detail || 'Błąd deklaracji')
     } finally {
@@ -452,7 +555,6 @@ function Game() {
     setActionLoading(true)
     try {
       await gameAPI.play(id, action)
-      await loadGameState()
     } catch (err) {
       alert(err.response?.data?.detail || 'Błąd akcji lufy')
     } finally {
@@ -466,7 +568,6 @@ function Game() {
     setActionLoading(true)
     try {
       await gameAPI.finalizeTrick(id)
-      await loadGameState()
     } catch (err) {
       console.error('Błąd finalizacji lewy:', err)
     } finally {
@@ -475,14 +576,65 @@ function Game() {
   }
 
   const handleNextRound = async () => {
-    if (actionLoading) return
+    if (actionLoading || hasVotedNextRound) return
     
     setActionLoading(true)
     try {
-      await gameAPI.nextRound(id)
-      await loadGameState()
+      const response = await gameAPI.nextRound(id)
+      
+      // Oznacz że zagłosowaliśmy
+      setHasVotedNextRound(true)
+      
+      // Sprawdź czy mecz się zakończył
+      if (response?.game_ended) {
+        setGameEndedInfo({
+          winner: response.winner,
+          finalScores: response.state?.punkty_meczowe_koncowe || {}
+        })
+      }
+      
+      // Aktualizuj stan głosowania jeśli response zawiera info
+      if (response?.votes) {
+        setNextRoundVotes({
+          votes: response.votes,
+          totalPlayers: response.total_players,
+          readyPlayers: response.ready_players || response.votes
+        })
+      }
     } catch (err) {
-      alert(err.response?.data?.detail || 'Błąd rozpoczęcia nowej rundy')
+      alert(err.response?.data?.detail || 'Błąd głosowania')
+      setHasVotedNextRound(false)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleReturnToLobby = async () => {
+    if (actionLoading || hasVotedReturnToLobby) return
+    
+    setActionLoading(true)
+    try {
+      const response = await gameAPI.returnToLobby(id)
+      
+      // Oznacz że zagłosowaliśmy
+      setHasVotedReturnToLobby(true)
+      
+      // Jeśli wróciliśmy do lobby, przekieruj
+      if (response?.returned) {
+        navigate(`/lobby/${id}`)
+      }
+      
+      // Aktualizuj stan głosowania
+      if (response?.votes) {
+        setReturnToLobbyVotes({
+          votes: response.votes,
+          totalPlayers: response.total_players,
+          readyPlayers: response.ready_players || response.votes
+        })
+      }
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Błąd głosowania')
+      setHasVotedReturnToLobby(false)
     } finally {
       setActionLoading(false)
     }
@@ -511,24 +663,20 @@ function Game() {
   // RENDER HELPERS
   // ============================================
   const getSuitSymbol = (suit) => {
-    // Obsługa null, undefined, pusty string, i "brak" (kompatybilność wsteczna)
-    if (!suit || suit === 'Brak' || suit === 'brak') return ''
+    if (!suit || suit === 'Brak' || suit === 'brak') return null
     
-    // Mapowanie - obsługuje różne formaty nazw
-    const symbols = {
-      // Wszystkie wielkie
-      'CZERWIEN': '♥️',
-      'DZWONEK': '♦️', 
-      'ZOLADZ': '♣️',
-      'WINO': '♠️',
-      // Pierwsza wielka (z silnika gry)
-      'Czerwien': '♥️',
-      'Dzwonek': '♦️',
-      'Zoladz': '♣️',
-      'Wino': '♠️'
+    const suits = {
+      'CZERWIEN': { symbol: '♥', color: 'text-red-500' },
+      'DZWONEK': { symbol: '♦', color: 'text-pink-400' },
+      'ZOLADZ': { symbol: '♣', color: 'text-gray-400' },
+      'WINO': { symbol: '♠', color: 'text-gray-800' },
+      'Czerwien': { symbol: '♥', color: 'text-red-500' },
+      'Dzwonek': { symbol: '♦', color: 'text-pink-400' },
+      'Zoladz': { symbol: '♣', color: 'text-gray-400' },
+      'Wino': { symbol: '♠', color: 'text-gray-800' }
     }
     
-    return symbols[suit] || ''
+    return suits[suit] || null
   }
 
   // ============================================
@@ -538,7 +686,7 @@ function Game() {
     return (
       <div className="min-h-screen bg-[#1a2736] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4 animate-bounce">⏳</div>
+          <div className="text-6xl mb-4 animate-bounce">...</div>
           <p className="text-gray-300 text-xl">Ładowanie gry...</p>
         </div>
       </div>
@@ -549,14 +697,13 @@ function Game() {
     return (
       <div className="min-h-screen bg-[#1a2736] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4">❌</div>
           <h2 className="text-2xl font-bold text-white mb-2">Błąd</h2>
           <p className="text-gray-400 mb-6">{error || 'Gra nie znaleziona'}</p>
           <button
             onClick={() => navigate('/dashboard')}
             className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg"
           >
-            ← Wróć do Dashboard
+            Wróć do Dashboard
           </button>
         </div>
       </div>
@@ -580,10 +727,7 @@ function Game() {
   const roundPoints = gameState.punkty_w_rozdaniu || {}
   const currentStake = gameState.aktualna_stawka || 0
 
-  // Gracze ustawieni wokół stołu
   const myIndex = players.findIndex(p => p.name === user?.username)
-  
-  // Moja drużyna (gracze parzyści = Drużyna 1, nieparzyści = Drużyna 2)
   const myTeam = myIndex !== -1 && myIndex % 2 === 0 ? 'Drużyna 1' : 'Drużyna 2'
   
   const getOpponentAtPosition = (position) => {
@@ -601,7 +745,6 @@ function Game() {
       {/* HEADER */}
       <div className="bg-[#1e2a3a]/80 backdrop-blur-sm border-b border-gray-700/50 p-3">
         <div className="flex items-center justify-between">
-          {/* Lewy górny róg - Dashboard */}
           <button
             onClick={() => navigate('/dashboard')}
             className="px-3 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg transition-all text-sm"
@@ -609,21 +752,165 @@ function Game() {
             ← Dashboard
           </button>
           
-          {/* Środek - Nazwa gry */}
           <div className="flex items-center gap-2">
-            <span className="text-2xl">🎴</span>
             <div>
               <h1 className="text-lg font-bold text-white">{lobby?.nazwa || 'Gra'}</h1>
               <p className="text-xs text-gray-400">Faza: {currentPhase}</p>
             </div>
           </div>
 
-          {/* Prawy górny róg - Status */}
           <div className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full font-semibold text-sm">
-            🎮 W grze
+            W grze
           </div>
         </div>
       </div>
+
+      {/* MODAL WALKOWERA */}
+      {forfeitInfo && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#1e2a3a] border-2 border-red-500/50 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+            <div className="text-6xl mb-4">🚫</div>
+            <h2 className="text-2xl font-bold text-red-400 mb-4">Gra zakończona</h2>
+            <p className="text-gray-300 mb-4">
+              <span className="text-red-400 font-bold">{forfeitInfo.disconnectedPlayer}</span> opuścił grę
+              <br />i nie wrócił w wyznaczonym czasie.
+            </p>
+            {forfeitInfo.winners?.length > 0 && (
+              <div className="mb-6">
+                <p className="text-green-400 font-bold text-lg">
+                  🏆 Zwycięzcy: {forfeitInfo.winners.join(', ')}
+                </p>
+              </div>
+            )}
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-8 py-3 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl transition-all"
+            >
+              Wróć do Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KOŃCA MECZU */}
+      {gameEndedInfo && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#1e2a3a] border-2 border-yellow-500/50 rounded-2xl p-8 max-w-lg text-center shadow-2xl">
+            <div className="text-6xl mb-4">🏆</div>
+            <h2 className="text-3xl font-bold text-yellow-400 mb-2">Mecz zakończony!</h2>
+            <p className="text-gray-300 mb-6 text-lg">
+              Zwycięzca: <span className="text-green-400 font-bold">{gameEndedInfo.winner}</span>
+            </p>
+            
+            {/* Końcowe punkty */}
+            {gameEndedInfo.finalScores && (
+              <div className="mb-6 p-4 bg-gray-800/50 rounded-xl">
+                <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">Końcowe punkty</h3>
+                <div className="space-y-2">
+                  {Object.entries(gameEndedInfo.finalScores).map(([name, points]) => (
+                    <div 
+                      key={name} 
+                      className={`flex justify-between items-center p-2 rounded-lg ${
+                        name === gameEndedInfo.winner 
+                          ? 'bg-yellow-500/20 border border-yellow-500/50' 
+                          : 'bg-gray-700/30'
+                      }`}
+                    >
+                      <span className={`font-semibold ${
+                        name === gameEndedInfo.winner ? 'text-yellow-400' : 'text-gray-300'
+                      }`}>
+                        {name === gameEndedInfo.winner && '🏆 '}{name}
+                      </span>
+                      <span className={`text-xl font-bold ${
+                        name === gameEndedInfo.winner ? 'text-yellow-400' : 'text-white'
+                      }`}>
+                        {points} pkt
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Status głosowania za powrotem do lobby */}
+            {returnToLobbyVotes && (
+              <div className="mb-4 p-3 bg-gray-800/50 rounded-lg">
+                <p className="text-sm text-gray-400 mb-2">Czekam na graczy...</p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {returnToLobbyVotes.votes.map((voter, idx) => (
+                    <span key={idx} className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+                      ✓ {voter}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  {returnToLobbyVotes.votes.length} / {returnToLobbyVotes.totalPlayers} graczy
+                </p>
+              </div>
+            )}
+            
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={handleReturnToLobby}
+                disabled={actionLoading || hasVotedReturnToLobby}
+                className={`px-6 py-3 font-bold rounded-xl transition-all transform hover:scale-105 ${
+                  hasVotedReturnToLobby 
+                    ? 'bg-green-600 text-white cursor-default' 
+                    : 'bg-teal-600 hover:bg-teal-700 text-white'
+                } disabled:cursor-not-allowed`}
+              >
+                {actionLoading ? '...' : hasVotedReturnToLobby ? '✓ Czekam na innych' : '🔄 Powrót do lobby'}
+              </button>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-xl transition-all"
+              >
+                Wyjść do Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER ROZŁĄCZENIA */}
+      {disconnectedPlayer && !forfeitInfo && (
+        <div className="bg-red-500/20 border-b border-red-500/50 p-3">
+          <div className="flex items-center justify-center gap-4">
+            <span className="text-2xl animate-pulse">⚠️</span>
+            <div className="text-center">
+              <p className="text-red-300 font-bold">
+                {disconnectedPlayer} rozłączył się!
+              </p>
+              <p className="text-red-200 text-sm">
+                Ma <span className="font-bold text-yellow-300">{disconnectTimer}s</span> na powrót
+                {disconnectTimer <= 10 && <span className="text-red-400 ml-2 animate-pulse">!</span>}
+              </p>
+            </div>
+            <div className="w-16 h-16 relative">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle
+                  cx="32" cy="32" r="28"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                  className="text-gray-700"
+                />
+                <circle
+                  cx="32" cy="32" r="28"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                  fill="none"
+                  strokeDasharray={`${(disconnectTimer / 60) * 176} 176`}
+                  className="text-red-500 transition-all"
+                />
+              </svg>
+              <span className="absolute inset-0 flex items-center justify-center text-white font-bold">
+                {disconnectTimer}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MAIN GAME AREA */}
       <div className="flex-1 flex overflow-hidden">
@@ -634,7 +921,6 @@ function Game() {
             {/* GRACZ TOP */}
             {topOpponent && (
               <div className="absolute top-0 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-                {/* Dymki akcji */}
                 {actionBubbles.filter(b => b.playerPosition === 'top').map(bubble => (
                   <ActionBubble
                     key={bubble.id}
@@ -647,9 +933,12 @@ function Game() {
                   ${gameState.kolej_gracza === topOpponent.name ? 'bg-yellow-500/20 border-yellow-500 shadow-lg shadow-yellow-500/20' : 'bg-gray-800/70 border-gray-700'}
                   border-2 rounded-xl p-2 backdrop-blur-sm transition-all flex items-center gap-2
                 `}>
-                  <div className="text-xl">
-                    {topOpponent.is_bot ? '🤖' : '👤'}
-                  </div>
+                  {getPlayerPrefix(topOpponent, !isTysiac) && (
+                    <span className="text-xs text-gray-400">
+                      {getPlayerPrefix(topOpponent, !isTysiac)}
+                    </span>
+                  )}
+                  {getPlayerPrefix(topOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
                   <p className="text-white font-bold text-sm">{topOpponent.name}</p>
                 </div>
                 
@@ -674,9 +963,7 @@ function Game() {
             {isTysiac && players.length === 2 && currentPhase !== 'PODSUMOWANIE_ROZDANIA' && (
               <div 
                 onClick={() => {
-                  // Klikalne tylko podczas wyboru musiku
                   if (currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn) {
-                    console.log('🎴 Kliknięto Musik 1')
                     if (!actionLoading) {
                       handleLufaAction({ typ: 'wybierz_musik', musik: 1 })
                     }
@@ -698,32 +985,22 @@ function Game() {
                     ? 'group-hover:scale-105 transition-transform'
                     : ''
                 }`}>
-                  {showMusikCards && gameState?.musik_1 && Array.isArray(gameState.musik_1) ? (
-                    // Pokaż karty z musiku (na koniec gry) z animacją
-                    <div className="animate-pulse">
-                      {gameState.musik_1.map((card, idx) => (
-                        <CardImage key={idx} card={card} size="sm" />
-                      ))}
-                    </div>
-                  ) : (
-                    // Pokaż zakryte karty
-                    [1, 2].map((idx) => (
-                      <img 
-                        key={idx}
-                        src="/karty/rewers.png" 
-                        alt="Musik 1" 
-                        className={`w-14 h-22 rounded-lg shadow-xl ${
-                          currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn
-                            ? 'group-hover:shadow-purple-500/50 transition-shadow'
-                            : ''
-                        }`}
-                      />
-                    ))
-                  )}
+                  {[1, 2].map((idx) => (
+                    <img 
+                      key={idx}
+                      src="/karty/rewers.png" 
+                      alt="Musik 1" 
+                      className={`w-14 h-22 rounded-lg shadow-xl ${
+                        currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn
+                          ? 'group-hover:shadow-purple-500/50 transition-shadow'
+                          : ''
+                      }`}
+                    />
+                  ))}
                 </div>
                 {currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn && (
                   <div className="text-center text-xs text-gray-400 group-hover:text-purple-300 transition-colors">
-                    ⬅ Kliknij
+                    Kliknij
                   </div>
                 )}
               </div>
@@ -733,9 +1010,7 @@ function Game() {
             {isTysiac && players.length === 2 && currentPhase !== 'PODSUMOWANIE_ROZDANIA' && (
               <div 
                 onClick={() => {
-                  // Klikalne tylko podczas wyboru musiku
                   if (currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn) {
-                    console.log('🎴 Kliknięto Musik 2')
                     if (!actionLoading) {
                       handleLufaAction({ typ: 'wybierz_musik', musik: 2 })
                     }
@@ -757,32 +1032,22 @@ function Game() {
                     ? 'group-hover:scale-105 transition-transform'
                     : ''
                 }`}>
-                  {showMusikCards && gameState?.musik_2 && Array.isArray(gameState.musik_2) ? (
-                    // Pokaż karty z musiku (na koniec gry) z animacją
-                    <div className="animate-pulse">
-                      {gameState.musik_2.map((card, idx) => (
-                        <CardImage key={idx} card={card} size="sm" />
-                      ))}
-                    </div>
-                  ) : (
-                    // Pokaż zakryte karty
-                    [1, 2].map((idx) => (
-                      <img 
-                        key={idx}
-                        src="/karty/rewers.png" 
-                        alt="Musik 2" 
-                        className={`w-14 h-22 rounded-lg shadow-xl ${
-                          currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn
-                            ? 'group-hover:shadow-purple-500/50 transition-shadow'
-                            : ''
-                        }`}
-                      />
-                    ))
-                  )}
+                  {[1, 2].map((idx) => (
+                    <img 
+                      key={idx}
+                      src="/karty/rewers.png" 
+                      alt="Musik 2" 
+                      className={`w-14 h-22 rounded-lg shadow-xl ${
+                        currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn
+                          ? 'group-hover:shadow-purple-500/50 transition-shadow'
+                          : ''
+                      }`}
+                    />
+                  ))}
                 </div>
                 {currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn && (
                   <div className="text-center text-xs text-gray-400 group-hover:text-purple-300 transition-colors">
-                    Kliknij ➡
+                    Kliknij
                   </div>
                 )}
               </div>
@@ -791,7 +1056,6 @@ function Game() {
             {/* GRACZ LEFT - tylko dla 3p/4p */}
             {leftOpponent && !(isTysiac && players.length === 2) && (
               <div className="absolute -left-28 top-1/2 -translate-y-1/2 flex flex-row items-center gap-2">
-                {/* Dymki akcji */}
                 {actionBubbles.filter(b => b.playerPosition === 'left').map(bubble => (
                   <ActionBubble
                     key={bubble.id}
@@ -804,9 +1068,12 @@ function Game() {
                   ${gameState.kolej_gracza === leftOpponent.name ? 'bg-yellow-500/20 border-yellow-500 shadow-lg shadow-yellow-500/20' : 'bg-gray-800/70 border-gray-700'}
                   border-2 rounded-xl p-2 backdrop-blur-sm transition-all flex items-center gap-2
                 `}>
-                  <div className="text-xl">
-                    {leftOpponent.is_bot ? '🤖' : '👤'}
-                  </div>
+                  {getPlayerPrefix(leftOpponent, !isTysiac) && (
+                    <span className="text-xs text-gray-400">
+                      {getPlayerPrefix(leftOpponent, !isTysiac)}
+                    </span>
+                  )}
+                  {getPlayerPrefix(leftOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
                   <p className="text-white font-bold text-sm">{leftOpponent.name}</p>
                 </div>
                 
@@ -845,7 +1112,6 @@ function Game() {
                   ))}
                 </div>
                 
-                {/* Dymki akcji */}
                 {actionBubbles.filter(b => b.playerPosition === 'right').map(bubble => (
                   <ActionBubble
                     key={bubble.id}
@@ -858,9 +1124,12 @@ function Game() {
                   ${gameState.kolej_gracza === rightOpponent.name ? 'bg-yellow-500/20 border-yellow-500 shadow-lg shadow-yellow-500/20' : 'bg-gray-800/70 border-gray-700'}
                   border-2 rounded-xl p-2 backdrop-blur-sm transition-all flex items-center gap-2
                 `}>
-                  <div className="text-xl">
-                    {rightOpponent.is_bot ? '🤖' : '👤'}
-                  </div>
+                  {getPlayerPrefix(rightOpponent, !isTysiac) && (
+                    <span className="text-xs text-gray-400">
+                      {getPlayerPrefix(rightOpponent, !isTysiac)}
+                    </span>
+                  )}
+                  {getPlayerPrefix(rightOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
                   <p className="text-white font-bold text-sm">{rightOpponent.name}</p>
                 </div>
               </div>
@@ -875,8 +1144,8 @@ function Game() {
                   {/* Wybór musiku w trybie 2p */}
                   {isTysiac && players.length === 2 && currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty && !gameState?.musik_wybrany && isMyTurn && (
                     <div className="px-6 py-3 bg-purple-500/20 border-2 border-purple-500/50 rounded-lg animate-pulse">
-                      <p className="text-purple-300 font-bold text-lg">🎴 Wybierz jeden z musików</p>
-                      <p className="text-purple-200 text-sm mt-1">⬅ Kliknij na karty po bokach ➡</p>
+                      <p className="text-purple-300 font-bold text-lg">Wybierz jeden z musików</p>
+                      <p className="text-purple-200 text-sm mt-1">Kliknij na karty po bokach</p>
                     </div>
                   )}
                   
@@ -890,7 +1159,7 @@ function Game() {
                    !(isTysiac && players.length === 2 && currentPhase === 'WYMIANA_MUSZKU' && !gameState?.musik_odkryty) && 
                    !(isTysiac && players.length === 2 && currentPhase === 'WYMIANA_MUSZKU' && gameState?.musik_odkryty) && (
                     <div className="px-4 py-2 bg-yellow-500/20 border-2 border-yellow-500/50 rounded-lg animate-pulse">
-                      <p className="text-yellow-300 font-bold">🎯 Twoja kolej!</p>
+                      <p className="text-yellow-300 font-bold">Twoja kolej!</p>
                     </div>
                   )}
                 </div>
@@ -925,16 +1194,23 @@ function Game() {
                         gameState={gameState}
                       />
                     ) : (
-                      <LicytacjaPanel 
+                                          <LicytacjaPanel 
                         onAction={handleLufaAction}
                         loading={actionLoading}
                         gameState={gameState}
+                        canGiveLufa={(() => {
+                          // Sprawdź czy jestem w innej drużynie niż grający
+                          const myPlayer = players.find(p => p.name === user?.username)
+                          const playingPlayerObj = players.find(p => p.name === playingPlayer)
+                          if (!myPlayer || !playingPlayerObj) return false
+                          return myPlayer.team !== playingPlayerObj.team
+                        })()}
                       />
                     )}
                   </div>
                 )}
 
-                {/* PANEL WYMIANY MUSZKU - tylko dla 3p/4p (w 2p wszystko na stole) */}
+                {/* PANEL WYMIANY MUSZKU - tylko dla 3p/4p */}
                 {currentPhase === 'WYMIANA_MUSZKU' && isMyTurn && isTysiac && players.length > 2 && (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <WymianaMuszkuPanel 
@@ -967,44 +1243,77 @@ function Game() {
                   </div>
                 )}
 
-                {/* KARTY NA STOLE */}
-                {currentTrick.length > 0 && !isRoundOver && (
+                {/* PANEL DECYZJI PO MUSIKU NA STOLE (Tysiąc 2p) */}
+                {currentPhase === 'DECYZJA_PO_MUSIKU' && isMyTurn && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="grid grid-cols-2 gap-6">
-                      {currentTrick.map((play, idx) => (
-                        <div key={idx} className="flex flex-col items-center gap-2">
-                          <div className="px-3 py-1 bg-gray-900/80 rounded-full text-xs text-white font-semibold">
-                            {play.gracz}
-                          </div>
+                    <DecyzjaPoMusikuPanel 
+                      onAction={handleLufaAction}
+                      loading={actionLoading}
+                      gameState={gameState}
+                    />
+                  </div>
+                )}
+
+                {/* KARTY NA STOLE - pozycjonowane przy graczu który je zagrał */}
+                {currentTrick.length > 0 && !isRoundOver && (
+                  <>
+                    {currentTrick.map((play, idx) => {
+                      // Znajdź pozycję gracza który zagrał kartę
+                      const playerIndex = players.findIndex(p => p.name === play.gracz)
+                      const relativePos = myIndex !== -1 && playerIndex !== -1 
+                        ? (playerIndex - myIndex + players.length) % players.length 
+                        : 0
+                      
+                      // Dla trybu 2p Tysiąc - tylko góra i dół
+                      let positionClass = ''
+                      if (isTysiac && players.length === 2) {
+                        positionClass = relativePos === 0 
+                          ? 'bottom-[30%] left-1/2 -translate-x-1/2' 
+                          : 'top-[30%] left-1/2 -translate-x-1/2'
+                      } else {
+                        // Dla 3p/4p - wszystkie 4 kierunki, bliżej środka
+                        const positions = [
+                          'bottom-[25%] left-1/2 -translate-x-1/2',  // ja (dół)
+                          'left-[25%] top-1/2 -translate-y-1/2',     // lewy
+                          'top-[25%] left-1/2 -translate-x-1/2',     // góra
+                          'right-[25%] top-1/2 -translate-y-1/2'     // prawy
+                        ]
+                        positionClass = positions[relativePos] || positions[0]
+                      }
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`absolute ${positionClass} z-10`}
+                        >
                           <CardImage card={play.karta} size="md" />
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      )
+                    })}
+                  </>
                 )}
 
-                {/* PRZYCISK FINALIZACJI LEWY - UKRYTY (finalizacja automatyczna) */}
-                {/* Pozostawiono kod na wypadek przyszłych zmian */}
-                {false && canFinalizeTrick && !isRoundOver && (
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
-                    <button
-                      onClick={handleFinalizeTrick}
-                      disabled={actionLoading}
-                      className="px-8 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-105"
-                    >
-                      ✅ Zakończ lewę
-                    </button>
-                  </div>
-                )}
-
-                {/* PODSUMOWANIE ROZDANIA - ukryj na 2 sekundy gdy pokazujemy musiki */}
-                {isRoundOver && roundSummary && !hideRoundSummary && (
-                  <RoundSummary 
-                    summary={roundSummary} 
-                    onNextRound={handleNextRound} 
-                    loading={actionLoading}
-                    myTeam={myTeam}
-                  />
+                {/* PODSUMOWANIE ROZDANIA */}
+                {isRoundOver && roundSummary && (
+                  isTysiac ? (
+                    <RoundSummaryTysiac
+                      gameState={gameState}
+                      onNextRound={handleNextRound}
+                      loading={actionLoading}
+                      user={user}
+                      hasVoted={hasVotedNextRound}
+                      votes={nextRoundVotes}
+                    />
+                  ) : (
+                    <RoundSummary 
+                      summary={roundSummary} 
+                      onNextRound={handleNextRound} 
+                      loading={actionLoading}
+                      myTeam={myTeam}
+                      hasVoted={hasVotedNextRound}
+                      votes={nextRoundVotes}
+                    />
+                  )
                 )}
               </div>
             </div>
@@ -1016,9 +1325,9 @@ function Game() {
                 <div className="text-center mb-3">
                   <div className="inline-flex items-center gap-4 px-6 py-3 bg-purple-500/20 border-2 border-purple-500/50 rounded-lg">
                     <div>
-                      <p className="text-purple-300 font-bold text-lg">🎴 Oddaj 2 karty do musiku</p>
-                      <p className="text-purple-200 text-sm mt-1">Kliknij 2 karty z ręki ⬇</p>
-                      <p className="text-yellow-300 text-xs mt-1">✨ Złote ramki = karty z musiku</p>
+                      <p className="text-purple-300 font-bold text-lg">Oddaj 2 karty do musiku</p>
+                      <p className="text-purple-200 text-sm mt-1">Kliknij 2 karty z ręki</p>
+                      <p className="text-yellow-300 text-xs mt-1">Złote ramki = karty z musiku</p>
                     </div>
                     {selectedCardsToDiscard.length === 2 && (
                       <button
@@ -1026,7 +1335,7 @@ function Game() {
                         disabled={actionLoading}
                         className="px-6 py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-600 text-white font-bold rounded-xl transition-all transform hover:scale-105 disabled:cursor-not-allowed"
                       >
-                        {actionLoading ? '⏳' : '✅ Oddaj karty'}
+                        {actionLoading ? '...' : 'Oddaj karty'}
                       </button>
                     )}
                   </div>
@@ -1038,12 +1347,11 @@ function Game() {
                 </div>
               )}
               
-              <div className="flex justify-center gap-2 pb-4">
+              <div className="flex justify-center gap-2 pb-2">
                 {myHand.length > 0 ? (
                   myHand.map((card, idx) => {
                     const isPlayable = playableCards.includes(card)
                     
-                    // W trybie oddawania kart (2p, musik odkryty) - sprawdź które karty są z musiku
                     const kartyZMusiku = gameState?.karty_z_musiku || []
                     const isFromMusik = isTysiac && players.length === 2 && 
                                        currentPhase === 'WYMIANA_MUSZKU' && 
@@ -1056,11 +1364,9 @@ function Game() {
                         card={card}
                         size="lg"
                         onClick={() => {
-                          // W trybie oddawania kart (2p Tysiąc)
                           if (isTysiac && players.length === 2 && currentPhase === 'WYMIANA_MUSZKU' && gameState?.musik_odkryty && isMyTurn) {
                             handleCardClickForDiscard(card)
                           } else {
-                            // Normalne zagranie karty
                             handlePlayCard(card)
                           }
                         }}
@@ -1072,7 +1378,8 @@ function Game() {
                           currentPhase === 'LUFA' ||
                           currentPhase === 'FAZA_PYTANIA_START' ||
                           currentPhase === 'LICYTACJA' ||
-                          currentPhase === 'FAZA_DECYZJI_PO_PASACH'
+                          currentPhase === 'FAZA_DECYZJI_PO_PASACH' ||
+                          currentPhase === 'DECYZJA_PO_MUSIKU'
                         }
                         playable={
                           (isPlayable && 
@@ -1080,7 +1387,8 @@ function Game() {
                           currentPhase !== 'LUFA' &&
                           currentPhase !== 'FAZA_PYTANIA_START' &&
                           currentPhase !== 'LICYTACJA' &&
-                          currentPhase !== 'FAZA_DECYZJI_PO_PASACH') ||
+                          currentPhase !== 'FAZA_DECYZJI_PO_PASACH' &&
+                          currentPhase !== 'DECYZJA_PO_MUSIKU') ||
                           (isTysiac && players.length === 2 && currentPhase === 'WYMIANA_MUSZKU' && gameState?.musik_odkryty && isMyTurn)
                         }
                         highlight={isFromMusik}
@@ -1094,18 +1402,37 @@ function Game() {
                   </div>
                 )}
               </div>
+              
+              {/* Moja nazwa pod kartami */}
+              {(() => {
+                const myPlayer = players.find(p => p.name === user?.username)
+                const myPrefix = myPlayer ? getPlayerPrefix(myPlayer, !isTysiac) : null
+                return (
+                  <div className="flex justify-center mt-2">
+                    <div className={`
+                      ${isMyTurn ? 'bg-yellow-500/20 border-yellow-500' : 'bg-gray-800/70 border-gray-700'}
+                      border-2 rounded-xl px-4 py-2 backdrop-blur-sm transition-all flex items-center gap-2
+                    `}>
+                      {myPrefix && (
+                        <span className="text-xs text-gray-400">{myPrefix}</span>
+                      )}
+                      {myPrefix && <span className="text-gray-600">·</span>}
+                      <span className="text-teal-400 font-bold text-sm">{user?.username}</span>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>
 
         {/* SIDEBAR */}
         <aside className="w-64 bg-[#1e2a3a]/80 backdrop-blur-sm border-l border-gray-700/50 flex flex-col">
-          {/* INFORMACJE (z punktami rozdania) */}
+          {/* INFORMACJE */}
           <div className="p-3 border-b border-gray-700/50">
             <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Informacje</h3>
             <div className="space-y-1.5">
               {isTysiac ? (
-                // Info dla Tysiąca
                 <>
                   {gameState?.kontrakt_wartosc > 0 && (
                     <InfoBox 
@@ -1117,7 +1444,13 @@ function Game() {
                   {gameState?.atut && (
                     <InfoBox 
                       label="Atut" 
-                      value={getSuitSymbol(gameState.atut)}
+                      value={
+                        getSuitSymbol(gameState.atut) ? (
+                          <span className={getSuitSymbol(gameState.atut).color}>
+                            {getSuitSymbol(gameState.atut).symbol}
+                          </span>
+                        ) : '-'
+                      }
                       color="red" 
                     />
                   )}
@@ -1133,15 +1466,19 @@ function Game() {
                   )}
                 </>
               ) : (
-                // Info dla 66 (oryginalny kod)
                 <>
                   {currentContract && (
                     <InfoBox 
                       label="Kontrakt" 
                       value={
-                        trumpSuit 
-                          ? `${currentContract} ${getSuitSymbol(trumpSuit)}`.trim()
-                          : currentContract
+                        trumpSuit && getSuitSymbol(trumpSuit) ? (
+                          <span>
+                            {currentContract}{' '}
+                            <span className={getSuitSymbol(trumpSuit).color}>
+                              {getSuitSymbol(trumpSuit).symbol}
+                            </span>
+                          </span>
+                        ) : currentContract
                       } 
                       color="blue" 
                     />
@@ -1155,8 +1492,6 @@ function Game() {
                 </>
               )}
               
-              {/* Punkty w rozdaniu - jako część Informacji */}
-              {/* Ukryj dla kontraktów Lepsza/Gorsza i dla Tysiąca */}
               {!isTysiac && Object.keys(roundPoints).length > 0 && currentContract !== 'LEPSZA' && currentContract !== 'GORSZA' && (
                 <div className="mt-2 pt-2 border-t border-gray-700/30">
                   <p className="text-xs text-gray-500 uppercase mb-1.5">Punkty w rozdaniu</p>
@@ -1180,7 +1515,6 @@ function Game() {
                 </div>
               )}
               
-              {/* Punkty w rozdaniu dla Tysiąca (indywidualne) */}
               {isTysiac && Object.keys(roundPoints).length > 0 && (
                 <div className="mt-2 pt-2 border-t border-gray-700/30">
                   <p className="text-xs text-gray-500 uppercase mb-1.5">Punkty w rozdaniu</p>
@@ -1199,17 +1533,18 @@ function Game() {
             </div>
           </div>
 
-          {/* GRACZE (2 kolumny dla 66, lista dla Tysiąca) */}
+          {/* GRACZE */}
           <div className="p-3 border-b border-gray-700/50">
             {isTysiac ? (
-              // Tysiąc - prosta lista (bez drużyn)
               <>
                 <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Gracze</h3>
                 <div className="space-y-1">
                   {players.map((player, idx) => (
                     <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-gray-800/50">
                       <div className="flex items-center gap-1">
-                        <span className="text-xs">{player.is_bot ? '🤖' : '👤'}</span>
+                        {getPlayerPrefix(player) && (
+                          <span className="text-xs text-gray-500">{getPlayerPrefix(player)}</span>
+                        )}
                         <span className={`font-medium text-xs truncate ${
                           player.name === user?.username ? 'text-teal-400' : 'text-white'
                         }`}>
@@ -1221,7 +1556,7 @@ function Game() {
                           {gameState.punkty_meczowe?.[player.name] || 0}
                         </span>
                         {gameState.kolej_gracza === player.name && (
-                          <span className="text-yellow-400 text-xs">⏱️</span>
+                          <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
                         )}
                       </div>
                     </div>
@@ -1229,22 +1564,20 @@ function Game() {
                 </div>
               </>
             ) : (
-              // 66 - 2 kolumny (drużyny)
               <>
-                {/* Nagłówki drużyn */}
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <div className="text-xs text-teal-400 font-semibold">Drużyna 1</div>
                   <div className="text-xs text-pink-400 font-semibold">Drużyna 2</div>
                 </div>
                 
-                {/* Gracze w 2 kolumnach */}
                 <div className="grid grid-cols-2 gap-2">
-                  {/* Kolumna 1 - Drużyna 1 */}
                   <div className="space-y-1">
                     {players.filter((_, idx) => idx % 2 === 0).map((player, idx) => (
                       <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-gray-800/50">
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs">{player.is_bot ? '🤖' : '👤'}</span>
+                        <div className="flex flex-col">
+                          {getPlayerPrefix(player) && (
+                            <span className="text-xs text-gray-500">{getPlayerPrefix(player)}</span>
+                          )}
                           <span className={`font-medium text-xs truncate ${
                             player.name === user?.username ? 'text-teal-400' : 'text-white'
                           }`}>
@@ -1252,18 +1585,19 @@ function Game() {
                           </span>
                         </div>
                         {gameState.kolej_gracza === player.name && (
-                          <span className="text-yellow-400 text-xs">⏱️</span>
+                          <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
                         )}
                       </div>
                     ))}
                   </div>
                   
-                  {/* Kolumna 2 - Drużyna 2 */}
                   <div className="space-y-1">
                     {players.filter((_, idx) => idx % 2 === 1).map((player, idx) => (
                       <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-gray-800/50">
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs">{player.is_bot ? '🤖' : '👤'}</span>
+                        <div className="flex flex-col">
+                          {getPlayerPrefix(player) && (
+                            <span className="text-xs text-gray-500">{getPlayerPrefix(player)}</span>
+                          )}
                           <span className={`font-medium text-xs truncate ${
                             player.name === user?.username ? 'text-teal-400' : 'text-white'
                           }`}>
@@ -1271,7 +1605,7 @@ function Game() {
                           </span>
                         </div>
                         {gameState.kolej_gracza === player.name && (
-                          <span className="text-yellow-400 text-xs">⏱️</span>
+                          <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
                         )}
                       </div>
                     ))}
@@ -1285,7 +1619,6 @@ function Game() {
           <div className="p-3 border-b border-gray-700/50">
             <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Punkty w meczu</h3>
             {isTysiac ? (
-              // Tysiąc - punkty indywidualne (do 1000)
               <div className="space-y-1.5">
                 {players.map((player, idx) => {
                   const punkty = gameState.punkty_meczowe?.[player.name] || 0
@@ -1303,7 +1636,6 @@ function Game() {
                           {punkty}
                         </span>
                       </div>
-                      {/* Progress bar */}
                       <div className="w-full bg-gray-700/50 rounded-full h-1.5">
                         <div 
                           className="bg-gradient-to-r from-teal-500 to-yellow-500 h-1.5 rounded-full transition-all"
@@ -1314,11 +1646,10 @@ function Game() {
                   )
                 })}
                 <div className="text-center text-xs text-gray-500 mt-2">
-                  🏆 Cel: 1000 punktów
+                  Cel: 1000 punktów
                 </div>
               </div>
             ) : (
-              // 66 - punkty drużynowe
               (() => {
                 const teams = gameState.punkty_meczowe ? Object.entries(gameState.punkty_meczowe) : [];
                 if (teams.length === 2) {
@@ -1350,7 +1681,7 @@ function Game() {
                 chatMessages.map(msg => (
                   <div key={msg.id} className={`text-sm break-words ${msg.is_system ? 'text-center text-gray-400 italic py-1' : ''}`}>
                     {msg.is_system ? (
-                      <span>📢 {msg.message}</span>
+                      <span>{msg.message}</span>
                     ) : (
                       <div className="break-words">
                         <span className="text-teal-400 font-semibold break-all">{msg.username}</span>

@@ -305,6 +305,18 @@ class TysiacEngine(AbstractGameEngine):
             ],
             'aktualna_licytacja': gs.aktualna_licytacja,
             'pasujacy_gracze': [p.nazwa for p in gs.pasujacy_gracze],
+            'bomba_uzyta': gs.bomba_uzyta.get(player_id, False),  # DODANE: Czy gracz użył bomby
+            'bomba_dostepna': not gs.bomba_uzyta.get(player_id, False),  # DODANE: Czy bomba dostępna
+            
+            # NOWE - informacje o ostatniej lewie
+            'ostatnia_lewa': gs.ostatnia_lewa,
+            'karty_ostatniej_lewy': gs.karty_ostatniej_lewy,
+            'zwyciezca_lewy': gs.zwyciezca_lewy_tymczasowy.nazwa if gs.zwyciezca_lewy_tymczasowy else None,
+            'zwyciezca_ostatniej_lewy': gs.zwyciezca_ostatniej_lewy.nazwa if gs.zwyciezca_ostatniej_lewy else None,
+            
+            # Oryginalne musiki (do pokazania na końcu)
+            'musik_1_oryginalny': [_karta_do_stringa(k) for k in gs.musik_1_oryginalny] if hasattr(gs, 'musik_1_oryginalny') else [],
+            'musik_2_oryginalny': [_karta_do_stringa(k) for k in gs.musik_2_oryginalny] if hasattr(gs, 'musik_2_oryginalny') else [],
         }
         
         return state

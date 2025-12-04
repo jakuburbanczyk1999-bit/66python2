@@ -1,14 +1,49 @@
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
 
 # Bazy danych
 *.db
 *.sqlite
 *.sqlite3
-# Ustawienia edytora VSCode
+data/
+
+# Ustawienia edytora
 .vscode/
+.idea/
+*.swp
+*.swo
 
 # Dane bazy danych Postgres
 postgres-data/
 miedziowe_karty/
+
+# Environment variables (WAŻNE!)
+.env
+.env.local
+.env.production
+
+# Frontend build
+frontend/dist/
+frontend/node_modules/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup
+backup/
+*.bak
+
+# Redis dump
+dump.rdb

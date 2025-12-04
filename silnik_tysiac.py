@@ -56,6 +56,8 @@ WARTOSCI_MELDUNKOW = {
     Kolor.WINO: 40,       # Wino
 }
 
+
+
 @dataclass(frozen=True)
 class Karta:
     """Reprezentuje pojedynczą kartę do gry - TAKA SAMA JAK W GRZE 66"""
@@ -107,6 +109,7 @@ class FazaGry(Enum):
     PRZED_ROZDANIEM = auto()
     LICYTACJA = auto()
     WYMIANA_MUSZKU = auto()
+    DECYZJA_PO_MUSIKU = auto()  # NOWA FAZA: zmiana kontraktu lub bomba
     ROZGRYWKA = auto()
     PODSUMOWANIE_ROZDANIA = auto()
     ZAKONCZONE = auto()
@@ -166,6 +169,7 @@ class RozdanieTysiac:
         self.grajacy: Optional[Gracz] = None
         self.licytujacy_idx: Optional[int] = None
         self.pasujacy_gracze: List[Gracz] = []
+        self.licytacja_wymuszona = False  # True jeśli wszyscy spasowali i gracz dostał automatyczny kontrakt
         
         # Muzyk (tylko 4p)
         self.muzyk_idx: Optional[int] = None
@@ -206,6 +210,8 @@ class RozdanieTysiac:
         # Lewa do zamknięcia
         self.lewa_do_zamkniecia = False
         self.zwyciezca_lewy_tymczasowy: Optional[Gracz] = None
+        self.ostatnia_lewa = False
+        self.karty_ostatniej_lewy: List[Tuple[str, str]] = []
         
         # Historia - TAKA SAMA JAK W GRZE 66
         self.szczegolowa_historia: List[Dict[str, Any]] = []
@@ -219,23 +225,35 @@ class RozdanieTysiac:
         except StopIteration:
             return None
     
+    def _konwertuj_na_serializowalne(self, obj):
+        """
+        Rekurencyjnie konwertuje obiekty Karta na stringi.
+        Zapewnia że wszystkie dane można zserializować do JSON.
+        """
+        if isinstance(obj, Karta):
+            return str(obj)
+        elif isinstance(obj, list):
+            return [self._konwertuj_na_serializowalne(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {k: self._konwertuj_na_serializowalne(v) for k, v in obj.items()}
+        elif isinstance(obj, tuple):
+            return tuple(self._konwertuj_na_serializowalne(item) for item in obj)
+        elif isinstance(obj, Kolor):
+            return obj.name
+        elif isinstance(obj, Ranga):
+            return obj.name
+        elif isinstance(obj, FazaGry):
+            return obj.name
+        elif isinstance(obj, Gracz):
+            return obj.nazwa
+        else:
+            return obj
+    
     def _dodaj_log(self, typ: str, **kwargs):
-        """Dodaje wpis do historii - TAKIE SAMO JAK W GRZE 66."""
-        # Konwertuj obiekty Karta na stringi w historii
-        for klucz, wartosc in kwargs.items():
-            if isinstance(wartosc, Karta):
-                kwargs[klucz] = str(wartosc)
-            elif isinstance(wartosc, list):
-                # Sprawdź czy lista zawiera obiekty Karta
-                kwargs[klucz] = [str(item) if isinstance(item, Karta) else item for item in wartosc]
-            elif isinstance(wartosc, dict):
-                # Sprawdź czy słownik zawiera obiekty Karta
-                if 'karty' in wartosc and isinstance(wartosc['karty'], list):
-                    wartosc = wartosc.copy()
-                    wartosc['karty'] = [str(k) if isinstance(k, Karta) else k for k in wartosc['karty']]
-                    kwargs[klucz] = wartosc
-        
-        log = {'typ': typ, **kwargs}
+        """Dodaje wpis do historii - konwertuje wszystkie obiekty na serializowalne."""
+        # Rekurencyjnie konwertuj wszystkie obiekty
+        kwargs_czyste = self._konwertuj_na_serializowalne(kwargs)
+        log = {'typ': typ, **kwargs_czyste}
         self.szczegolowa_historia.append(log)
     
     def rozpocznij_nowe_rozdanie(self):
@@ -246,6 +264,33 @@ class RozdanieTysiac:
         for gracz in self.gracze:
             gracz.reka.clear()
             gracz.wygrane_karty.clear()
+        
+        # Resetuj stan licytacji
+        self.pasujacy_gracze = []
+        self.grajacy = None
+        self.kontrakt_wartosc = 0
+        self.aktualna_licytacja = 0
+        self.licytacja_wymuszona = False
+        
+        # Resetuj stan musiku
+        self.musik_odkryty = False
+        self.musik_karty = []
+        if self.tryb == '2p':
+            self.musik_1 = []
+            self.musik_2 = []
+            self.musik_wybrany = None
+            self.musik_1_oryginalny = []
+            self.musik_2_oryginalny = []
+        
+        # Resetuj stan rozgrywki
+        self.atut = None
+        self.zadeklarowane_meldunki = []
+        self.aktualna_lewa = []
+        self.lewa_numer = 0
+        self.lewa_do_zamkniecia = False
+        self.ostatnia_lewa = False
+        self.zwyciezca_lewy = None
+        self.wynik_rozdania = None
         
         # Rozdaj karty
         if self.tryb == '2p':
@@ -337,6 +382,35 @@ class RozdanieTysiac:
         for gracz in self.gracze:
             gracz.reka.sort(key=lambda k: (KOLEJNOSC_KOLOROW_SORT[k.kolor], -k.ranga.value))
     
+    def _oblicz_meldunki_w_rece(self, gracz: Gracz) -> Tuple[int, List[Dict[str, Any]]]:
+        """
+        Oblicza sumę możliwych meldunków w ręce gracza.
+        
+        Returns:
+            Tuple: (suma_punktów, lista_meldunków)
+            gdzie lista_meldunków to [{'kolor': Kolor, 'punkty': int}, ...]
+        """
+        suma = 0
+        meldunki = []
+        for kolor in Kolor:
+            ma_krola = any(k.kolor == kolor and k.ranga == Ranga.KROL for k in gracz.reka)
+            ma_dame = any(k.kolor == kolor and k.ranga == Ranga.DAMA for k in gracz.reka)
+            if ma_krola and ma_dame:
+                punkty = WARTOSCI_MELDUNKOW[kolor]
+                suma += punkty
+                meldunki.append({'kolor': kolor.name, 'punkty': punkty})
+        return suma, meldunki
+    
+    def _oblicz_max_licytacje(self, gracz: Gracz) -> int:
+        """
+        Oblicza maksymalną możliwą licytację dla gracza.
+        Max = 120 (punkty za karty) + suma meldunków w ręce.
+        """
+        suma_meldunkow, _ = self._oblicz_meldunki_w_rece(gracz)
+        max_licytacja = 120 + suma_meldunkow
+        # Nie więcej niż 360 (limit gry)
+        return min(max_licytacja, 360)
+    
     def get_mozliwe_akcje(self, gracz: Gracz) -> List[Dict[str, Any]]:
         """Zwraca możliwe akcje dla gracza."""
         gracz_idx = self._get_player_index(gracz)
@@ -354,9 +428,12 @@ class RozdanieTysiac:
             if gracz not in self.pasujacy_gracze:
                 akcje.append({'typ': 'pas'})
             
+            # Oblicz max licytację na podstawie meldunków
+            max_licytacja = self._oblicz_max_licytacje(gracz)
+            
             nastepna_licytacja = self.aktualna_licytacja + 10
-            if nastepna_licytacja <= 360:
-                akcje.append({'typ': 'licytuj', 'wartosc': nastepna_licytacja})
+            if nastepna_licytacja <= max_licytacja:
+                akcje.append({'typ': 'licytuj', 'wartosc': nastepna_licytacja, 'max_wartosc': max_licytacja})
             
             return akcje
         
@@ -381,10 +458,42 @@ class RozdanieTysiac:
                         liczba_aktywnych -= 1
                     akcje.append({'typ': 'rozdaj_karty', 'liczba': liczba_aktywnych})
                 
-                if not self.bomba_uzyta[gracz.nazwa]:
-                    akcje.append({'typ': 'bomba'})
+                # Bomba usunięta z tej fazy - teraz jest w DECYZJA_PO_MUSIKU
                 
                 return akcje
+        
+        # DECYZJA PO MUSIKU (zmiana kontraktu / bomba)
+        if self.faza == FazaGry.DECYZJA_PO_MUSIKU:
+            if gracz != self.grajacy:
+                return []
+            
+            akcje = []
+            
+            # Oblicz max kontrakt na podstawie meldunków (po wzięciu musiku)
+            max_kontrakt = self._oblicz_max_licytacje(gracz)
+            suma_meldunkow, lista_meldunkow = self._oblicz_meldunki_w_rece(gracz)
+            
+            # Opcja 1: Kontynuuj bez zmian
+            akcje.append({'typ': 'kontynuuj'})
+            
+            # Opcja 2: Zmień kontrakt (możliwe wartości od obecnej do max)
+            mozliwe_kontrakty = []
+            for wartosc in range(self.kontrakt_wartosc + 10, max_kontrakt + 10, 10):
+                if wartosc <= max_kontrakt:
+                    mozliwe_kontrakty.append(wartosc)
+            if mozliwe_kontrakty:
+                akcje.append({
+                    'typ': 'zmien_kontrakt', 
+                    'mozliwe_wartosci': mozliwe_kontrakty,
+                    'max_wartosc': max_kontrakt,
+                    'meldunki': lista_meldunkow
+                })
+            
+            # Opcja 3: Bomba (jeśli jeszcze nie użyta w tym meczu)
+            if not self.bomba_uzyta[gracz.nazwa]:
+                akcje.append({'typ': 'bomba'})
+            
+            return akcje
         
         return []
     
@@ -403,7 +512,18 @@ class RozdanieTysiac:
                 self._sprawdz_koniec_licytacji()
             
             elif akcja['typ'] == 'licytuj':
-                self.aktualna_licytacja = akcja['wartosc']
+                wartosc = akcja['wartosc']
+                max_licytacja = self._oblicz_max_licytacje(gracz)
+                
+                # Walidacja licytacji
+                if wartosc > max_licytacja:
+                    print(f"[BŁĄD] Licytacja {wartosc} przekracza limit gracza ({max_licytacja})")
+                    return
+                if wartosc <= self.aktualna_licytacja:
+                    print(f"[BŁĄD] Licytacja {wartosc} musi być wyższa niż obecna ({self.aktualna_licytacja})")
+                    return
+                
+                self.aktualna_licytacja = wartosc
                 self.grajacy = gracz
                 self._nastepny_licytujacy()
         
@@ -418,6 +538,14 @@ class RozdanieTysiac:
             elif akcja['typ'] == 'rozdaj_karty':
                 rozdanie = akcja.get('rozdanie', {})
                 self._rozdaj_karty_z_reki(gracz, rozdanie)
+        
+        elif self.faza == FazaGry.DECYZJA_PO_MUSIKU:
+            if akcja['typ'] == 'kontynuuj':
+                self._kontynuuj_bez_zmian(gracz)
+            
+            elif akcja['typ'] == 'zmien_kontrakt':
+                nowa_wartosc = akcja.get('wartosc', self.kontrakt_wartosc)
+                self._zmien_kontrakt(gracz, nowa_wartosc)
             
             elif akcja['typ'] == 'bomba':
                 self._rzuc_bombe(gracz)
@@ -481,6 +609,7 @@ class RozdanieTysiac:
             self.grajacy = self.gracze[pierwszy_gracz_idx]
             self.kontrakt_wartosc = 100  # Minimalny kontrakt
             self.aktualna_licytacja = 100
+            self.licytacja_wymuszona = True  # Gracz nie miał wyboru!
             
             self._dodaj_log('wszyscy_spasowali', 
                           grajacy=self.grajacy.nazwa, 
@@ -582,7 +711,9 @@ class RozdanieTysiac:
             self.musik_2_oryginalny = karty.copy()
         
         self._dodaj_log('oddano_karty', gracz=gracz.nazwa, liczba=len(karty))
-        self._rozpocznij_rozgrywke()
+        
+        # Przejdź do fazy decyzji (zmiana kontraktu / bomba)
+        self._rozpocznij_faze_decyzji()
     
     def _rozdaj_karty_z_reki(self, gracz: Gracz, rozdanie: Dict[str, Karta]):
         """Grający rozdaje karty z ręki pozostałym graczom (tryb 3p/4p)."""
@@ -619,6 +750,52 @@ class RozdanieTysiac:
             'grajacy': gracz.nazwa,
             'przyznane_punkty': 120 if self.tryb == '2p' else 60
         }
+    
+    def _rozpocznij_faze_decyzji(self):
+        """Rozpoczyna fazę decyzji po oddaniu kart (zmiana kontraktu / bomba)."""
+        # Jeśli licytacja była wymuszona (wszyscy spasowali), pomiń fazę decyzji
+        if self.licytacja_wymuszona:
+            print(f"[DECYZJA] Pomijam fazę decyzji - licytacja była wymuszona (kontrakt 100)")
+            self._rozpocznij_rozgrywke()
+            return
+        
+        self.faza = FazaGry.DECYZJA_PO_MUSIKU
+        gracz_idx = self._get_player_index(self.grajacy)
+        self.kolej_gracza_idx = gracz_idx
+        self._dodaj_log('faza_decyzji', gracz=self.grajacy.nazwa, kontrakt=self.kontrakt_wartosc)
+        print(f"[DECYZJA] Gracz {self.grajacy.nazwa} wybiera: zmiana kontraktu ({self.kontrakt_wartosc}) lub bomba")
+    
+    def _zmien_kontrakt(self, gracz: Gracz, nowa_wartosc: int):
+        """Zmienia wartość kontraktu na nową wartość."""
+        if nowa_wartosc < self.kontrakt_wartosc:
+            print(f"[BŁĄD] Nowa wartość kontraktu ({nowa_wartosc}) nie może być mniejsza niż obecna ({self.kontrakt_wartosc})")
+            return
+        
+        # Sprawdź max na podstawie meldunków
+        max_kontrakt = self._oblicz_max_licytacje(gracz)
+        if nowa_wartosc > max_kontrakt:
+            print(f"[BŁĄD] Nowa wartość kontraktu ({nowa_wartosc}) przekracza limit ({max_kontrakt}) wynikający z meldunków")
+            return
+        
+        if nowa_wartosc % 10 != 0:
+            print(f"[BŁĄD] Wartość kontraktu musi być wielokrotnością 10")
+            return
+        
+        stara_wartosc = self.kontrakt_wartosc
+        self.kontrakt_wartosc = nowa_wartosc
+        self._dodaj_log('zmiana_kontraktu', gracz=gracz.nazwa, stara_wartosc=stara_wartosc, nowa_wartosc=nowa_wartosc)
+        print(f"[DECYZJA] Gracz {gracz.nazwa} zmienia kontrakt: {stara_wartosc} -> {nowa_wartosc}")
+        
+        # Przejdź do rozgrywki
+        self._rozpocznij_rozgrywke()
+    
+    def _kontynuuj_bez_zmian(self, gracz: Gracz):
+        """Kontynuuje grę bez zmiany kontraktu."""
+        self._dodaj_log('kontynuuj', gracz=gracz.nazwa, kontrakt=self.kontrakt_wartosc)
+        print(f"[DECYZJA] Gracz {gracz.nazwa} kontynuuje z kontraktem {self.kontrakt_wartosc}")
+        
+        # Przejdź do rozgrywki
+        self._rozpocznij_rozgrywke()
     
     def _rozpocznij_rozgrywke(self):
         """Rozpoczyna fazę rozgrywki."""
@@ -670,7 +847,16 @@ class RozdanieTysiac:
         return wynik
     
     def _waliduj_ruch(self, gracz: Gracz, karta: Karta) -> bool:
-        """Sprawdza, czy zagranie karty jest legalne - LOGIKA JAK W GRZE 66."""
+        """
+        Sprawdza, czy zagranie karty jest legalne.
+        
+        Zasady Tysiąca:
+        1. Musisz dać kolor wiodący (jeśli masz)
+        2. Musisz przebić (dać wyższą kartę w kolorze) jeśli możesz!
+        3. Jeśli nie masz koloru wiodącego, musisz dać atut (jeśli masz)
+        4. Jeśli są atuty na stole, musisz przebić atutem (jeśli masz wyższy)
+        5. Jeśli nie masz koloru ani atutów - możesz dać cokolwiek
+        """
         gracz_idx = self._get_player_index(gracz)
         
         if gracz_idx is None or gracz_idx != self.kolej_gracza_idx:
@@ -686,14 +872,28 @@ class RozdanieTysiac:
         kolor_wiodacy = self.aktualna_lewa[0][1].kolor
         karty_do_koloru = [k for k in gracz.reka if k.kolor == kolor_wiodacy]
         
-        # Gracz ma karty w kolorze wiodącym
+        # === GRACZ MA KARTY W KOLORZE WIODĄCYM ===
         if karty_do_koloru:
+            # Musi zagrać w kolorze wiodącym
             if karta.kolor != kolor_wiodacy:
-                # Można zagrać atuta jeśli nie ma koloru wiodącego (ale tutaj ma!)
                 return False
-            return True
+            
+            # ZASADA PRZEBICIA: znajdź najwyższą kartę w kolorze wiodącym na stole
+            karty_wiodace_na_stole = [k for _, k in self.aktualna_lewa if k.kolor == kolor_wiodacy]
+            najwyzsza_na_stole = max(karty_wiodace_na_stole, key=lambda k: k.ranga.value)
+            
+            # Sprawdź czy gracz ma kartę wyższą
+            wyzsze_karty = [k for k in karty_do_koloru if k.ranga.value > najwyzsza_na_stole.ranga.value]
+            
+            if wyzsze_karty:
+                # Gracz MA wyższą kartę - MUSI ją zagrać
+                return karta in wyzsze_karty
+            else:
+                # Gracz NIE MA wyższej karty - może zagrać dowolną w kolorze
+                return True
         
-        # Gracz nie ma koloru wiodącego - sprawdź atuty
+        # === GRACZ NIE MA KOLORU WIODĄCEGO ===
+        # Sprawdź czy ma atuty
         if self.atut:
             atuty_w_rece = [k for k in gracz.reka if k.kolor == self.atut]
             if atuty_w_rece:
@@ -717,7 +917,7 @@ class RozdanieTysiac:
         return True
     
     def _zakoncz_lewe(self):
-        """Ustala zwycięzcę lewy - LOGIKA JAK W GRZE 66."""
+        """Ustala zwycięzcę lewy."""
         if not self.aktualna_lewa:
             return
         
@@ -744,11 +944,15 @@ class RozdanieTysiac:
         self.zwyciezca_lewy_tymczasowy = zwyciezca
         self.kolej_gracza_idx = None
         
-        # Automatycznie finalizuj lewę jeśli wszystkie karty na ręce są puste
-        # (ostatnia lewa rozdania)
+        # Sprawdź czy to ostatnia lewa - zapisz informację
         aktywni_gracze = [g for g in self.gracze if self.tryb != '4p' or self.gracze.index(g) != self.muzyk_idx]
-        if all(len(g.reka) == 0 for g in aktywni_gracze):
-            self.finalizuj_lewe()
+        self.ostatnia_lewa = all(len(g.reka) == 0 for g in aktywni_gracze)
+        
+        # Zapisz karty z ostatniej lewy do wyświetlenia
+        if self.ostatnia_lewa:
+            self.karty_ostatniej_lewy = [(g.nazwa, str(k)) for g, k in self.aktualna_lewa]
+        
+        # NIE finalizuj automatycznie - pozwól frontendowi pokazać karty
     
     def finalizuj_lewe(self):
         """Finalizuje lewę - STRUKTURA JAK W GRZE 66."""
