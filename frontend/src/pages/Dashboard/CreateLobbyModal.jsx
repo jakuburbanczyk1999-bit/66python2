@@ -5,7 +5,8 @@ const GAME_MODES = {
   '66': {
     name: 'Gra w 66',
     icon: '🃏',
-    players: [3, 4],
+    players: [4],
+    disabledPlayers: [3], // 3-osobowa wkrótce
     description: 'Klasyczna gra karciana',
   },
   'tysiac': {
@@ -13,7 +14,7 @@ const GAME_MODES = {
     icon: '🎴',
     players: [2, 3, 4],
     description: 'Popularna polska gra',
-    disabled: false, // ✅ WŁĄCZONE!
+    disabled: true, // ⏳ Wkrótce
   },
 }
 
@@ -148,6 +149,7 @@ function CreateLobbyModal({ onClose, onSuccess }) {
               Liczba graczy *
             </label>
             <div className="flex gap-2">
+              {/* Dostępne opcje */}
               {selectedGame.players.map((num) => (
                 <button
                   key={num}
@@ -161,6 +163,18 @@ function CreateLobbyModal({ onClose, onSuccess }) {
                   } disabled:opacity-50`}
                 >
                   {num} graczy
+                </button>
+              ))}
+              {/* Wyłączone opcje (wkrótce) */}
+              {selectedGame.disabledPlayers?.map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  disabled={true}
+                  className="flex-1 py-3 rounded-lg font-semibold bg-gray-700/30 text-gray-500 cursor-not-allowed opacity-50 flex flex-col items-center"
+                >
+                  <span>{num} graczy</span>
+                  <span className="text-xs text-yellow-400">⏳ wkrótce</span>
                 </button>
               ))}
             </div>
