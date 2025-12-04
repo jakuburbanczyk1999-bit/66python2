@@ -34,7 +34,9 @@ class AuthService:
             >>> print(hashed)
             $2b$12$...
         """
-        return self.pwd_context.hash(password)
+        # bcrypt ma limit 72 bajtów - truncate jeśli dłuższe
+        password_bytes = password.encode('utf-8')[:72]
+        return self.pwd_context.hash(password_bytes.decode('utf-8'))
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
         """
@@ -55,7 +57,9 @@ class AuthService:
             >>> auth.verify_password("wrong", hashed)
             False
         """
-        return self.pwd_context.verify(plain_password, hashed_password)
+        # bcrypt ma limit 72 bajtów - truncate jeśli dłuższe (musi być spójne z hash_password)
+        password_bytes = plain_password.encode('utf-8')[:72]
+        return self.pwd_context.verify(password_bytes.decode('utf-8'), hashed_password)
     
     # ============================================
     # TOKEN GENERATION

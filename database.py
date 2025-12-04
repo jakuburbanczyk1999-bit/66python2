@@ -1,5 +1,6 @@
 # database.py
 
+import os
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -14,7 +15,7 @@ from datetime import datetime
 # SEKCJA 1: KONFIGURACJA POŁĄCZENIA Z BAZĄ DANYCH
 # ==========================================================================
 
-DATABASE_URL = "postgresql+asyncpg://mkuser:mkpassword@localhost/mkdb"
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://mkuser:mkpassword@localhost/mkdb")
 
 engine = create_async_engine(DATABASE_URL)
 
