@@ -385,33 +385,51 @@ async def health_check():
 # ADMIN ENDPOINTS (opcjonalnie)
 # ============================================
 
-@app.get("/api/stats", tags=["📊 Admin"])
-async def get_stats():
+@app.get("/api/stats", tags=["📊 Stats"])
+async def get_public_stats():
     """
-    Statystyki serwera (liczba gier, graczy, etc.)
+    Publiczne statystyki dla strony głównej
     """
-    from utils.cleanup import get_cleanup_stats
-    from routers.websocket_router import manager
+    from services.redis_service import get_redis_client
+    from database import async_sessionmaker, User
+    from sqlalchemy import select, func
     
     try:
-        cleanup_stats = await get_cleanup_stats()
-        ws_stats = {
-            'connected_games': len(manager.get_all_games()),
-            'total_connections': sum(
-                manager.get_connections_count(game_id)
-                for game_id in manager.get_all_games()
+        # Liczba zarejestrowanych użytkowników (bez gości)
+        active_players = 0
+        total_games = 0
+        
+        async with async_sessionmaker() as session:
+            # Policz użytkowników (nie-gości)
+            query = select(func.count()).select_from(User).where(
+                ~User.username.like('Guest_%')
             )
-        }
+            result = await session.execute(query)
+            active_players = result.scalar() or 0
+        
+        # Policz aktywne lobby w Redis
+        try:
+            redis = get_redis_client()
+            # Policz gry zakończone (można też dodać counter w Redis)
+            lobby_keys = await redis.keys("lobby:*")
+            active_lobbies = len(lobby_keys)
+            
+            # Total games - można przechowywać w Redis jako counter
+            total_games_str = await redis.get("stats:total_games")
+            total_games = int(total_games_str) if total_games_str else active_lobbies * 2  # Szacunek
+        except:
+            total_games = 0
         
         return {
-            "status": "ok",
-            "cleanup": cleanup_stats,
-            "websocket": ws_stats
+            "activePlayers": active_players,
+            "totalGames": total_games,
+            "availableGames": 1  # Na razie tylko 66
         }
     except Exception as e:
         return {
-            "status": "error",
-            "error": str(e)
+            "activePlayers": 0,
+            "totalGames": 0,
+            "availableGames": 1
         }
 
 # ============================================
