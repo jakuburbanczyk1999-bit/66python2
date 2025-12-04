@@ -95,15 +95,15 @@ function Landing() {
             {/* Stats - dynamiczne */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-2xl">
               <div className="text-center sm:text-left">
-                <div className="text-4xl font-bold text-teal-400 mb-1">{stats.activePlayers.toLocaleString()}</div>
+                <div className="text-4xl font-bold text-teal-400 mb-1">{(stats?.activePlayers || 0).toLocaleString()}</div>
                 <div className="text-sm text-gray-400">Aktywnych graczy</div>
               </div>
               <div className="text-center sm:text-left">
-                <div className="text-4xl font-bold text-teal-400 mb-1">{stats.totalGames.toLocaleString()}</div>
+                <div className="text-4xl font-bold text-teal-400 mb-1">{(stats?.totalGames || 0).toLocaleString()}</div>
                 <div className="text-sm text-gray-400">Rozegranych gier</div>
               </div>
               <div className="text-center sm:text-left">
-                <div className="text-4xl font-bold text-teal-400 mb-1">{stats.availableGames}</div>
+                <div className="text-4xl font-bold text-teal-400 mb-1">{stats?.availableGames || 1}</div>
                 <div className="text-sm text-gray-400">Dostępne gry</div>
               </div>
             </div>
