@@ -71,20 +71,7 @@ function App() {
 
     const sendHeartbeat = async () => {
       try {
-        const tokenStorage = localStorage.getItem('auth-storage')
-        if (tokenStorage) {
-          const parsed = JSON.parse(tokenStorage)
-          const accessToken = parsed?.state?.token
-          if (accessToken) {
-            await fetch('/api/auth/heartbeat', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json'
-              }
-            })
-          }
-        }
+        await authAPI.heartbeat()
       } catch (e) {
         // Ignoruj błędy heartbeat
       }

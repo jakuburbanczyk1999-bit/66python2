@@ -48,10 +48,17 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Unauthorized (401) lub Forbidden z "Not authenticated" (403) - wyloguj
+    // ALE NIE przy logowaniu/rejestracji!
     const status = error.response?.status
     const detail = error.response?.data?.detail
+    const url = error.config?.url || ''
     
-    if (status === 401 || (status === 403 && detail === 'Not authenticated')) {
+    // Nie przekierowuj przy endpointach auth (login, register, guest)
+    const isAuthEndpoint = url.includes('/auth/login') || 
+                           url.includes('/auth/register') || 
+                           url.includes('/auth/guest')
+    
+    if (!isAuthEndpoint && (status === 401 || (status === 403 && detail === 'Not authenticated'))) {
       console.log('🔒 Sesja wygasła - wylogowywanie...')
       // Wyczyść Zustand persist storage
       localStorage.removeItem('auth-storage')
@@ -127,6 +134,15 @@ export const authAPI = {
     const response = await api.get('/auth/me')
     return response.data
   },
+
+  /**
+   * Send heartbeat to maintain online status
+   * @returns {Promise}
+   */
+  heartbeat: async () => {
+    const response = await api.post('/auth/heartbeat')
+    return response.data
+  },
 }
 
 // ============================================
@@ -196,10 +212,12 @@ export const lobbyAPI = {
   /**
    * Add bot to lobby
    * @param {string} lobbyId 
+   * @param {number|null} slotNumber - opcjonalny numer slotu
    * @returns {Promise}
    */
-  addBot: async (lobbyId) => {
-    const response = await api.post(`/lobby/${lobbyId}/add-bot`)
+  addBot: async (lobbyId, slotNumber = null) => {
+    const params = slotNumber !== null ? { slot_number: slotNumber } : {}
+    const response = await api.post(`/lobby/${lobbyId}/add-bot`, null, { params })
     return response.data
   },
 
@@ -355,6 +373,16 @@ export const gameAPI = {
    */
   returnToLobby: async (gameId) => {
     const response = await api.post(`/game/${gameId}/return-to-lobby`)
+    return response.data
+  },
+
+  /**
+   * Leave game and go to dashboard after game ends
+   * @param {string} gameId 
+   * @returns {Promise}
+   */
+  leaveToDashboard: async (gameId) => {
+    const response = await api.post(`/game/${gameId}/leave-to-dashboard`)
     return response.data
   },
 }

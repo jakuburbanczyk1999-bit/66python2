@@ -273,24 +273,36 @@ function Game() {
               break
               
             case 'return_to_lobby_vote':
-              // Aktualizuj stan głosowania za powrotem
+              // Aktualizuj stan głosowania za powrotem (nowy format)
               setReturnToLobbyVotes({
-                votes: data.votes || [],
-                totalPlayers: data.total_players,
-                readyPlayers: data.ready_players || []
+                votesStay: data.votes_stay || [],
+                votesLeave: data.votes_leave || [],
+                totalPlayers: data.total_players
               })
               break
               
             case 'returned_to_lobby':
-              // Powrót do lobby - przekieruj
-              navigate(`/lobby/${id}`)
+              // Powrót do lobby - sprawdź czy ja zostałem
+              if (data.staying_players?.includes(user?.username)) {
+                navigate(`/lobby/${id}`)
+              } else if (data.leaving_players?.includes(user?.username)) {
+                navigate('/dashboard')
+              } else {
+                // Fallback - przekieruj do lobby
+                navigate(`/lobby/${id}`)
+              }
+              break
+            
+            case 'lobby_closed':
+              // Lobby zamknięte - wszyscy wyszli
+              navigate('/dashboard')
               break
               
             case 'player_disconnected':
               // Gracz się rozłączył - pokaż timer
               if (data.player && data.player !== user?.username) {
                 setDisconnectedPlayer(data.player)
-                setDisconnectTimer(data.timeout_seconds || 60)
+                setDisconnectTimer(data.reconnect_timeout || 60)
               }
               break
               
@@ -624,17 +636,31 @@ function Game() {
         navigate(`/lobby/${id}`)
       }
       
-      // Aktualizuj stan głosowania
-      if (response?.votes) {
+      // Aktualizuj stan głosowania (nowy format)
+      if (response?.votes_stay || response?.votes_leave) {
         setReturnToLobbyVotes({
-          votes: response.votes,
-          totalPlayers: response.total_players,
-          readyPlayers: response.ready_players || response.votes
+          votesStay: response.votes_stay || [],
+          votesLeave: response.votes_leave || [],
+          totalPlayers: (response.votes_stay?.length || 0) + (response.votes_leave?.length || 0)
         })
       }
     } catch (err) {
       alert(err.response?.data?.detail || 'Błąd głosowania')
       setHasVotedReturnToLobby(false)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleLeaveToDashboard = async () => {
+    if (actionLoading) return
+    
+    setActionLoading(true)
+    try {
+      await gameAPI.leaveToDashboard(id)
+      navigate('/dashboard')
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Błąd wyjścia')
     } finally {
       setActionLoading(false)
     }
@@ -835,17 +861,29 @@ function Game() {
             {/* Status głosowania za powrotem do lobby */}
             {returnToLobbyVotes && (
               <div className="mb-4 p-3 bg-gray-800/50 rounded-lg">
-                <p className="text-sm text-gray-400 mb-2">Czekam na graczy...</p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {returnToLobbyVotes.votes.map((voter, idx) => (
-                    <span key={idx} className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
-                      ✓ {voter}
-                    </span>
-                  ))}
+                <p className="text-sm text-gray-400 mb-2">Decyzje graczy:</p>
+                <div className="space-y-2">
+                  {returnToLobbyVotes.votesStay?.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <span className="text-xs text-gray-500">Zostają:</span>
+                      {returnToLobbyVotes.votesStay.map((voter, idx) => (
+                        <span key={idx} className="px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+                          ✓ {voter}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {returnToLobbyVotes.votesLeave?.length > 0 && (
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <span className="text-xs text-gray-500">Wychodzą:</span>
+                      {returnToLobbyVotes.votesLeave.map((voter, idx) => (
+                        <span key={idx} className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full">
+                          ✗ {voter}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  {returnToLobbyVotes.votes.length} / {returnToLobbyVotes.totalPlayers} graczy
-                </p>
               </div>
             )}
             
@@ -859,13 +897,14 @@ function Game() {
                     : 'bg-teal-600 hover:bg-teal-700 text-white'
                 } disabled:cursor-not-allowed`}
               >
-                {actionLoading ? '...' : hasVotedReturnToLobby ? '✓ Czekam na innych' : '🔄 Powrót do lobby'}
+                {actionLoading ? '...' : hasVotedReturnToLobby ? '✓ Zostajesz w lobby' : '🔄 Powrót do lobby'}
               </button>
               <button
-                onClick={() => navigate('/dashboard')}
-                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-xl transition-all"
+                onClick={handleLeaveToDashboard}
+                disabled={actionLoading}
+                className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-xl transition-all disabled:opacity-50"
               >
-                Wyjść do Dashboard
+                {actionLoading ? '...' : '🚪 Wyjść'}
               </button>
             </div>
           </div>

@@ -14,9 +14,12 @@ function Navbar({ onLoginClick, onRegisterClick }) {
             <a href="#gry" className="text-gray-300 hover:text-white transition-colors">
               Gry
             </a>
-            <a href="#ranking" className="text-gray-300 hover:text-white transition-colors">
+            <button 
+              onClick={onLoginClick}
+              className="text-gray-300 hover:text-white transition-colors"
+            >
               Ranking
-            </a>
+            </button>
             <a href="/changelog" className="text-gray-300 hover:text-white transition-colors">
               Changelog
             </a>

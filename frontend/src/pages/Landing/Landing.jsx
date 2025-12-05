@@ -227,15 +227,9 @@ function Landing() {
             <img src="/icon.png" alt="Miedziowe Karty" className="w-8 h-8" />
             <span className="text-white font-bold text-xl">Miedziowe Karty</span>
           </div>
-          <p className="text-gray-400 text-sm mb-3">
+          <p className="text-gray-400 text-sm">
             Portal gier karcianych online. Graj, rywalizuj, rozwijaj się!
           </p>
-          <a 
-            href="/changelog" 
-            className="text-teal-400 hover:text-teal-300 text-sm transition-colors"
-          >
-            📋 Changelog (v1.0.0)
-          </a>
         </div>
       </footer>
 

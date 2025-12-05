@@ -2,6 +2,22 @@ import { Link } from 'react-router-dom'
 
 const CHANGELOG = [
   {
+    version: '1.0.1',
+    date: '5 grudnia 2024',
+    title: '🔧 Poprawki i ulepszenia',
+    changes: [
+      'Naprawiono wyświetlanie błędów logowania (błędne hasło, użytkownik nie istnieje)',
+      'Boty dodają się teraz na wybrany slot zamiast pierwszego wolnego',
+      'Nowy system powrotu do lobby po zakończeniu meczu - każdy gracz decyduje osobno',
+      'Możliwość dołączenia do gry którą opuściliśmy (60 sekund na powrót)',
+      'System heartbeat - dokładniejsze śledzenie statusów online/offline',
+      'Agresywniejsze czyszczenie nieaktywnych lobby (co 2 minuty)',
+      'Poprawiono linki w nawigacji strony powitalnej',
+      'Domyślna nazwa lobby przy tworzeniu gry',
+      'Naprawiono generowanie nazw gości',
+    ],
+  },
+  {
     version: '1.0.0',
     date: '5 grudnia 2024',
     title: '🎉 Uruchomienie Miedziowych Kart!',

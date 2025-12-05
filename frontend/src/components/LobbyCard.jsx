@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import useAuthStore from '../store/authStore'
 
 function LobbyCard({ lobby, onJoin, onRefresh }) {
   const [showPreview, setShowPreview] = useState(false)
+  const { user } = useAuthStore()
   
   const { id_gry, nazwa, opcje, slots, status_partii } = lobby
   
@@ -17,6 +19,12 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
   const maxPlayers = opcje?.max_graczy || lobby.max_graczy || 4
   const isFull = playerCount >= maxPlayers
   const isInGame = status_partii === 'W_GRZE' || status_partii === 'W_TRAKCIE'
+
+  // Sprawdź czy aktualny użytkownik jest w tej grze
+  const isUserInGame = slots?.some(s => 
+    s.typ === 'gracz' && 
+    (s.id_uzytkownika === user?.id || s.nazwa === user?.username)
+  ) || false
 
   // Get host
   const hostSlot = slots?.find(s => s.is_host)
@@ -44,13 +52,15 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
           
           {/* Status Badge */}
           <div className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-            isInGame 
-              ? 'bg-red-500/20 text-red-400'
-              : isFull
-                ? 'bg-yellow-500/20 text-yellow-400'
-                : 'bg-green-500/20 text-green-400'
+            isUserInGame
+              ? 'bg-green-500/20 text-green-400 animate-pulse'
+              : isInGame 
+                ? 'bg-red-500/20 text-red-400'
+                : isFull
+                  ? 'bg-yellow-500/20 text-yellow-400'
+                  : 'bg-green-500/20 text-green-400'
           }`}>
-            {isInGame ? 'W grze' : isFull ? 'Pełne' : 'Dostępne'}
+            {isUserInGame ? '🔄 Twoja gra' : isInGame ? 'W grze' : isFull ? 'Pełne' : 'Dostępne'}
           </div>
         </div>
 
@@ -102,7 +112,15 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
 
         {/* Actions */}
         <div className="flex gap-2">
-          {!isFull && !isInGame ? (
+          {isUserInGame ? (
+            // Użytkownik jest w tej grze - może wrócić
+            <button
+              onClick={onJoin}
+              className="flex-1 py-2 rounded-lg font-semibold transition-all bg-green-600 hover:bg-green-700 text-white animate-pulse"
+            >
+              🔄 Wróć do gry
+            </button>
+          ) : !isFull && !isInGame ? (
             // Można dołączyć
             <button
               onClick={onJoin}

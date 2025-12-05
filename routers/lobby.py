@@ -568,6 +568,7 @@ async def kick_player(
 @router.post("/{lobby_id}/add-bot")
 async def add_bot(
     lobby_id: str,
+    slot_number: Optional[int] = Query(None, description="Numer slotu (0-3), jeśli None to pierwszy wolny"),
     current_user: dict = Depends(get_current_user),
     redis: RedisService = Depends(get_redis)
 ):
@@ -576,6 +577,7 @@ async def add_bot(
     
     Args:
         lobby_id: ID lobby
+        slot_number: Opcjonalny numer slotu (0-3)
         current_user: Zalogowany użytkownik
         redis: Redis service
     
@@ -593,13 +595,32 @@ async def add_bot(
             detail="Lobby nie znalezione"
         )
     
-    # Znajdź pusty slot
     slots = lobby_data.get('slots', [])
+    
+    # Znajdź slot do dodania bota
     empty_slot = None
-    for slot in slots:
-        if slot['typ'] == 'pusty':
-            empty_slot = slot
-            break
+    
+    if slot_number is not None:
+        # Konkretny slot
+        if slot_number < 0 or slot_number >= len(slots):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nieprawidłowy numer slotu"
+            )
+        
+        if slots[slot_number]['typ'] != 'pusty':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Ten slot jest zajęty"
+            )
+        
+        empty_slot = slots[slot_number]
+    else:
+        # Pierwszy wolny slot
+        for slot in slots:
+            if slot['typ'] == 'pusty':
+                empty_slot = slot
+                break
     
     if not empty_slot:
         raise HTTPException(

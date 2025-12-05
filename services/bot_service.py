@@ -559,7 +559,7 @@ class BotService:
         await manager.broadcast_state_update(game_id)
     
     async def trigger_return_to_lobby_voting(self, game_id: str, redis: RedisService) -> None:
-        """Publiczna metoda wywoływana po zakończeniu meczu."""
+        """Publiczna metoda wywoływana po zakończeniu meczu - boty głosują za powrotem do lobby."""
         import random
         
         try:
@@ -576,50 +576,43 @@ class BotService:
             for gracz in state.gracze:
                 is_bot = await self._is_registered_bot_by_name(gracz.nazwa)
                 if is_bot:
-                    if random.random() < 0.25:
-                        delay = random.uniform(3.0, 6.0)
-                        await asyncio.sleep(delay)
+                    # Boty zawsze głosują za powrotem do lobby
+                    delay = random.uniform(2.0, 5.0)
+                    await asyncio.sleep(delay)
+                    
+                    votes_key = f"return_to_lobby_votes:{game_id}"
+                    votes_data = await redis.redis.get(votes_key)
+                    
+                    if votes_data:
+                        votes = json.loads(votes_data)
+                    else:
+                        votes = {'stay': [], 'leave': []}
+                    
+                    if gracz.nazwa not in votes['stay']:
+                        votes['stay'].append(gracz.nazwa)
+                        await redis.redis.set(votes_key, json.dumps(votes), ex=120)
                         
-                        votes_key = f"return_to_lobby_votes:{game_id}"
-                        votes_data = await redis.redis.get(votes_key)
+                        all_players = [
+                            s['nazwa'] for s in lobby_data.get('slots', []) 
+                            if s.get('typ') in ['gracz', 'bot'] and s.get('nazwa')
+                        ]
                         
-                        if votes_data:
-                            votes = json.loads(votes_data)
-                        else:
-                            votes = []
+                        await manager.broadcast(game_id, {
+                            'type': 'return_to_lobby_vote',
+                            'player': gracz.nazwa,
+                            'action': 'stay',
+                            'votes_stay': votes['stay'],
+                            'votes_leave': votes['leave'],
+                            'total_players': len(all_players)
+                        })
                         
-                        if gracz.nazwa not in votes:
-                            votes.append(gracz.nazwa)
-                            await redis.redis.set(votes_key, json.dumps(votes), ex=3600)
-                            
-                            all_players = [
-                                s['nazwa'] for s in lobby_data.get('slots', []) 
-                                if s.get('typ') in ['gracz', 'bot'] and s.get('nazwa')
-                            ]
-                            
-                            await manager.broadcast(game_id, {
-                                'type': 'return_to_lobby_vote',
-                                'player': gracz.nazwa,
-                                'votes': votes,
-                                'total_players': len(all_players),
-                                'ready_players': votes
-                            })
-                            
-                            if set(votes) >= set(all_players):
-                                await redis.redis.delete(votes_key)
-                                
-                                lobby_data['status_partii'] = 'LOBBY'
-                                for slot in lobby_data.get('slots', []):
-                                    if slot.get('typ') in ['gracz', 'bot']:
-                                        slot['ready'] = False
-                                
-                                await redis.save_lobby(game_id, lobby_data)
-                                await redis.redis.delete(f"game_engine:{game_id}")
-                                
-                                await manager.broadcast(game_id, {
-                                    'type': 'returned_to_lobby',
-                                    'lobby': lobby_data
-                                })
-                                return
+                        # Sprawdź czy wszyscy zdecydowali
+                        decided = set(votes['stay'] + votes['leave'])
+                        if decided >= set(all_players):
+                            # Finalizuj - importuj funkcję
+                            from routers.game import _finalize_lobby_return
+                            await _finalize_lobby_return(game_id, lobby_data, votes, redis)
+                            return
         except Exception as e:
+            print(f"⚠️ Błąd trigger_return_to_lobby_voting: {e}")
             pass

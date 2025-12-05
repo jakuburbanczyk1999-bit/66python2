@@ -142,11 +142,11 @@ function Lobby() {
     }
   }
 
-  const handleAddBotToSlot = async () => {
+  const handleAddBotToSlot = async (slotIndex) => {
     setActionLoading(true)
     setActiveSlotMenu(null)
     try {
-      await lobbyAPI.addBot(id)
+      await lobbyAPI.addBot(id, slotIndex)
       await loadLobby()
       await loadChat()
     } catch (err) {
@@ -397,7 +397,7 @@ function Lobby() {
                   onClick={() => handleSlotClick(index)}
                   onJoin={handleJoinSlot}
                   onChangeSlot={() => handleChangeSlot(index)}
-                  onAddBot={handleAddBotToSlot}
+                  onAddBot={() => handleAddBotToSlot(index)}
                   onKick={() => {
                     if (slot.typ === 'bot') {
                       handleKickBot(index)

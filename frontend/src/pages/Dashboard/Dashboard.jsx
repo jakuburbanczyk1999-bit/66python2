@@ -286,14 +286,30 @@ function Dashboard() {
               {/* Lobby Grid */}
               {!loading && lobbies.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {lobbies.map((lobby) => (
-                    <LobbyCard
-                      key={lobby.id_gry}
-                      lobby={lobby}
-                      onJoin={() => navigate(`/lobby/${lobby.id_gry}`)}
-                      onRefresh={() => loadLobbies()}
-                    />
-                  ))}
+                  {lobbies.map((lobby) => {
+                    const isInGame = lobby.status_partii === 'W_GRZE' || lobby.status_partii === 'W_TRAKCIE'
+                    const isUserInLobby = lobby.slots?.some(s => 
+                      s.typ === 'gracz' && 
+                      (s.id_uzytkownika === user?.id || s.nazwa === user?.username)
+                    )
+                    
+                    return (
+                      <LobbyCard
+                        key={lobby.id_gry}
+                        lobby={lobby}
+                        onJoin={() => {
+                          // Jeśli użytkownik jest w grze i gra trwa -> /game
+                          // W przeciwnym razie -> /lobby
+                          if (isUserInLobby && isInGame) {
+                            navigate(`/game/${lobby.id_gry}`)
+                          } else {
+                            navigate(`/lobby/${lobby.id_gry}`)
+                          }
+                        }}
+                        onRefresh={() => loadLobbies()}
+                      />
+                    )
+                  })}
                 </div>
               )}
             </>
