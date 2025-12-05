@@ -78,6 +78,22 @@ async def _delayed_bot_ready(lobby_id: str, bot_name: str, redis: RedisService):
         print(f"❌ Błąd delayed_bot_ready: {e}")
 
 # ============================================
+# HELPER - Update Last Activity
+# ============================================
+
+async def update_last_activity(lobby_id: str, lobby_data: dict, redis: RedisService):
+    """
+    Aktualizuj timestamp ostatniej aktywności w lobby
+    
+    Args:
+        lobby_id: ID lobby
+        lobby_data: Dane lobby
+        redis: Redis service
+    """
+    lobby_data['last_activity'] = time.time()
+    await redis.save_lobby(lobby_id, lobby_data)
+
+# ============================================
 # HELPER - Send System Message
 # ============================================
 
@@ -222,6 +238,10 @@ async def create_lobby(
     # System message
     await send_system_message(game_id, f"Lobby utworzone przez {current_user['username']}", redis)
     
+    # Aktualizuj last_activity
+    lobby_data['last_activity'] = time.time()
+    await redis.save_lobby(game_id, lobby_data)
+    
     print(f"✅ Lobby utworzone: {game_id} przez {current_user['username']}")
     
     return lobby_data
@@ -323,6 +343,9 @@ async def join_lobby(
     
     # System message
     await send_system_message(lobby_id, f"{current_user['username']} dołączył do lobby", redis)
+    
+    # Aktualizuj last_activity
+    await update_last_activity(lobby_id, lobby_data, redis)
     
     print(f"✅ {current_user['username']} dołączył do lobby {lobby_id}")
     
@@ -452,6 +475,9 @@ async def toggle_ready(
     # System message
     status_text = "gotowy" if player_slot['ready'] else "nie gotowy"
     await send_system_message(lobby_id, f"{current_user['username']} jest {status_text}", redis)
+    
+    # Aktualizuj last_activity
+    await update_last_activity(lobby_id, lobby_data, redis)
     
     print(f"✅ {current_user['username']} zmienił ready na {player_slot['ready']}")
     
@@ -1062,6 +1088,9 @@ async def send_chat_message(
     await redis.redis.rpush(chat_key, json.dumps(chat_message))
     await redis.redis.ltrim(chat_key, -100, -1)
     await redis.redis.expire(chat_key, 86400)
+    
+    # Aktualizuj last_activity
+    await update_last_activity(lobby_id, lobby_data, redis)
     
     print(f"💬 [{lobby_id}] {current_user['username']}: {msg_text}")
     

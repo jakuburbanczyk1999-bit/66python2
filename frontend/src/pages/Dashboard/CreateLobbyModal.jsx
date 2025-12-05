@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { lobbyAPI } from '../../services/api'
+import useAuthStore from '../../store/authStore'
 
 const GAME_MODES = {
   '66': {
@@ -19,7 +20,8 @@ const GAME_MODES = {
 }
 
 function CreateLobbyModal({ onClose, onSuccess }) {
-  const [nazwa, setNazwa] = useState('')
+  const { user } = useAuthStore()
+  const [nazwa, setNazwa] = useState(`Gra ${user?.username || 'gracza'}`)
   const [gameMode, setGameMode] = useState('66')
   const [maxGraczy, setMaxGraczy] = useState(4)
   const [haslo, setHaslo] = useState('')

@@ -11,14 +11,14 @@ function Navbar({ onLoginClick, onRegisterClick }) {
 
           {/* Menu - PO ŚRODKU */}
           <div className="hidden md:flex items-center gap-8 absolute left-1/2 transform -translate-x-1/2">
-            <a href="#zasady" className="text-gray-300 hover:text-white transition-colors">
-              Zasady
-            </a>
             <a href="#gry" className="text-gray-300 hover:text-white transition-colors">
               Gry
             </a>
             <a href="#ranking" className="text-gray-300 hover:text-white transition-colors">
               Ranking
+            </a>
+            <a href="/changelog" className="text-gray-300 hover:text-white transition-colors">
+              Changelog
             </a>
           </div>
 

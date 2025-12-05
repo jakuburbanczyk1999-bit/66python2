@@ -141,6 +141,14 @@ function Dashboard() {
             <span>📖</span>
             <span>Zasady</span>
           </button>
+
+          <button 
+            onClick={() => navigate('/changelog')}
+            className="w-full px-4 py-3 rounded-lg text-left text-gray-300 hover:bg-gray-700/50 transition-all mb-2 flex items-center gap-2"
+          >
+            <span>📋</span>
+            <span>Changelog</span>
+          </button>
         </nav>
 
         {/* Admin Panel Button - POPRAWIONA POZYCJA! */}

@@ -202,8 +202,8 @@ async def guest_login(
     Returns:
         AuthResponse: Token + guest info
     """
-    # Wygeneruj nazwę gościa jeśli nie podano
-    name = request.name or f"Guest_{random.randint(1000, 9999)}"
+    # Wygeneruj nazwę gościa jeśli nie podano lub pusta
+    name = (request.name and request.name.strip()) or f"Guest_{random.randint(1000, 9999)}"
     
     # Sprawdź czy nazwa jest zajęta (dla gości dodaj sufiks jeśli zajęta)
     result = await db.execute(
@@ -265,6 +265,96 @@ async def logout(
         "success": True,
         "message": "Wylogowano pomyślnie"
     }
+
+# ============================================
+# OFFLINE (przy zamknięciu karty)
+# ============================================
+
+class OfflineRequest(BaseModel):
+    """Request do ustawienia statusu offline"""
+    token: str
+
+@router.post("/offline")
+async def set_offline(
+    request: OfflineRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Ustaw status użytkownika na offline (wywoływane przez sendBeacon)
+    
+    Args:
+        request: Token użytkownika
+        db: Database session
+    
+    Returns:
+        dict: Success message
+    """
+    try:
+        # Znajdź user_id po tokenie
+        redis_client = get_redis_client()
+        user_id_str = await redis_client.get(f"token:{request.token}")
+        
+        if not user_id_str:
+            return {"success": False, "message": "Token nie znaleziony"}
+        
+        user_id = int(user_id_str)
+        
+        # Ustaw status na offline
+        result = await db.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if user:
+            user.status = 'offline'
+            await db.commit()
+            print(f"📴 Offline: {user.username} (ID: {user.id})")
+        
+        return {"success": True, "message": "Status ustawiony na offline"}
+        
+    except Exception as e:
+        print(f"❌ Błąd set_offline: {e}")
+        return {"success": False, "message": str(e)}
+
+# ============================================
+# HEARTBEAT (utrzymanie statusu online)
+# ============================================
+
+@router.post("/heartbeat")
+async def heartbeat(
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Heartbeat - utrzymuje status online i aktualizuje last_seen w Redis
+    
+    Args:
+        user: Current user (z dependency)
+        db: Database session
+    
+    Returns:
+        dict: Success message
+    """
+    try:
+        # Zapisz timestamp heartbeat w Redis (wygasa po 3 min)
+        redis_client = get_redis_client()
+        await redis_client.set(f"heartbeat:{user['id']}", "1", ex=180)  # 3 minuty
+        
+        # Aktualizuj status w bazie na online
+        result = await db.execute(
+            select(User).where(User.id == user['id'])
+        )
+        db_user = result.scalar_one_or_none()
+        
+        if db_user and db_user.status != 'online':
+            db_user.status = 'online'
+            await db.commit()
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"❌ Błąd heartbeat: {e}")
+        return {"success": False}
 
 # ============================================
 # ME (Current user info)

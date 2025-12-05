@@ -6,6 +6,7 @@ import Lobby from './pages/Lobby/Lobby'
 import Game from './pages/Game/Game'
 import Ranking from './pages/Ranking/Ranking'
 import Zasady from './pages/Zasady/Zasady'
+import Changelog from './pages/Changelog/Changelog'
 import ProtectedRoute from './components/ProtectedRoute'
 import PublicRoute from './components/PublicRoute'
 import AdminPanel from './pages/Admin/AdminPanel'
@@ -40,6 +41,62 @@ function App() {
 
     verifyToken()
   }, []) // Tylko przy pierwszym renderze
+
+  // Wylogowanie przy zamknięciu karty (status offline)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Użyj sendBeacon do wysłania requesta przed zamknięciem
+      const token = localStorage.getItem('auth-storage')
+      if (token) {
+        try {
+          const parsed = JSON.parse(token)
+          const accessToken = parsed?.state?.token
+          if (accessToken) {
+            // sendBeacon jest niezawodne przy zamykaniu karty
+            navigator.sendBeacon('/api/auth/offline', JSON.stringify({ token: accessToken }))
+          }
+        } catch (e) {
+          // Ignoruj błędy parsowania
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
+  // Heartbeat - utrzymuj status online
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const sendHeartbeat = async () => {
+      try {
+        const tokenStorage = localStorage.getItem('auth-storage')
+        if (tokenStorage) {
+          const parsed = JSON.parse(tokenStorage)
+          const accessToken = parsed?.state?.token
+          if (accessToken) {
+            await fetch('/api/auth/heartbeat', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              }
+            })
+          }
+        }
+      } catch (e) {
+        // Ignoruj błędy heartbeat
+      }
+    }
+
+    // Wyślij heartbeat od razu
+    sendHeartbeat()
+
+    // Potem co 60 sekund
+    const interval = setInterval(sendHeartbeat, 60000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
 
   // Pokaż loading podczas weryfikacji
   if (isVerifying) {
@@ -120,6 +177,9 @@ function App() {
             </ProtectedRoute>
           } 
         />
+
+        {/* Changelog - publiczny */}
+        <Route path="/changelog" element={<Changelog />} />
 
         {/* Fallback - 404 */}
         <Route 

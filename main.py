@@ -15,7 +15,7 @@ from services.redis_service import init_redis, close_redis
 from database import init_db
 
 # Import utils
-from utils.cleanup import setup_periodic_cleanup, stop_cleanup
+from utils.cleanup import setup_periodic_cleanup, stop_cleanup, setup_inactive_users_cleanup, stop_inactive_users_cleanup
 
 # Import logging config
 from logging_config import setup_logging
@@ -153,10 +153,11 @@ async def lifespan(app: FastAPI):
         raise
     
     # 3. Uruchomienie cleanup task
-    print("\n🧹 [3/4] Uruchamianie garbage collector...")
+    print("\n🧹 [3/5] Uruchamianie garbage collector...")
     try:
         setup_periodic_cleanup()
-        print("✅ Cleanup task uruchomiony!")
+        setup_inactive_users_cleanup()
+        print("✅ Cleanup tasks uruchomione!")
     except Exception as e:
         print(f"⚠️ OSTRZEŻENIE cleanup: {e}")
         # Nie przerywaj startu jeśli cleanup nie działa
@@ -212,9 +213,10 @@ async def lifespan(app: FastAPI):
         print(f"⚠️ Błąd zatrzymywania bot matchmaking: {e}")
     
     # 2. Zatrzymaj cleanup task
-    print("\n🧹 [2/3] Zatrzymywanie cleanup task...")
+    print("\n🧹 [2/3] Zatrzymywanie cleanup tasks...")
     try:
         await stop_cleanup()
+        await stop_inactive_users_cleanup()
         print("✅ Cleanup zatrzymany!")
     except Exception as e:
         print(f"⚠️ Błąd zatrzymywania cleanup: {e}")
