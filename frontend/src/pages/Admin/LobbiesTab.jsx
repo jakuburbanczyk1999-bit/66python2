@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import useAuthStore from '../../store/authStore'
 
-const API_URL = 'http://localhost:8000/api'
+const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api'
 
 function LobbiesTab() {
   const { token } = useAuthStore()

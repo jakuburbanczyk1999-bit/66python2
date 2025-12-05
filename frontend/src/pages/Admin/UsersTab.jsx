@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { adminAPI } from '../../services/api'
 import useAuthStore from '../../store/authStore'
 
-const API_URL = 'http://localhost:8000/api'
+const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api'
 
 function UsersTab() {
   const { token } = useAuthStore()
