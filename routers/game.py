@@ -519,6 +519,14 @@ async def vote_next_round(
                 lobby_data['status_partii'] = 'ZAKONCZONA'
                 await redis.save_lobby(game_id, lobby_data)
             
+            # === INKREMENTUJ LICZNIK ROZEGRANYCH GIER ===
+            try:
+                await redis.redis.incr("stats:total_games")
+                print(f"[📊 Stats] Rozegrano grę - inkrementacja total_games")
+            except Exception as stats_err:
+                print(f"[⚠️ Stats] Błąd inkrementacji: {stats_err}")
+            # === KONIEC INKREMENTACJI ===
+            
             # Pobierz stan dla gracza
             final_state = convert_enums_to_strings(engine.get_state_for_player(player_id))
             final_state['mecz_zakonczony'] = True

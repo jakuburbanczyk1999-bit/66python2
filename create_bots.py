@@ -45,17 +45,17 @@ BOTY_DO_STWORZENIA = [
     ("Khaos", "chaotic"),
     ("Krolwicz", "chaotic"),
     
+    # === COUNTER (kontruje przeciwników) ===
+    ("SiemaEniuu", "counter"),
+    ("Kaczorrr", "counter"),
+    
     # === NIE LUBIĘ PYTAĆ ===
     ("Ktopytal", "nie_lubie_pytac"),
-    ("NiePytamZ3", "nie_lubie_pytac"),
+    ("CoCoLubie", "nie_lubie_pytac"),
     
     # === HEURYSTYCZNY (prostszy, przewidywalny) ===
     ("Esssa", "heuristic"),
     ("67676767", "heuristic"),
-    
-    # === LOSOWY (dla zabawy/testów) ===
-    ("Test_bot1", "random"),
-    ("Test_bot2", "random"),
 ]
 
 

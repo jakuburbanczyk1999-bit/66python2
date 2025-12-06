@@ -390,44 +390,77 @@ async def health_check():
 @app.get("/api/stats", tags=["📊 Stats"])
 async def get_public_stats():
     """
-    Publiczne statystyki dla strony głównej
+    Publiczne statystyki dla strony głównej.
+    Liczy wszystkich zarejestrowanych graczy + gości online.
     """
     from services.redis_service import get_redis_client
     from database import async_sessionmaker, User
-    from sqlalchemy import select, func
+    from sqlalchemy import select, func, not_
+    import json
     
     try:
-        # Liczba zarejestrowanych użytkowników (bez gości)
-        active_players = 0
+        total_players = 0
         total_games = 0
         
-        async with async_sessionmaker() as session:
-            # Policz użytkowników (nie-gości)
-            query = select(func.count()).select_from(User).where(
-                ~User.username.like('Guest_%')
-            )
-            result = await session.execute(query)
-            active_players = result.scalar() or 0
+        redis = get_redis_client()
         
-        # Policz aktywne lobby w Redis
-        try:
-            redis = get_redis_client()
-            # Policz gry zakończone (można też dodać counter w Redis)
-            lobby_keys = await redis.keys("lobby:*")
-            active_lobbies = len(lobby_keys)
+        async with async_sessionmaker() as session:
+            # 1. Policz ZAREJESTROWANYCH użytkowników (nie-gości, nie-boty)
+            query_registered = select(func.count()).select_from(User).where(
+                not_(User.username.like('Guest_%'))
+            )
+            result_reg = await session.execute(query_registered)
+            registered_users = result_reg.scalar() or 0
             
-            # Total games - można przechowywać w Redis jako counter
+            # 2. Policz botów
+            query_all = select(User)
+            result_all = await session.execute(query_all)
+            all_users = result_all.scalars().all()
+            
+            bots_count = 0
+            for user in all_users:
+                try:
+                    if user.settings:
+                        settings = json.loads(user.settings)
+                        if settings.get('jest_botem'):
+                            bots_count += 1
+                except:
+                    pass
+            
+            # 3. Policz gości online (przez heartbeat)
+            heartbeat_keys = await redis.keys("heartbeat:*")
+            guests_online = 0
+            for key in heartbeat_keys:
+                key_str = key.decode() if isinstance(key, bytes) else key
+                # Format: heartbeat:user_id
+                if 'Guest_' in str(key_str):
+                    guests_online += 1
+            
+            # TOTAL: zarejestrowani (w tym boty) + goście online
+            # Ale zarejestrowani już zawierają botów, więc:
+            total_players = registered_users + guests_online
+        
+        # 4. Policz rozegrane gry (counter w Redis)
+        try:
             total_games_str = await redis.get("stats:total_games")
-            total_games = int(total_games_str) if total_games_str else active_lobbies * 2  # Szacunek
+            total_games = int(total_games_str) if total_games_str else 0
         except:
             total_games = 0
         
         return {
-            "activePlayers": active_players,
+            "activePlayers": total_players,
             "totalGames": total_games,
-            "availableGames": 1  # Na razie tylko 66
+            "availableGames": 1,  # Na razie tylko 66 (Tysiąc w przygotowaniu)
+            "details": {
+                "registered": registered_users - bots_count,
+                "bots": bots_count,
+                "guests_online": guests_online
+            }
         }
     except Exception as e:
+        print(f"Stats error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "activePlayers": 0,
             "totalGames": 0,

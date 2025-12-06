@@ -25,7 +25,8 @@ function CreateLobbyModal({ onClose, onSuccess }) {
   const [gameMode, setGameMode] = useState('66')
   const [maxGraczy, setMaxGraczy] = useState(4)
   const [haslo, setHaslo] = useState('')
-  const [rankingowa, setRankingowa] = useState(true)
+  const [casualMode, setCasualMode] = useState(false) // domyślnie rankingowa
+  const [isPrivate, setIsPrivate] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -54,8 +55,8 @@ function CreateLobbyModal({ onClose, onSuccess }) {
         nazwa: nazwa.trim(),
         typ_gry: gameMode,
         max_graczy: maxGraczy,
-        haslo: haslo.trim() || null,
-        rankingowa: rankingowa,
+        haslo: isPrivate ? (haslo.trim() || null) : null,
+        rankingowa: !casualMode, // odwrócona logika
       })
 
       console.log('✅ Lobby utworzone:', lobby)
@@ -182,44 +183,65 @@ function CreateLobbyModal({ onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Rankingowa */}
+          {/* Gra casual */}
           <div>
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
-                checked={rankingowa}
-                onChange={(e) => setRankingowa(e.target.checked)}
+                checked={casualMode}
+                onChange={(e) => setCasualMode(e.target.checked)}
                 disabled={loading}
                 className="w-5 h-5 rounded border-gray-600 text-teal-600 focus:ring-teal-500 focus:ring-offset-gray-800 bg-gray-700"
               />
               <div>
                 <div className="text-white font-semibold text-sm">
-                  🏆 Rozgrywka rankingowa
+                  ☕ Gra casual
                 </div>
                 <div className="text-xs text-gray-400">
-                  Wynik wpłynie na Twój ranking
+                  Bez wpływu na ranking, bez limitu czasowego
                 </div>
               </div>
             </label>
           </div>
 
-          {/* Hasło */}
-          <div>
-            <label className="block text-white font-semibold mb-2 text-sm">
-              Hasło (opcjonalnie)
+          {/* Gra prywatna */}
+          <div className="space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(e) => {
+                  setIsPrivate(e.target.checked)
+                  if (!e.target.checked) setHaslo('')
+                }}
+                disabled={loading}
+                className="w-5 h-5 rounded border-gray-600 text-teal-600 focus:ring-teal-500 focus:ring-offset-gray-800 bg-gray-700"
+              />
+              <div>
+                <div className="text-white font-semibold text-sm">
+                  🔒 Gra prywatna
+                </div>
+                <div className="text-xs text-gray-400">
+                  Tylko osoby z hasłem mogą dołączyć
+                </div>
+              </div>
             </label>
-            <input
-              type="password"
-              value={haslo}
-              onChange={(e) => setHaslo(e.target.value)}
-              placeholder="Zostaw puste dla publicznej gry"
-              disabled={loading}
-              maxLength={20}
-              className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-teal-500 disabled:opacity-50"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              🔒 Jeśli ustawisz hasło, tylko osoby z hasłem będą mogły dołączyć
-            </p>
+            
+            {/* Pole hasła - widoczne tylko gdy zaznaczono "Gra prywatna" */}
+            {isPrivate && (
+              <div className="ml-8 animate-slideDown">
+                <input
+                  type="password"
+                  value={haslo}
+                  onChange={(e) => setHaslo(e.target.value)}
+                  placeholder="Wpisz hasło do gry"
+                  disabled={loading}
+                  maxLength={20}
+                  className="w-full px-4 py-3 bg-gray-800/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-teal-500 disabled:opacity-50"
+                  autoFocus
+                />
+              </div>
+            )}
           </div>
 
           {/* Error */}

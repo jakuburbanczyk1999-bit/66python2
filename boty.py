@@ -133,6 +133,20 @@ BOT_PERSONALITIES = {
         loss_multiplier=0.5,  # Kompletnie ignoruje przegrane
     ),
     
+    # Counter - analizuje i kontruje przeciwników
+    # Lubi dawać lufy i kontry, czeka na błędy przeciwników
+    'counter': RewardModifiers(
+        normalna_mult=1.1,      # Preferuje grę normalną (bezpieczna)
+        gorsza_mult=0.9,        # Mniej skłonny do gorszej (ryzyko)
+        lepsza_mult=0.9,        # Mniej skłonny do lepszej (ryzyko)
+        bez_pytania_mult=0.8,   # Unika bez pytania
+        lufa_bonus=0.5,         # BARDZO lubi dawać lufy!
+        kontra_bonus=0.5,       # BARDZO lubi dawać kontry!
+        pas_bonus=0.15,         # Lubi pasować - czeka na błędy
+        win_multiplier=1.1,     # Ceni wygrane
+        loss_multiplier=0.85,   # Nie boi się przegranych (agresywny)
+    ),
+    
     # Nie lubię pytać - preferuje grę bez pytania
     'nie_lubie_pytac': RewardModifiers(
         bez_pytania_mult=2.0,
@@ -1477,11 +1491,11 @@ BOT_ALGORITHMS = {
     'lepsza_enjoyer': lambda: MCTS_Bot(personality='lepsza_enjoyer'),
     'beginner': lambda: MCTS_Bot(personality='beginner'),
     'chaotic': lambda: MCTS_Bot(personality='chaotic'),
+    'counter': lambda: MCTS_Bot(personality='counter'),
     'nie_lubie_pytac': lambda: MCTS_Bot(personality='nie_lubie_pytac'),
     
     # === INNE TYPY BOTÓW ===
     'heuristic': lambda: AdvancedHeuristicBot(),
-    'random': lambda: RandomBot(),
 }
 
 # Dostępne nazwy algorytmów (dla walidacji)
@@ -1521,6 +1535,10 @@ BOTY_DO_STWORZENIA = [
     ("Khaos", "chaotic"),
     ("Krolwicz", "chaotic"),
     
+    # === COUNTER (kontruje przeciwników) ===
+    ("Kontradmirał", "counter"),
+    ("LufaMaster", "counter"),
+    
     # === NIE LUBIĘ PYTAĆ ===
     ("Ktopytal", "nie_lubie_pytac"),
     ("NiePytamZ3", "nie_lubie_pytac"),
@@ -1528,14 +1546,10 @@ BOTY_DO_STWORZENIA = [
     # === HEURYSTYCZNY (prostszy, przewidywalny) ===
     ("Esssa", "heuristic"),
     ("67676767", "heuristic"),
-    
-    # === LOSOWY (dla zabawy) ===
-    ("Test_bot1", "random"),
-    ("Test_bot2", "random"),
 ]
 
 
-def stworz_bota(algorytm: str) -> Union[MCTS_Bot, AdvancedHeuristicBot, RandomBot, None]:
+def stworz_bota(algorytm: str) -> Union[MCTS_Bot, AdvancedHeuristicBot, None]:
     """
     Tworzy instancję bota na podstawie nazwy algorytmu.
     

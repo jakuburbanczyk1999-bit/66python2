@@ -7,11 +7,52 @@ import random
 import json
 import uuid
 import time
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, field
 
 from database import async_sessionmaker, User
 from sqlalchemy import select
+
+
+# ===========================================
+# KONFIGURACJA HARMONOGRAMU BOTÓW
+# ===========================================
+
+# Liczba aktywnych botów w zależności od pory dnia
+BOT_SCHEDULE = {
+    # Godzina (0-23): liczba aktywnych botów
+    0: 4,   # Północ - 4 boty
+    1: 4,
+    2: 4,
+    3: 4,
+    4: 4,
+    5: 4,
+    6: 8,   # Rano - 8 botów
+    7: 8,
+    8: 8,
+    9: 8,
+    10: 8,
+    11: 8,
+    12: 12,  # Po południu - 12 botów
+    13: 12,
+    14: 12,
+    15: 12,
+    16: 12,
+    17: 12,
+    18: 18,  # Wieczór - 18 botów (maksimum)
+    19: 18,
+    20: 18,
+    21: 18,
+    22: 12,  # Późny wieczór - 12 botów
+    23: 8,
+}
+
+# Interwał rotacji botów (w sekundach) - co 3 godziny
+ROTATION_INTERVAL = 3 * 60 * 60  # 3 godziny
+
+# Minimalna liczba botów zawsze aktywnych (nigdy nie wyłączaj wszystkich)
+MIN_ALWAYS_ACTIVE = 2
 
 
 @dataclass
@@ -36,6 +77,7 @@ class BotMatchmakingWorker:
     """
     Worker zarządzający autonomicznymi botami.
     Każdy bot działa jako osobny task z losowym interwałem.
+    Obsługuje harmonogram godzinowy i rotację botów.
     """
     
     def __init__(self):
@@ -50,6 +92,11 @@ class BotMatchmakingWorker:
         
         self.preferred_game_type: str = "66"
         self.preferred_players: int = 4
+        
+        # Harmonogram i rotacja
+        self.active_bot_ids: Set[int] = set()  # Aktualnie aktywne boty
+        self.rotation_task: Optional[asyncio.Task] = None
+        self.last_rotation_time: float = 0
     
     async def initialize(self, redis_service):
         """Inicjalizuj worker z Redis service"""
@@ -75,6 +122,108 @@ class BotMatchmakingWorker:
                         )
                 except:
                     pass
+    
+    # ===========================================
+    # HARMONOGRAM I ROTACJA BOTÓW
+    # ===========================================
+    
+    def _get_target_bot_count(self) -> int:
+        """Pobierz docelową liczbę botów na podstawie aktualnej godziny"""
+        current_hour = datetime.now().hour
+        target = BOT_SCHEDULE.get(current_hour, 8)
+        # Nie więcej niż mamy botów
+        return min(target, len(self.bots))
+    
+    def _select_bots_to_activate(self, count: int) -> List[int]:
+        """
+        Wybierz boty do aktywacji.
+        Priorytetyzuje boty, które nie są w grze.
+        Dodaje losowość dla różnorodności.
+        """
+        all_bot_ids = list(self.bots.keys())
+        
+        # Najpierw boty które NIE są w grze (można je wyłączyć/włączyć)
+        not_in_game = [bid for bid in all_bot_ids if not self.bots[bid].in_game]
+        in_game = [bid for bid in all_bot_ids if self.bots[bid].in_game]
+        
+        # Losowo przetasuj
+        random.shuffle(not_in_game)
+        random.shuffle(in_game)
+        
+        # Wybierz: najpierw te w grze (muszą być aktywne), potem losowe
+        selected = in_game.copy()
+        
+        # Dodaj z puli "nie w grze" aż do osiągnięcia limitu
+        for bid in not_in_game:
+            if len(selected) >= count:
+                break
+            selected.append(bid)
+        
+        return selected[:count]
+    
+    async def _apply_bot_schedule(self):
+        """
+        Zastosuj harmonogram - aktywuj/dezaktywuj boty.
+        Wywoływane przy starcie i co ROTATION_INTERVAL.
+        """
+        target_count = self._get_target_bot_count()
+        current_hour = datetime.now().hour
+        
+        # Wybierz boty do aktywacji
+        bots_to_activate = set(self._select_bots_to_activate(target_count))
+        
+        # Znajdź zmiany
+        to_start = bots_to_activate - self.active_bot_ids
+        to_stop = self.active_bot_ids - bots_to_activate
+        
+        # Nie zatrzymuj botów które są w grze
+        to_stop = {bid for bid in to_stop if not self.bots[bid].in_game}
+        
+        # Zatrzymaj nadmiarowe boty
+        for bot_id in to_stop:
+            if bot_id in self.bot_tasks:
+                self.bot_tasks[bot_id].cancel()
+                try:
+                    await self.bot_tasks[bot_id]
+                except asyncio.CancelledError:
+                    pass
+                del self.bot_tasks[bot_id]
+                self.bots[bot_id].is_active = False
+                print(f"🔴 [{self.bots[bot_id].username}] Dezaktywowany (harmonogram: {target_count} botów o {current_hour}:00)")
+        
+        # Uruchom nowe boty
+        for bot_id in to_start:
+            if bot_id not in self.bot_tasks:
+                bot = self.bots[bot_id]
+                bot.is_active = True
+                task = asyncio.create_task(self._bot_loop(bot))
+                self.bot_tasks[bot_id] = task
+                print(f"🟢 [{bot.username}] Aktywowany (harmonogram: {target_count} botów o {current_hour}:00)")
+        
+        # Aktualizuj set aktywnych
+        self.active_bot_ids = set(self.bot_tasks.keys())
+        self.last_rotation_time = time.time()
+        
+        print(f"📅 Harmonogram: {len(self.active_bot_ids)}/{len(self.bots)} botów aktywnych (cel: {target_count}, godzina: {current_hour}:00)")
+    
+    async def _rotation_loop(self):
+        """Pętla rotacji botów - wywoływana co ROTATION_INTERVAL"""
+        while self.is_running:
+            try:
+                # Czekaj do następnej rotacji
+                await asyncio.sleep(ROTATION_INTERVAL)
+                
+                if not self.is_running:
+                    break
+                
+                print(f"\n🔄 === ROTACJA BOTÓW ===")
+                await self._apply_bot_schedule()
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"❌ Błąd rotacji botów: {e}")
+                await asyncio.sleep(60)  # Czekaj minutę przed ponowną próbą
     
     async def _sync_bot_lobby_states(self):
         """Synchronizuj stan botów z Redis"""
@@ -127,7 +276,7 @@ class BotMatchmakingWorker:
             pass
     
     async def start(self):
-        """Uruchom wszystkie boty"""
+        """Uruchom system botów z harmonogramem"""
         if self.is_running:
             return
         
@@ -135,15 +284,28 @@ class BotMatchmakingWorker:
         
         self.is_running = True
         
-        for user_id, bot_config in self.bots.items():
-            if bot_config.is_active:
-                task = asyncio.create_task(self._bot_loop(bot_config))
-                self.bot_tasks[user_id] = task
+        # Zastosuj harmonogram zamiast uruchamiać wszystkie boty
+        print(f"\n🤖 === START SYSTEMU BOTÓW ===")
+        print(f"🤖 Załadowano {len(self.bots)} botów")
+        await self._apply_bot_schedule()
+        
+        # Uruchom pętlę rotacji
+        self.rotation_task = asyncio.create_task(self._rotation_loop())
     
     async def stop(self):
-        """Zatrzymaj wszystkie boty"""
+        """Zatrzymaj wszystkie boty i rotację"""
         self.is_running = False
         
+        # Zatrzymaj rotację
+        if self.rotation_task:
+            self.rotation_task.cancel()
+            try:
+                await self.rotation_task
+            except asyncio.CancelledError:
+                pass
+            self.rotation_task = None
+        
+        # Zatrzymaj wszystkie boty
         for user_id, task in self.bot_tasks.items():
             task.cancel()
             try:
@@ -152,6 +314,8 @@ class BotMatchmakingWorker:
                 pass
         
         self.bot_tasks.clear()
+        self.active_bot_ids.clear()
+        print("🛑 System botów zatrzymany")
     
     async def _bot_loop(self, bot: BotConfig):
         """Główna pętla pojedynczego bota"""
@@ -537,20 +701,35 @@ class BotMatchmakingWorker:
         self.matchmaking_enabled = enabled
     
     def set_bot_active(self, bot_username: str, active: bool) -> bool:
-        """Admin: Włącz/wyłącz konkretnego bota"""
+        """Admin: Włącz/wyłącz konkretnego bota (nie można wyłączyć podczas gry)"""
         for bot in self.bots.values():
             if bot.username == bot_username:
+                # Zabezpieczenie: nie wyłączaj bota który jest w grze
+                if not active and bot.in_game:
+                    print(f"⚠️ Nie można wyłączyć bota {bot_username} - jest w grze")
+                    return False
                 bot.is_active = active
                 return True
         return False
     
     def get_status(self) -> dict:
         """Admin: Pobierz status wszystkich botów"""
+        current_hour = datetime.now().hour
+        target_count = self._get_target_bot_count()
+        next_rotation = ROTATION_INTERVAL - (time.time() - self.last_rotation_time) if self.last_rotation_time else 0
+        
         return {
             "matchmaking_enabled": self.matchmaking_enabled,
             "is_running": self.is_running,
             "total_bots": len(self.bots),
+            "active_bots": len(self.active_bot_ids),
             "active_tasks": len(self.bot_tasks),
+            "schedule": {
+                "current_hour": current_hour,
+                "target_bots": target_count,
+                "next_rotation_in": f"{int(next_rotation // 60)}m {int(next_rotation % 60)}s" if next_rotation > 0 else "now",
+                "rotation_interval": f"{ROTATION_INTERVAL // 3600}h"
+            },
             "config": {
                 "min_interval": self.min_interval,
                 "max_interval": self.max_interval,
@@ -561,7 +740,7 @@ class BotMatchmakingWorker:
                 {
                     "username": bot.username,
                     "algorytm": bot.algorytm,
-                    "is_active": bot.is_active,
+                    "is_active": bot.user_id in self.active_bot_ids,
                     "in_game": bot.in_game,
                     "current_lobby": bot.current_lobby_id,
                     "interval": f"{bot.min_interval:.0f}-{bot.max_interval:.0f}s"

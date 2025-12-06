@@ -36,6 +36,17 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
 
   // Gracze w lobby
   const players = slots?.filter(s => s.typ !== 'pusty') || []
+  
+  // Drużyny dla gry 66 (4 gracze)
+  const isTysiac = gameType === 'tysiac'
+  const hasTeams = !isTysiac && maxPlayers === 4
+  
+  // Podział na drużyny: slot 0,2 = drużyna 1, slot 1,3 = drużyna 2
+  const team1 = hasTeams ? slots?.filter((s, idx) => s.typ !== 'pusty' && idx % 2 === 0) || [] : []
+  const team2 = hasTeams ? slots?.filter((s, idx) => s.typ !== 'pusty' && idx % 2 === 1) || [] : []
+  
+  // Punkty meczowe (jeśli gra w toku) - sprawdź różne ścieżki
+  const matchScore = lobby?.punkty_meczowe || lobby?.rozdanie?.punkty_meczowe || lobby?.game_state?.punkty_meczowe || null
 
   return (
     <>
@@ -188,55 +199,174 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
               </button>
             </div>
 
-            {/* Lista graczy */}
+            {/* Wynik meczu - jeśli gra w toku */}
+            {isInGame && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/30 rounded-xl">
+                <h3 className="text-sm font-semibold text-yellow-400 uppercase mb-3 text-center">
+                  🏆 Wynik meczu
+                </h3>
+                {hasTeams ? (
+                  // Wyświetl wynik drużynowy
+                  <div className="flex items-center justify-center gap-4">
+                    <div className="text-center">
+                      <div className="text-xs text-teal-400 mb-1">Drużyna 1</div>
+                      <div className="text-3xl font-bold text-white">
+                        {matchScore?.['Drużyna 1'] ?? matchScore?.['Team 1'] ?? 0}
+                      </div>
+                    </div>
+                    <div className="text-2xl text-gray-500">:</div>
+                    <div className="text-center">
+                      <div className="text-xs text-pink-400 mb-1">Drużyna 2</div>
+                      <div className="text-3xl font-bold text-white">
+                        {matchScore?.['Drużyna 2'] ?? matchScore?.['Team 2'] ?? 0}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Wyświetl wynik indywidualny (Tysiąc)
+                  <div className="space-y-2">
+                    {matchScore && Object.keys(matchScore).length > 0 ? (
+                      Object.entries(matchScore).map(([name, points]) => (
+                        <div key={name} className="flex justify-between items-center">
+                          <span className="text-gray-300">{name}</span>
+                          <span className="text-xl font-bold text-yellow-400">{points}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center text-gray-400">Gra rozpoczęta</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Lista graczy - z podziałem na drużyny */}
             <div className="mb-6">
               <h3 className="text-sm font-semibold text-gray-400 uppercase mb-3">
                 Gracze ({playerCount}/{maxPlayers})
               </h3>
-              <div className="space-y-2">
-                {players.map((player, idx) => (
-                  <div 
-                    key={idx}
-                    className={`flex items-center gap-3 p-3 rounded-lg ${
-                      player.typ === 'bot'
-                        ? 'bg-purple-500/10 border border-purple-500/30'
-                        : player.is_host
-                          ? 'bg-yellow-500/10 border border-yellow-500/30'
-                          : 'bg-gray-700/30 border border-gray-600/30'
-                    }`}
-                  >
-                    {/* Avatar */}
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
-                      player.typ === 'bot'
-                        ? 'bg-purple-500/30 text-purple-300'
-                        : 'bg-teal-500/30 text-teal-300'
-                    }`}>
-                      {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
+              
+              {hasTeams ? (
+                // Widok drużynowy
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Drużyna 1 */}
+                  <div>
+                    <div className="text-xs text-teal-400 font-semibold mb-2 flex items-center gap-1">
+                      <span className="w-2 h-2 bg-teal-400 rounded-full"></span>
+                      Drużyna 1
                     </div>
-                    
-                    {/* Info */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white">{player.nazwa}</span>
-                        {player.is_host && (
-                          <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
-                            👑 Host
-                          </span>
-                        )}
-                        {player.typ === 'bot' && (
-                          <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">
-                            Bot
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        Slot {player.numer_gracza + 1}
-                        {player.ready && <span className="text-green-400 ml-2">✓ Gotowy</span>}
-                      </div>
+                    <div className="space-y-2">
+                      {team1.length > 0 ? team1.map((player, idx) => (
+                        <div 
+                          key={idx}
+                          className={`flex items-center gap-2 p-2 rounded-lg border ${
+                            player.typ === 'bot'
+                              ? 'bg-purple-500/10 border-purple-500/30'
+                              : player.is_host
+                                ? 'bg-yellow-500/10 border-yellow-500/30'
+                                : 'bg-teal-500/10 border-teal-500/30'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                            player.typ === 'bot' ? 'bg-purple-500/30 text-purple-300' : 'bg-teal-500/30 text-teal-300'
+                          }`}>
+                            {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-white text-sm truncate">{player.nazwa}</div>
+                            <div className="text-xs text-gray-500 flex items-center gap-1">
+                              {player.is_host && <span className="text-yellow-400">👑</span>}
+                              {player.typ === 'bot' && <span className="text-purple-400">Bot</span>}
+                              {!isInGame && player.ready && <span className="text-green-400">✓</span>}
+                            </div>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="text-gray-500 text-sm text-center py-2">Brak graczy</div>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
+                  
+                  {/* Drużyna 2 */}
+                  <div>
+                    <div className="text-xs text-pink-400 font-semibold mb-2 flex items-center gap-1">
+                      <span className="w-2 h-2 bg-pink-400 rounded-full"></span>
+                      Drużyna 2
+                    </div>
+                    <div className="space-y-2">
+                      {team2.length > 0 ? team2.map((player, idx) => (
+                        <div 
+                          key={idx}
+                          className={`flex items-center gap-2 p-2 rounded-lg border ${
+                            player.typ === 'bot'
+                              ? 'bg-purple-500/10 border-purple-500/30'
+                              : player.is_host
+                                ? 'bg-yellow-500/10 border-yellow-500/30'
+                                : 'bg-pink-500/10 border-pink-500/30'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                            player.typ === 'bot' ? 'bg-purple-500/30 text-purple-300' : 'bg-pink-500/30 text-pink-300'
+                          }`}>
+                            {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-white text-sm truncate">{player.nazwa}</div>
+                            <div className="text-xs text-gray-500 flex items-center gap-1">
+                              {player.is_host && <span className="text-yellow-400">👑</span>}
+                              {player.typ === 'bot' && <span className="text-purple-400">Bot</span>}
+                              {!isInGame && player.ready && <span className="text-green-400">✓</span>}
+                            </div>
+                          </div>
+                        </div>
+                      )) : (
+                        <div className="text-gray-500 text-sm text-center py-2">Brak graczy</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                // Widok standardowy (bez drużyn)
+                <div className="space-y-2">
+                  {players.map((player, idx) => (
+                    <div 
+                      key={idx}
+                      className={`flex items-center gap-3 p-3 rounded-lg ${
+                        player.typ === 'bot'
+                          ? 'bg-purple-500/10 border border-purple-500/30'
+                          : player.is_host
+                            ? 'bg-yellow-500/10 border border-yellow-500/30'
+                            : 'bg-gray-700/30 border border-gray-600/30'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${
+                        player.typ === 'bot' ? 'bg-purple-500/30 text-purple-300' : 'bg-teal-500/30 text-teal-300'
+                      }`}>
+                        {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{player.nazwa}</span>
+                          {player.is_host && (
+                            <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
+                              👑 Host
+                            </span>
+                          )}
+                          {player.typ === 'bot' && (
+                            <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">
+                              Bot
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Slot {player.numer_gracza + 1}
+                          {!isInGame && player.ready && <span className="text-green-400 ml-2">✓ Gotowy</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Info o grze */}

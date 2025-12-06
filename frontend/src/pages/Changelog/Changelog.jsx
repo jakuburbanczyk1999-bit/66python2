@@ -2,6 +2,19 @@ import { Link } from 'react-router-dom'
 
 const CHANGELOG = [
   {
+    version: '1.0.2',
+    date: '6 grudnia 2024',
+    title: '🎮 Ulepszenia UI i statystyk',
+    changes: [
+      'Nowy checkbox "Gra casual" - rozgrywki bez wpływu na ranking',
+      'Nowy checkbox "Gra prywatna" - możliwość ustawienia hasła do lobby',
+      'Podgląd gry w toku pokazuje aktualny wynik meczu',
+      'Podgląd gry 4-osobowej pokazuje podział na drużyny',
+      'Poprawiono licznik aktywnych graczy na stronie głównej',
+      'Naprawiono zliczanie rozegranych gier w statystykach',
+    ],
+  },
+  {
     version: '1.0.1',
     date: '5 grudnia 2024',
     title: '🔧 Poprawki i ulepszenia',
