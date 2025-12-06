@@ -80,6 +80,30 @@ class GameService:
         
         print(f"[GameService] Silnik utworzony, faza: {engine.game_state.faza}")
         
+        # === SYNCHRONIZUJ PUNKTY MECZOWE DO LOBBY ===
+        try:
+            punkty_meczowe = {}
+            if game_type == 'tysiac' or game_type == '1000':
+                for gracz in engine.game_state.gracze:
+                    if hasattr(gracz, 'punkty_meczu'):
+                        punkty_meczowe[gracz.nazwa] = gracz.punkty_meczu
+            else:
+                # 66 - drużyny lub gracze
+                if hasattr(engine.game_state, 'druzyny') and engine.game_state.druzyny:
+                    for druzyna in engine.game_state.druzyny:
+                        if hasattr(druzyna, 'punkty_meczu'):
+                            punkty_meczowe[druzyna.nazwa] = druzyna.punkty_meczu
+                elif hasattr(engine.game_state, 'gracze'):
+                    for gracz in engine.game_state.gracze:
+                        if hasattr(gracz, 'punkty_meczu'):
+                            punkty_meczowe[gracz.nazwa] = gracz.punkty_meczu
+            
+            lobby_data['punkty_meczowe'] = punkty_meczowe
+            await redis.save_lobby(lobby_id, lobby_data)
+        except Exception as e:
+            print(f"[GameService] ⚠️ Błąd synchronizacji punktów: {e}")
+        # === KONIEC SYNCHRONIZACJI ===
+        
         # Auto-wykonaj akcje botów jeśli bot ma turę
         await self.bot_service.process_bot_actions(lobby_id, engine, redis)
         

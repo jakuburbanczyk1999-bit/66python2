@@ -6,8 +6,7 @@ const GAME_MODES = {
   '66': {
     name: 'Gra w 66',
     icon: '🃏',
-    players: [4],
-    disabledPlayers: [3], // 3-osobowa wkrótce
+    players: [3, 4],
     description: 'Klasyczna gra karciana',
   },
   'tysiac': {

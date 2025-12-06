@@ -52,8 +52,12 @@ function App() {
           const parsed = JSON.parse(token)
           const accessToken = parsed?.state?.token
           if (accessToken) {
-            // sendBeacon jest niezawodne przy zamykaniu karty
-            navigator.sendBeacon('/api/auth/offline', JSON.stringify({ token: accessToken }))
+            // sendBeacon wymaga Blob z odpowiednim Content-Type dla JSON
+            const blob = new Blob(
+              [JSON.stringify({ token: accessToken })],
+              { type: 'application/json' }
+            )
+            navigator.sendBeacon('/api/auth/offline', blob)
           }
         } catch (e) {
           // Ignoruj błędy parsowania

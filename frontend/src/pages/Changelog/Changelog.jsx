@@ -2,6 +2,16 @@ import { Link } from 'react-router-dom'
 
 const CHANGELOG = [
   {
+    version: '1.1.0',
+    date: '6 grudnia 2024',
+    title: '🎲 Tryb 3-osobowy i poprawki',
+    changes: [
+      'Nowy tryb gry: 66 dla 3 graczy',
+      'Naprawiono wyświetlanie wyniku w podglądzie gry w toku',
+      'Synchronizacja punktów meczowych w czasie rzeczywistym',
+    ],
+  },
+  {
     version: '1.0.2',
     date: '6 grudnia 2024',
     title: '🎮 Ulepszenia UI i statystyk',

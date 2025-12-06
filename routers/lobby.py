@@ -177,7 +177,7 @@ async def create_lobby(
                 detail="Liczba graczy w Tysiącu musi być 2, 3 lub 4"
             )
     else:  # 66
-        if request.max_graczy not in [3, 4]:  
+        if request.max_graczy not in [3, 4]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Liczba graczy w 66 musi być 3 lub 4"

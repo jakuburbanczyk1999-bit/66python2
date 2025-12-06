@@ -46,7 +46,7 @@ function RoundSummaryTysiac({
   // FAZA 1: Musiki
   if (showMusiks && gameState?.tryb === '2p' && (musik1.length > 0 || musik2.length > 0)) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-[3rem] z-50">
+      <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-[100]">
         <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 max-w-2xl w-full mx-4 border-2 border-yellow-500/30 shadow-2xl">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-white mb-4">
@@ -98,14 +98,14 @@ function RoundSummaryTysiac({
   // FAZA 2: Wyniki
   if (!summary) {
     return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-[3rem] z-50">
+      <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-[100]">
         <div className="text-white text-xl">Ładowanie wyników...</div>
       </div>
     )
   }
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-[3rem] z-50">
+    <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm z-[100]">
       <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-8 max-w-2xl w-full mx-4 border-2 border-yellow-500/30 shadow-2xl">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-white mb-6">

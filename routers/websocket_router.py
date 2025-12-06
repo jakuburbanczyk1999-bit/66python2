@@ -75,6 +75,10 @@ class ConnectionManager:
             
             if was_disconnected:
                 await redis.redis.delete(disconnect_key)
+                
+                # Anuluj task timeout
+                cancel_disconnect_timeout(game_id, player_id)
+                
                 print(f"✅ WebSocket: {player_id} wrócił do gry {game_id} (rejoin)")
                 
                 # Broadcast info o powrocie
@@ -278,30 +282,46 @@ manager = ConnectionManager()
 # DISCONNECT TIMEOUT HANDLER
 # ============================================
 
-async def _handle_disconnect_timeout(game_id: str, player_id: str, redis: RedisService):
+# Globalna lista aktywnych tasków timeout (żeby nie zostały garbage collected)
+_disconnect_timeout_tasks: Dict[str, asyncio.Task] = {}
+
+async def _handle_disconnect_timeout(game_id: str, player_id: str):
     """
     Obsługa timeout po rozłączeniu gracza.
     Jeśli gracz nie wróci w ciągu 60 sekund, przegrywa grę.
     """
-    await asyncio.sleep(60)  # Czekaj 60 sekund
+    task_key = f"{game_id}:{player_id}"
     
     try:
-        # Sprawdź czy gracz wrócił (klucz został usunięty)
-        disconnect_key = f"disconnected:{game_id}:{player_id}"
-        still_disconnected = await redis.redis.get(disconnect_key)
+        print(f"⏳ Timeout task dla {player_id} w grze {game_id} - czekam 60s...")
+        await asyncio.sleep(60)  # Czekaj 60 sekund
+        print(f"⏰ Timeout minął dla {player_id} w grze {game_id} - sprawdzam status...")
         
-        if not still_disconnected:
-            # Gracz wrócił - wszystko OK
-            print(f"✅ Gracz {player_id} wrócił do gry {game_id}")
+        # Nowa instancja Redis (stara mogła zostać zamknięta)
+        redis = RedisService()
+        
+        # Sprawdź czy klucz nadal istnieje (gracz nie wrócił)
+        disconnect_key = f"disconnected:{game_id}:{player_id}"
+        disconnect_timestamp = await redis.redis.get(disconnect_key)
+        
+        print(f"🔍 Klucz {disconnect_key} = {disconnect_timestamp}")
+        
+        if not disconnect_timestamp:
+            # Klucz nie istnieje = gracz wrócił (klucz został usunięty przy rejoin)
+            print(f"✅ Gracz {player_id} wrócił do gry {game_id} (klucz usunięty = rejoin)")
             return
         
-        # Gracz nie wrócił - sprawdź czy gra nadal trwa
+        # Sprawdź czy gra nadal trwa
         lobby_data = await redis.get_lobby(game_id)
+        print(f"🔍 Lobby status = {lobby_data.get('status_partii') if lobby_data else 'BRAK'}")
+        
         if not lobby_data or lobby_data.get('status_partii') not in ['W_GRZE', 'W_TRAKCIE']:
             # Gra już się skończyła
+            print(f"ℹ️ Gra {game_id} już nie jest aktywna - pomijam forfeit")
+            await redis.redis.delete(disconnect_key)
             return
         
-        print(f"❌ Gracz {player_id} nie wrócił w ciągu 60s - przegrywa grę {game_id}")
+        print(f"❌ Gracz {player_id} nie wrócił w ciągu 60s - walkower w grze {game_id}")
         
         # Usuń klucz disconnect
         await redis.redis.delete(disconnect_key)
@@ -309,6 +329,8 @@ async def _handle_disconnect_timeout(game_id: str, player_id: str, redis: RedisS
         # === FORFEIT - Gracz przegrywa ===
         engine = await redis.get_game_engine(game_id)
         
+        # Znajdź zwycięzców (wszyscy oprócz gracza który wyszedł)
+        winners = []
         if engine:
             # Ustaw fazę na ZAKONCZONE i oznacz przegranego
             from engines.tysiac_engine import TysiacEngine
@@ -329,24 +351,44 @@ async def _handle_disconnect_timeout(game_id: str, player_id: str, redis: RedisS
             engine.game_state.podsumowanie['forfeit_player'] = player_id
             engine.game_state.podsumowanie['forfeit_reason'] = 'Przekroczono czas na powrót'
             
+            # Pobierz listę zwycięzców
+            for gracz in engine.game_state.gracze:
+                if gracz.nazwa != player_id:
+                    winners.append(gracz.nazwa)
+            
             await redis.save_game_engine(game_id, engine)
         
         # Zmień status lobby
         lobby_data['status_partii'] = 'ZAKONCZONA'
         await redis.save_lobby(game_id, lobby_data)
         
-        # Broadcast końca gry
+        # Broadcast końca gry - użyj game_forfeit (frontend tego oczekuje)
         await manager.broadcast(game_id, {
-            'type': 'game_ended',
-            'reason': 'forfeit',
-            'forfeit_player': player_id,
-            'message': f'{player_id} przegrał przez opuszczenie gry'
+            'type': 'game_forfeit',
+            'disconnected_player': player_id,
+            'winners': winners,
+            'reason': 'Przekroczono czas na powrót'
         })
         
+    except asyncio.CancelledError:
+        print(f"ℹ️ Task timeout dla {player_id} w grze {game_id} został anulowany")
     except Exception as e:
         print(f"❌ Błąd _handle_disconnect_timeout: {e}")
         import traceback
         traceback.print_exc()
+    finally:
+        # Usuń task z globalnej listy
+        if task_key in _disconnect_timeout_tasks:
+            del _disconnect_timeout_tasks[task_key]
+
+
+def cancel_disconnect_timeout(game_id: str, player_id: str):
+    """Anuluj task timeout dla gracza (gdy wraca do gry)."""
+    task_key = f"{game_id}:{player_id}"
+    if task_key in _disconnect_timeout_tasks:
+        _disconnect_timeout_tasks[task_key].cancel()
+        del _disconnect_timeout_tasks[task_key]
+        print(f"ℹ️ Anulowano timeout dla {player_id} w grze {game_id}")
 
 # ============================================
 # ROUTER
@@ -438,11 +480,10 @@ async def websocket_endpoint(
             # Tylko jeśli gra jest w trakcie
             if lobby_data and lobby_data.get('status_partii') in ['W_GRZE', 'W_TRAKCIE']:
                 import time
-                import json
                 
-                # Zapisz timestamp opuszczenia (60 sekund na powrót)
+                # Zapisz timestamp opuszczenia (90 sekund TTL - więcej niż timeout 60s)
                 disconnect_key = f"disconnected:{game_id}:{player_id}"
-                await redis.redis.set(disconnect_key, str(time.time()), ex=60)
+                await redis.redis.set(disconnect_key, str(time.time()), ex=90)
                 
                 print(f"📴 Gracz {player_id} opuścił grę {game_id} - ma 60s na powrót")
                 
@@ -453,10 +494,12 @@ async def websocket_endpoint(
                     'reconnect_timeout': 60
                 })
                 
-                # Uruchom task który sprawdzi po 60s
-                asyncio.create_task(
-                    _handle_disconnect_timeout(game_id, player_id, redis)
+                # Uruchom task który sprawdzi po 60s (zapisz w globalnej liście)
+                task_key = f"{game_id}:{player_id}"
+                task = asyncio.create_task(
+                    _handle_disconnect_timeout(game_id, player_id)
                 )
+                _disconnect_timeout_tasks[task_key] = task
             else:
                 # Gra nie jest w trakcie - zwykłe rozłączenie
                 await manager.broadcast(game_id, {

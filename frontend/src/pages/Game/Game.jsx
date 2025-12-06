@@ -61,6 +61,8 @@ function Game() {
   const heartbeatIntervalRef = useRef(null)
   const isMountedRef = useRef(true)
   const isConnectingRef = useRef(false)
+  const [wsConnected, setWsConnected] = useState(false)
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0)
 
   // ============================================
   // LOAD GAME STATE
@@ -133,9 +135,24 @@ function Game() {
       return
     }
     
-    const relativePos = (playerIndex - myIndex + 4) % 4
-    const positions = ['bottom', 'left', 'top', 'right']
-    const position = positions[relativePos]
+    const numPlayers = playersList.length
+    const relativePos = (playerIndex - myIndex + numPlayers) % numPlayers
+    
+    // Pozycje zależne od liczby graczy
+    let position = 'bottom'
+    if (numPlayers === 2) {
+      // 2 graczy: ja (dół) + przeciwnik (góra)
+      const positions2p = ['bottom', 'top']
+      position = positions2p[relativePos] || 'bottom'
+    } else if (numPlayers === 3) {
+      // 3 graczy: ja (dół) + lewy + prawy
+      const positions3p = ['bottom', 'left', 'right']
+      position = positions3p[relativePos] || 'bottom'
+    } else {
+      // 4 graczy: ja (dół) + lewy + góra + prawy
+      const positions4p = ['bottom', 'left', 'top', 'right']
+      position = positions4p[relativePos] || 'bottom'
+    }
     
     // Dodaj dymek
     const bubbleId = Date.now() + Math.random()
@@ -184,6 +201,8 @@ function Game() {
       ws.onopen = () => {
         console.log('WebSocket: Połączony')
         isConnectingRef.current = false
+        setWsConnected(true)
+        setWsReconnectAttempts(0)
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current)
           reconnectTimeoutRef.current = null
@@ -352,21 +371,25 @@ function Game() {
       ws.onerror = (error) => {
         console.error('WebSocket: Błąd połączenia:', error)
         isConnectingRef.current = false
+        setWsConnected(false)
       }
       
       ws.onclose = (event) => {
         console.log('WebSocket: Rozłączony (kod:', event.code, ')')
         wsRef.current = null
         isConnectingRef.current = false
+        setWsConnected(false)
         
         // Reconnect tylko jeśli komponent jest zamontowany i nie było to zamierzone zamknięcie
         if (isMountedRef.current && event.code !== 1000) {
-          console.log('WebSocket: Ponowne łączenie za 3s...')
+          setWsReconnectAttempts(prev => prev + 1)
+          const delay = Math.min(3000 * Math.pow(1.5, wsReconnectAttempts), 30000) // exponential backoff, max 30s
+          console.log(`WebSocket: Ponowne łączenie za ${Math.round(delay/1000)}s... (próba ${wsReconnectAttempts + 1})`)
           reconnectTimeoutRef.current = setTimeout(() => {
             if (isMountedRef.current) {
               connectWebSocket()
             }
-          }, 3000)
+          }, delay)
         }
       }
       
@@ -375,6 +398,17 @@ function Game() {
       console.error('WebSocket: Błąd inicjalizacji:', err)
       isConnectingRef.current = false
     }
+  }
+  
+  const manualReconnectWebSocket = () => {
+    console.log('WebSocket: Ręczne ponowne łączenie...')
+    setWsReconnectAttempts(0)
+    disconnectWebSocket()
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        connectWebSocket()
+      }
+    }, 500)
   }
   
   const disconnectWebSocket = () => {
@@ -762,9 +796,27 @@ function Game() {
     return players[targetIndex]
   }
 
-  const leftOpponent = isTysiac && players.length === 2 ? null : getOpponentAtPosition(1)
-  const topOpponent = isTysiac && players.length === 2 ? players.find(p => p.name !== user?.username) || null : getOpponentAtPosition(2)
-  const rightOpponent = isTysiac && players.length === 2 ? null : getOpponentAtPosition(3)
+  // Logika pozycjonowania zależna od liczby graczy:
+  // 2 graczy: ja (dół) + przeciwnik (góra)
+  // 3 graczy: ja (dół) + lewy + prawy (bez góry!)
+  // 4 graczy: ja (dół) + lewy + góra + prawy
+  let leftOpponent = null
+  let topOpponent = null  
+  let rightOpponent = null
+  
+  if (players.length === 2) {
+    // Tysiąc 2p lub inne 2-osobowe
+    topOpponent = players.find(p => p.name !== user?.username) || null
+  } else if (players.length === 3) {
+    // 3-osobowe (66 lub Tysiąc) - lewy i prawy, BEZ góry
+    leftOpponent = getOpponentAtPosition(1)
+    rightOpponent = getOpponentAtPosition(2)
+  } else if (players.length === 4) {
+    // 4-osobowe - pełny układ
+    leftOpponent = getOpponentAtPosition(1)
+    topOpponent = getOpponentAtPosition(2)
+    rightOpponent = getOpponentAtPosition(3)
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1a2736] via-[#1e3a52] to-[#1a2736] flex flex-col">
@@ -907,6 +959,29 @@ function Game() {
                 {actionLoading ? '...' : '🚪 Wyjść'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER BRAKU POŁĄCZENIA WEBSOCKET */}
+      {!wsConnected && !loading && (
+        <div className="bg-orange-500/20 border-b border-orange-500/50 p-2">
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-xl animate-pulse">⚠️</span>
+            <div className="text-center">
+              <p className="text-orange-300 font-semibold text-sm">
+                Brak połączenia WebSocket
+              </p>
+              <p className="text-orange-200 text-xs">
+                Gra może działać wolniej. {wsReconnectAttempts > 0 && `Próba połączenia #${wsReconnectAttempts}...`}
+              </p>
+            </div>
+            <button
+              onClick={manualReconnectWebSocket}
+              className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold rounded-lg transition-all"
+            >
+              🔄 Połącz
+            </button>
           </div>
         </div>
       )}
@@ -1303,21 +1378,30 @@ function Game() {
                         ? (playerIndex - myIndex + players.length) % players.length 
                         : 0
                       
-                      // Dla trybu 2p Tysiąc - tylko góra i dół
+                      // Pozycje kart na stole zależne od liczby graczy
                       let positionClass = ''
-                      if (isTysiac && players.length === 2) {
+                      if (players.length === 2) {
+                        // 2 graczy: dół i góra
                         positionClass = relativePos === 0 
                           ? 'bottom-[30%] left-1/2 -translate-x-1/2' 
                           : 'top-[30%] left-1/2 -translate-x-1/2'
+                      } else if (players.length === 3) {
+                        // 3 graczy: dół, lewy, prawy (BEZ góry!)
+                        const positions3p = [
+                          'bottom-[25%] left-1/2 -translate-x-1/2',  // ja (dół)
+                          'left-[25%] top-1/2 -translate-y-1/2',     // lewy
+                          'right-[25%] top-1/2 -translate-y-1/2'     // prawy
+                        ]
+                        positionClass = positions3p[relativePos] || positions3p[0]
                       } else {
-                        // Dla 3p/4p - wszystkie 4 kierunki, bliżej środka
-                        const positions = [
+                        // 4 graczy: dół, lewy, góra, prawy
+                        const positions4p = [
                           'bottom-[25%] left-1/2 -translate-x-1/2',  // ja (dół)
                           'left-[25%] top-1/2 -translate-y-1/2',     // lewy
                           'top-[25%] left-1/2 -translate-x-1/2',     // góra
                           'right-[25%] top-1/2 -translate-y-1/2'     // prawy
                         ]
-                        positionClass = positions[relativePos] || positions[0]
+                        positionClass = positions4p[relativePos] || positions4p[0]
                       }
                       
                       return (
@@ -1349,6 +1433,8 @@ function Game() {
                       onNextRound={handleNextRound} 
                       loading={actionLoading}
                       myTeam={myTeam}
+                      myName={user?.username}
+                      playerCount={players.length}
                       hasVoted={hasVotedNextRound}
                       votes={nextRoundVotes}
                     />
@@ -1358,7 +1444,7 @@ function Game() {
             </div>
 
             {/* MOJA RĘKA - DÓŁ */}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full">
+            <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-full ${isRoundOver ? 'pointer-events-none' : ''}`}>
               {/* Informacja o oddawaniu kart w trybie 2p */}
               {isTysiac && players.length === 2 && currentPhase === 'WYMIANA_MUSZKU' && gameState?.musik_odkryty && isMyTurn && (
                 <div className="text-center mb-3">
@@ -1531,42 +1617,42 @@ function Game() {
                 </>
               )}
               
-              {!isTysiac && Object.keys(roundPoints).length > 0 && currentContract !== 'LEPSZA' && currentContract !== 'GORSZA' && (
+              {/* Punkty w rozdaniu - wyświetlaj dla wszystkich typów gier */}
+              {Object.keys(roundPoints).length > 0 && currentContract !== 'LEPSZA' && currentContract !== 'GORSZA' && (
                 <div className="mt-2 pt-2 border-t border-gray-700/30">
                   <p className="text-xs text-gray-500 uppercase mb-1.5">Punkty w rozdaniu</p>
-                  {(() => {
-                    const teams = Object.entries(roundPoints);
-                    if (teams.length === 2) {
-                      return (
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-teal-400 font-semibold">{teams[0][0]}</span>
-                          <span className={`font-bold ${
-                            teams[0][1] >= 66 || teams[1][1] >= 66 ? 'text-green-400' : 'text-white'
-                          }`}>
-                            {teams[0][1]} : {teams[1][1]}
+                  {players.length === 4 && !isTysiac ? (
+                    // 66 4-osobowe - format drużynowy
+                    (() => {
+                      const teams = Object.entries(roundPoints);
+                      if (teams.length === 2) {
+                        return (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-teal-400 font-semibold">{teams[0][0]}</span>
+                            <span className={`font-bold ${
+                              teams[0][1] >= 66 || teams[1][1] >= 66 ? 'text-green-400' : 'text-white'
+                            }`}>
+                              {teams[0][1]} : {teams[1][1]}
+                            </span>
+                            <span className="text-pink-400 font-semibold">{teams[1][0]}</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()
+                  ) : (
+                    // Tysiąc lub 66 3-osobowe - format indywidualny
+                    <div className="space-y-1">
+                      {Object.entries(roundPoints).map(([name, points]) => (
+                        <div key={name} className="flex justify-between text-xs">
+                          <span className={name === user?.username ? 'text-teal-400' : 'text-gray-300'}>
+                            {name}
                           </span>
-                          <span className="text-pink-400 font-semibold">{teams[1][0]}</span>
+                          <span className="text-white font-bold">{points}</span>
                         </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-              )}
-              
-              {isTysiac && Object.keys(roundPoints).length > 0 && (
-                <div className="mt-2 pt-2 border-t border-gray-700/30">
-                  <p className="text-xs text-gray-500 uppercase mb-1.5">Punkty w rozdaniu</p>
-                  <div className="space-y-1">
-                    {Object.entries(roundPoints).map(([name, points]) => (
-                      <div key={name} className="flex justify-between text-xs">
-                        <span className={name === user?.username ? 'text-teal-400' : 'text-gray-300'}>
-                          {name}
-                        </span>
-                        <span className="text-white font-bold">{points}</span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1657,11 +1743,13 @@ function Game() {
           {/* PUNKTY W MECZU */}
           <div className="p-3 border-b border-gray-700/50">
             <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Punkty w meczu</h3>
-            {isTysiac ? (
+            {isTysiac || players.length === 3 ? (
+              // Tysiąc lub 66 3-osobowe - punkty indywidualne
               <div className="space-y-1.5">
                 {players.map((player, idx) => {
                   const punkty = gameState.punkty_meczowe?.[player.name] || 0
-                  const progress = (punkty / 1000) * 100
+                  const cel = isTysiac ? 1000 : 66
+                  const progress = (punkty / cel) * 100
                   
                   return (
                     <div key={idx} className="p-2 rounded-lg bg-gray-800/50">
@@ -1685,10 +1773,11 @@ function Game() {
                   )
                 })}
                 <div className="text-center text-xs text-gray-500 mt-2">
-                  Cel: 1000 punktów
+                  Cel: {isTysiac ? '1000' : '66'} punktów
                 </div>
               </div>
             ) : (
+              // 66 4-osobowe - punkty drużynowe
               (() => {
                 const teams = gameState.punkty_meczowe ? Object.entries(gameState.punkty_meczowe) : [];
                 if (teams.length === 2) {

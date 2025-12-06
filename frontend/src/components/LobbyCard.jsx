@@ -205,37 +205,40 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                 <h3 className="text-sm font-semibold text-yellow-400 uppercase mb-3 text-center">
                   🏆 Wynik meczu
                 </h3>
-                {hasTeams ? (
-                  // Wyświetl wynik drużynowy
-                  <div className="flex items-center justify-center gap-4">
-                    <div className="text-center">
-                      <div className="text-xs text-teal-400 mb-1">Drużyna 1</div>
-                      <div className="text-3xl font-bold text-white">
-                        {matchScore?.['Drużyna 1'] ?? matchScore?.['Team 1'] ?? 0}
-                      </div>
-                    </div>
-                    <div className="text-2xl text-gray-500">:</div>
-                    <div className="text-center">
-                      <div className="text-xs text-pink-400 mb-1">Drużyna 2</div>
-                      <div className="text-3xl font-bold text-white">
-                        {matchScore?.['Drużyna 2'] ?? matchScore?.['Team 2'] ?? 0}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  // Wyświetl wynik indywidualny (Tysiąc)
-                  <div className="space-y-2">
-                    {matchScore && Object.keys(matchScore).length > 0 ? (
-                      Object.entries(matchScore).map(([name, points]) => (
+                {matchScore && Object.keys(matchScore).length > 0 ? (
+                  hasTeams ? (
+                    // Wyświetl wynik drużynowy (2 drużyny obok siebie)
+                    (() => {
+                      const entries = Object.entries(matchScore)
+                      const team1Entry = entries[0] || ['Drużyna 1', 0]
+                      const team2Entry = entries[1] || ['Drużyna 2', 0]
+                      return (
+                        <div className="flex items-center justify-center gap-4">
+                          <div className="text-center">
+                            <div className="text-xs text-teal-400 mb-1">{team1Entry[0]}</div>
+                            <div className="text-3xl font-bold text-white">{team1Entry[1]}</div>
+                          </div>
+                          <div className="text-2xl text-gray-500">:</div>
+                          <div className="text-center">
+                            <div className="text-xs text-pink-400 mb-1">{team2Entry[0]}</div>
+                            <div className="text-3xl font-bold text-white">{team2Entry[1]}</div>
+                          </div>
+                        </div>
+                      )
+                    })()
+                  ) : (
+                    // Wyświetl wynik indywidualny (Tysiąc lub 3p 66)
+                    <div className="space-y-2">
+                      {Object.entries(matchScore).map(([name, points]) => (
                         <div key={name} className="flex justify-between items-center">
                           <span className="text-gray-300">{name}</span>
                           <span className="text-xl font-bold text-yellow-400">{points}</span>
                         </div>
-                      ))
-                    ) : (
-                      <div className="text-center text-gray-400">Gra rozpoczęta</div>
-                    )}
-                  </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  <div className="text-center text-gray-400">Gra rozpoczęta</div>
                 )}
               </div>
             )}

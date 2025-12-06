@@ -18,6 +18,43 @@ from routers.websocket_router import manager
 # HELPER FUNCTIONS
 # ============================================
 
+async def sync_match_score_to_lobby(game_id: str, engine, redis: RedisService):
+    """
+    Synchronizuj punkty meczowe z silnika gry do lobby w Redis.
+    Dzięki temu podgląd lobby pokazuje aktualny wynik.
+    """
+    try:
+        lobby_data = await redis.get_lobby(game_id)
+        if not lobby_data:
+            return
+        
+        punkty_meczowe = {}
+        
+        from engines.tysiac_engine import TysiacEngine
+        
+        if isinstance(engine, TysiacEngine):
+            if hasattr(engine.game_state, 'gracze'):
+                for gracz in engine.game_state.gracze:
+                    if hasattr(gracz, 'punkty_meczu'):
+                        punkty_meczowe[gracz.nazwa] = gracz.punkty_meczu
+        else:
+            # 66 - sprawdź czy są drużyny (4p) czy gracze indywidualni (3p)
+            if hasattr(engine.game_state, 'druzyny') and engine.game_state.druzyny:
+                for druzyna in engine.game_state.druzyny:
+                    if hasattr(druzyna, 'punkty_meczu'):
+                        punkty_meczowe[druzyna.nazwa] = druzyna.punkty_meczu
+            elif hasattr(engine.game_state, 'gracze'):
+                for gracz in engine.game_state.gracze:
+                    if hasattr(gracz, 'punkty_meczu'):
+                        punkty_meczowe[gracz.nazwa] = gracz.punkty_meczu
+        
+        lobby_data['punkty_meczowe'] = punkty_meczowe
+        await redis.save_lobby(game_id, lobby_data)
+    
+    except Exception as e:
+        print(f"[Game] ⚠️ Błąd synchronizacji punktów: {e}")
+
+
 def convert_enums_to_strings(obj):
     """Konwertuje wszystkie Enumy i obiekty Karta w obiekcie na stringi dla JSON serialization"""
     # Import klas Karta z obu silników
@@ -272,6 +309,9 @@ async def play_action(
             
             # Wyślij spersonalizowany stan każdemu graczowi
             await manager.broadcast_state_update(game_id)
+            
+            # Synchronizuj punkty meczowe do lobby (dla podglądu)
+            await sync_match_score_to_lobby(game_id, engine, redis)
         # === KONIEC AUTO-FINALIZACJI ===
         
         # === AUTOMATYCZNIE WYKONAJ AKCJE BOTÓW (W TLE) ===
@@ -397,6 +437,9 @@ async def finalize_trick(
         
         # Wyślij spersonalizowany stan każdemu graczowi
         await manager.broadcast_state_update(game_id)
+        
+        # Synchronizuj punkty meczowe do lobby (dla podglądu)
+        await sync_match_score_to_lobby(game_id, engine, redis)
         
         # Auto-wykonaj akcje botów (W TLE)
         asyncio.create_task(bot_service.process_bot_actions(game_id, engine, redis))
@@ -754,6 +797,9 @@ async def _start_next_round_internal(
     
     # Wyślij spersonalizowany stan każdemu graczowi
     await manager.broadcast_state_update(game_id)
+    
+    # Synchronizuj punkty meczowe do lobby (dla podglądu)
+    await sync_match_score_to_lobby(game_id, engine, redis)
     
     # === AUTO-WYKONAJ AKCJE BOTÓW (W TLE) ===
     asyncio.create_task(bot_service.process_bot_actions(game_id, engine, redis))

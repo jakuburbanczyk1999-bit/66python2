@@ -237,6 +237,9 @@ class BotService:
                         'type': 'trick_finalized'
                     })
                     await manager.broadcast_state_update(game_id)
+                    
+                    # Synchronizuj punkty meczowe do lobby
+                    await self._sync_match_score_to_lobby(game_id, engine, redis)
                 
             except Exception as e:
                 print(f"[Bot] Błąd akcji: {e}")
@@ -305,6 +308,38 @@ class BotService:
         """Pobierz poziom trudności bota"""
         return 'medium'
     
+    async def _sync_match_score_to_lobby(self, game_id: str, engine: Any, redis: RedisService) -> None:
+        """Synchronizuj punkty meczowe z silnika gry do lobby w Redis."""
+        try:
+            lobby_data = await redis.get_lobby(game_id)
+            if not lobby_data:
+                return
+            
+            punkty_meczowe = {}
+            
+            from engines.tysiac_engine import TysiacEngine
+            
+            if isinstance(engine, TysiacEngine):
+                if hasattr(engine.game_state, 'gracze'):
+                    for gracz in engine.game_state.gracze:
+                        if hasattr(gracz, 'punkty_meczu'):
+                            punkty_meczowe[gracz.nazwa] = gracz.punkty_meczu
+            else:
+                # 66 - drużyny lub gracze
+                if hasattr(engine.game_state, 'druzyny') and engine.game_state.druzyny:
+                    for druzyna in engine.game_state.druzyny:
+                        if hasattr(druzyna, 'punkty_meczu'):
+                            punkty_meczowe[druzyna.nazwa] = druzyna.punkty_meczu
+                elif hasattr(engine.game_state, 'gracze'):
+                    for gracz in engine.game_state.gracze:
+                        if hasattr(gracz, 'punkty_meczu'):
+                            punkty_meczowe[gracz.nazwa] = gracz.punkty_meczu
+            
+            lobby_data['punkty_meczowe'] = punkty_meczowe
+            await redis.save_lobby(game_id, lobby_data)
+        except Exception as e:
+            print(f"[Bot] ⚠️ Błąd sync punkty: {e}")
+    
     async def _auto_next_round_if_all_bots(self, game_id: str, engine: Any, redis: RedisService) -> None:
         """Automatycznie głosuje za nową rundą gdy rozdanie jest zakończone."""
         import random
@@ -318,6 +353,9 @@ class BotService:
             
             # LOG: Rozdanie zakończone
             print(f"📋 [Gra {game_id[:8]}] Rozdanie zakończone")
+            
+            # Synchronizuj punkty meczowe do lobby
+            await self._sync_match_score_to_lobby(game_id, engine, redis)
             
             # Sprawdź czy mecz się zakończył
             mecz_zakonczony = False
@@ -553,6 +591,9 @@ class BotService:
         
         # Zapisz silnik
         await redis.save_game_engine(game_id, engine)
+        
+        # Synchronizuj punkty meczowe do lobby
+        await self._sync_match_score_to_lobby(game_id, engine, redis)
         
         # Broadcast info o nowej rundzie
         await manager.broadcast(game_id, {'type': 'next_round_started'})

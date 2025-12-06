@@ -351,6 +351,12 @@ class Rozdanie:
 
         # --- Faza LICYTACJA ---
         if self.faza == FazaGry.LICYTACJA:
+            # Sprawdź czy gracz już wykonał akcję w tej fazie
+            gracz_juz_pasowal = gracz in self.pasujacy_gracze
+            gracz_juz_przebil = any(o[0] == gracz for o in self.oferty_przebicia)
+            if gracz_juz_pasowal or gracz_juz_przebil:
+                return []  # Gracz już wykonał akcję
+            
             akcje = [{'typ': 'pas'}]
             # Sprawdź, czy można jeszcze przebić na Gorsza/Lepsza
             has_lepsza = any(o[1]['kontrakt'] == Kontrakt.LEPSZA for o in self.oferty_przebicia)
@@ -359,7 +365,7 @@ class Rozdanie:
                 akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.LEPSZA})
                 if not has_gorsza: # Jeśli nikt nie przebił na Gorszą
                     akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.GORSZA})
-            # Przeciwnik grającego może dać lufę
+            # Przeciwnik grającego może dać lufę (tylko raz na fazę LICYTACJA)
             if self.grajacy and gracz.druzyna != self.grajacy.druzyna:
                 # Dodaj kontekst (kontrakt, atut) do akcji lufa
                 akcje.append({'typ': 'lufa', 'kontrakt': self.kontrakt, 'atut': self.atut})
@@ -1176,6 +1182,12 @@ class RozdanieTrzyOsoby:
             ]
 
         if self.faza == FazaGry.LICYTACJA:
+            # Sprawdź czy gracz już wykonał akcję w tej fazie
+            gracz_juz_pasowal = gracz in self.pasujacy_gracze
+            gracz_juz_przebil = any(o[0] == gracz for o in self.oferty_przebicia)
+            if gracz_juz_pasowal or gracz_juz_przebil:
+                return []  # Gracz już wykonał akcję
+            
             akcje = [{'typ': 'pas'}]
             # Sprawdź możliwość przebicia
             has_lepsza = any(o[1]['kontrakt'] == Kontrakt.LEPSZA for o in self.oferty_przebicia)
@@ -1184,7 +1196,7 @@ class RozdanieTrzyOsoby:
                 akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.LEPSZA})
                 if not has_gorsza:
                     akcje.append({'typ': 'przebicie', 'kontrakt': Kontrakt.GORSZA})
-            # Każdy obrońca może dać lufę
+            # Każdy obrońca może dać lufę (tylko raz na fazę LICYTACJA)
             if gracz != self.grajacy:
                  akcje.append({'typ': 'lufa', 'kontrakt': self.kontrakt, 'atut': self.atut})
             return akcje
@@ -1658,7 +1670,8 @@ class RozdanieTrzyOsoby:
             "atut": self.atut.name if self.atut else "Brak",
             "mnoznik_gry": mnoznik_gry, "mnoznik_lufy": self.mnoznik_lufy,
             "wynik_w_kartach": self.punkty_w_rozdaniu, "powod": powod,
-            "bonus_z_trzech_kart": self.bonus_z_trzech_kart
+            "bonus_z_trzech_kart": self.bonus_z_trzech_kart,
+            "punkty_meczowe": {g.nazwa: g.punkty_meczu for g in self.gracze if g}  # DODANO dla 3p
         }
         if not wygrani: # Jeśli wystąpił błąd
             self.podsumowanie["wygrani_gracze"] = ["Brak"]; self.podsumowanie["przyznane_punkty"] = 0; self.podsumowanie["powod"] = "Błąd rozliczenia"
