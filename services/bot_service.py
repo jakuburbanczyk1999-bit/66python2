@@ -71,7 +71,7 @@ class BotService:
         # - 1 runda = ~35 iteracji (deklaracje + lufy + 24 karty + 6 finalizacji)
         # - Mecz do 66 pkt = 10-15 rund = 350-500 iteracji
         self.max_iterations = 1000
-        self.bot_delay = 0.8  # Opóźnienie między ruchami botów (sekundy)
+        self.bot_delay = 0.6  # Opóźnienie między ruchami botów (sekundy)
         self.mcts_time_limit = 1.0  # Limit czasu dla MCTS (sekundy)
     
     def _convert_karty_w_akcji(self, akcja: Any) -> Any:
@@ -152,9 +152,9 @@ class BotService:
             if not is_bot:
                 break
             
-            # Delay PRZED akcją bota
+            # Delay PRZED akcją bota (krótszy dla pierwszej akcji)
             if first_action:
-                await asyncio.sleep(0.8)
+                await asyncio.sleep(0.2)  # Szybki start
                 first_action = False
             else:
                 await asyncio.sleep(self.bot_delay)
@@ -388,6 +388,14 @@ class BotService:
                     lobby_data['status_partii'] = 'ZAKONCZONA'
                     await redis.save_lobby(game_id, lobby_data)
                 
+                # === INKREMENTUJ LICZNIK ROZEGRANYCH GIER ===
+                try:
+                    await redis.redis.incr("stats:total_games")
+                    print(f"[📊 Stats] Rozegrano grę - inkrementacja total_games")
+                except Exception as stats_err:
+                    print(f"[⚠️ Stats] Błąd inkrementacji: {stats_err}")
+                # === KONIEC INKREMENTACJI ===
+                
                 # Boty głosują za powrotem do lobby
                 await self._bots_vote_return_to_lobby(game_id, engine, redis)
                 return
@@ -396,7 +404,7 @@ class BotService:
             for gracz in state.gracze:
                 is_bot = await self._is_registered_bot_by_name(gracz.nazwa)
                 if is_bot:
-                    delay = random.uniform(2.0, 3.0)
+                    delay = random.uniform(0.5, 1.5)  # Szybsze głosowanie
                     await asyncio.sleep(delay)
                     await self._bot_vote_next_round(game_id, gracz.nazwa, redis)
             
@@ -441,58 +449,9 @@ class BotService:
             pass
     
     async def _bots_vote_return_to_lobby(self, game_id: str, engine: Any, redis: RedisService) -> None:
-        """Boty głosują za powrotem do lobby (25% szans każdy)."""
-        import random
-        
-        try:
-            state = engine.game_state
-            all_players = [g.nazwa for g in state.gracze]
-            votes = []
-            
-            for gracz in state.gracze:
-                is_bot = await self._is_registered_bot_by_name(gracz.nazwa)
-                
-                if is_bot:
-                    # 25% szans na głosowanie za powrotem
-                    if random.random() < 0.25:
-                        delay = random.uniform(3.0, 6.0)
-                        await asyncio.sleep(delay)
-                        
-                        votes.append(gracz.nazwa)
-                        
-                        await manager.broadcast(game_id, {
-                            'type': 'return_to_lobby_vote',
-                            'player': gracz.nazwa,
-                            'votes': votes,
-                            'total_players': len(all_players),
-                            'ready_players': votes
-                        })
-            
-            # Sprawdź czy wszyscy zagłosowali
-            if set(votes) >= set(all_players):
-                lobby_data = await redis.get_lobby(game_id)
-                
-                if lobby_data:
-                    lobby_data['status_partii'] = 'LOBBY'
-                    for slot in lobby_data.get('slots', []):
-                        if slot.get('typ') in ['gracz', 'bot']:
-                            slot['ready'] = False
-                    
-                    await redis.save_lobby(game_id, lobby_data)
-                    
-                    await manager.broadcast(game_id, {
-                        'type': 'returned_to_lobby',
-                        'lobby': lobby_data
-                    })
-                
-                await redis.delete_game_engine(game_id)
-            else:
-                # Nie wszyscy zagłosowali - usuń grę
-                await redis.delete_game(game_id)
-                print(f"🗑️ [Gra {game_id[:8]}] Gra usunięta (boty opuściły)")
-                
-        except Exception as e:
-            print(f"[Bot] Błąd _bots_vote_return: {e}")
+        """Wywołuje trigger_return_to_lobby_voting - boty decydują w ramach 10s timera."""
+        # Deleguj do głównej funkcji z timerem
+        await self.trigger_return_to_lobby_voting(game_id, redis)
     
     async def _start_next_round_internal(self, game_id: str, engine: Any, redis: RedisService) -> None:
         """Wewnętrzna metoda rozpoczynająca nową rundę."""
@@ -600,7 +559,7 @@ class BotService:
         await manager.broadcast_state_update(game_id)
     
     async def trigger_return_to_lobby_voting(self, game_id: str, redis: RedisService) -> None:
-        """Publiczna metoda wywoływana po zakończeniu meczu - boty głosują za powrotem do lobby."""
+        """Po zakończeniu meczu - uruchamia timer 10s i boty decydują czy zostać."""
         import random
         
         try:
@@ -613,47 +572,148 @@ class BotService:
                 return
             
             state = engine.game_state
+            staying_key = f"staying_players:{game_id}"
             
+            # Uruchom boty równolegle (każdy decyduje niezależnie)
+            bot_tasks = []
             for gracz in state.gracze:
                 is_bot = await self._is_registered_bot_by_name(gracz.nazwa)
                 if is_bot:
-                    # Boty zawsze głosują za powrotem do lobby
-                    delay = random.uniform(2.0, 5.0)
-                    await asyncio.sleep(delay)
-                    
-                    votes_key = f"return_to_lobby_votes:{game_id}"
-                    votes_data = await redis.redis.get(votes_key)
-                    
-                    if votes_data:
-                        votes = json.loads(votes_data)
+                    # 20% szans że bot kliknie "zostań"
+                    if random.random() < 0.20:
+                        task = asyncio.create_task(
+                            self._bot_click_stay(game_id, gracz.nazwa, staying_key, redis)
+                        )
+                        bot_tasks.append(task)
                     else:
-                        votes = {'stay': [], 'leave': []}
-                    
-                    if gracz.nazwa not in votes['stay']:
-                        votes['stay'].append(gracz.nazwa)
-                        await redis.redis.set(votes_key, json.dumps(votes), ex=120)
-                        
-                        all_players = [
-                            s['nazwa'] for s in lobby_data.get('slots', []) 
-                            if s.get('typ') in ['gracz', 'bot'] and s.get('nazwa')
-                        ]
-                        
-                        await manager.broadcast(game_id, {
-                            'type': 'return_to_lobby_vote',
-                            'player': gracz.nazwa,
-                            'action': 'stay',
-                            'votes_stay': votes['stay'],
-                            'votes_leave': votes['leave'],
-                            'total_players': len(all_players)
-                        })
-                        
-                        # Sprawdź czy wszyscy zdecydowali
-                        decided = set(votes['stay'] + votes['leave'])
-                        if decided >= set(all_players):
-                            # Finalizuj - importuj funkcję
-                            from routers.game import _finalize_lobby_return
-                            await _finalize_lobby_return(game_id, lobby_data, votes, redis)
-                            return
+                        print(f"🤖 [{gracz.nazwa}] nie klika (wyjdzie po timeout)")
+            
+            # === TIMEOUT 10s ===
+            print(f"⏳ [Gra {game_id[:8]}] Rozpoczęto timer 10s na powrót do lobby")
+            await asyncio.sleep(10.0)
+            
+            # Anuluj niedokończone taski botów
+            for task in bot_tasks:
+                if not task.done():
+                    task.cancel()
+            
+            # Pobierz kto został
+            staying_data = await redis.redis.get(staying_key)
+            staying_players = json.loads(staying_data) if staying_data else []
+            
+            print(f"⏰ [Gra {game_id[:8]}] Timeout - zostają: {staying_players}")
+            
+            # Finalizuj lobby
+            await self._finalize_end_game_lobby(game_id, staying_players, redis)
+            
         except Exception as e:
             print(f"⚠️ Błąd trigger_return_to_lobby_voting: {e}")
-            pass
+            import traceback
+            traceback.print_exc()
+    
+    async def _bot_click_stay(self, game_id: str, bot_name: str, staying_key: str, redis: RedisService) -> None:
+        """Bot klika 'zostań w lobby' w losowym momencie."""
+        import random
+        try:
+            # Bot "klika" w losowym momencie (1-8s)
+            delay = random.uniform(1.0, 8.0)
+            await asyncio.sleep(delay)
+            
+            staying_data = await redis.redis.get(staying_key)
+            staying = json.loads(staying_data) if staying_data else []
+            
+            if bot_name not in staying:
+                staying.append(bot_name)
+                await redis.redis.set(staying_key, json.dumps(staying), ex=60)
+                print(f"🤖 [{bot_name}] klika: ZOSTAŃ W LOBBY")
+                
+                await manager.broadcast(game_id, {
+                    'type': 'player_staying',
+                    'player': bot_name
+                })
+        except asyncio.CancelledError:
+            pass  # Task anulowany przez timeout
+        except Exception as e:
+            print(f"[Bot] Błąd _bot_click_stay: {e}")
+    
+    async def _finalize_end_game_lobby(self, game_id: str, staying_players: list, redis: RedisService) -> None:
+        """Finalizuje lobby po zakończeniu meczu - usuwa graczy którzy nie kliknęli 'zostań'."""
+        try:
+            lobby_data = await redis.get_lobby(game_id)
+            if not lobby_data:
+                return
+            
+            slots = lobby_data.get('slots', [])
+            
+            # Jeśli nikt nie zostaje - usuń lobby
+            if not staying_players:
+                print(f"🗑️ [Gra {game_id[:8]}] Nikt nie został - usuwam lobby")
+                await redis.delete_game(game_id)
+                await manager.broadcast(game_id, {
+                    'type': 'lobby_closed',
+                    'reason': 'Wszyscy opuścili grę'
+                })
+                return
+            
+            # Usuń graczy którzy nie kliknęli "zostań"
+            old_host_idx = None
+            for i, slot in enumerate(slots):
+                if slot.get('is_host'):
+                    old_host_idx = i
+                
+                player_name = slot.get('nazwa')
+                if player_name and player_name not in staying_players:
+                    # Gracz wychodzi - opróżnij slot
+                    print(f"   ✖ {player_name} opuścił grę")
+                    slot['typ'] = 'pusty'
+                    slot['id_uzytkownika'] = None
+                    slot['nazwa'] = None
+                    slot['is_host'] = False
+                    slot['ready'] = False
+                    slot['avatar_url'] = None
+            
+            # Sprawdź czy host został
+            current_host = None
+            for slot in slots:
+                if slot.get('is_host') and slot.get('nazwa'):
+                    current_host = slot['nazwa']
+                    break
+            
+            # Jeśli host wyszedł, wybierz nowego z zostających
+            if not current_host and staying_players:
+                for slot in slots:
+                    if slot.get('nazwa') in staying_players:
+                        slot['is_host'] = True
+                        lobby_data['host_id'] = slot.get('id_uzytkownika')
+                        print(f"   👑 Nowy host: {slot['nazwa']}")
+                        break
+            
+            # Zresetuj gotowość wszystkich
+            for slot in slots:
+                if slot.get('typ') in ['gracz', 'bot']:
+                    slot['ready'] = False
+            
+            # Zmień status na LOBBY
+            lobby_data['status_partii'] = 'LOBBY'
+            
+            # Zapisz
+            await redis.save_lobby(game_id, lobby_data)
+            
+            # Usuń silnik gry i klucze tymczasowe
+            await redis.redis.delete(f"game_engine:{game_id}")
+            await redis.redis.delete(f"staying_players:{game_id}")
+            await redis.redis.delete(f"return_to_lobby_votes:{game_id}")
+            
+            print(f"✅ [Gra {game_id[:8]}] Powrót do lobby - zostali: {staying_players}")
+            
+            # Broadcast
+            await manager.broadcast(game_id, {
+                'type': 'returned_to_lobby',
+                'lobby': lobby_data,
+                'staying_players': staying_players
+            })
+            
+        except Exception as e:
+            print(f"[Bot] Błąd _finalize_end_game_lobby: {e}")
+            import traceback
+            traceback.print_exc()

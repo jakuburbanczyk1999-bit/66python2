@@ -119,7 +119,7 @@ function Landing() {
             <p className="text-gray-400">Wybierz grę i rozpocznij rozgrywkę!</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Gra w 66 */}
             <div className="bg-[#243447] border border-gray-700/50 rounded-xl p-6 hover:border-teal-500/50 transition-all">
               <div className="mb-4">
@@ -132,11 +132,11 @@ function Landing() {
               </div>
               <h3 className="text-2xl font-bold text-white mb-3">Gra w 66</h3>
               <p className="text-gray-400 mb-4 leading-relaxed">
-                Klasyczna gra karciana dla 4 graczy. Zbieraj lewy, zdobywaj punkty i osiągnij 66 aby wygrać rozdanie!
+                Klasyczna gra karciana dla 3-4 graczy. Zbieraj lewy, zdobywaj punkty i osiągnij 66 aby wygrać rozdanie!
               </p>
               <div className="flex flex-wrap gap-3 mb-4 text-sm">
                 <span className="text-gray-500 flex items-center gap-1">
-                  <span>👥</span> 4 graczy
+                  <span>👥</span> 3-4 graczy
                 </span>
                 <span className="text-gray-500 flex items-center gap-1">
                   <span>⏱️</span> ~15 min
@@ -183,20 +183,64 @@ function Landing() {
               </button>
             </div>
 
-            {/* Kolejne gry */}
-            <div className="bg-[#243447] border border-dashed border-gray-600/50 rounded-xl p-6">
+            {/* Pan */}
+            <div className="bg-[#243447] border border-gray-700/50 rounded-xl p-6 hover:border-yellow-500/50 transition-all opacity-75">
               <div className="mb-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-3xl mb-4">
-                  ❓
+                <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-500 rounded-lg flex items-center justify-center text-3xl mb-4">
+                  👑
+                </div>
+                <div className="inline-block px-3 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-semibold rounded-full mb-3">
+                  ⏳ Wkrótce
                 </div>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3">Kolejne gry</h3>
+              <h3 className="text-2xl font-bold text-white mb-3">Pan</h3>
               <p className="text-gray-400 mb-4 leading-relaxed">
-                Pracujemy nad kolejnymi grami karcianymi. Masz pomysł? Daj nam znać!
+                Dynamiczna gra karciana. Pozbywaj się kart i nie zostaw "Panem" z ostatnią kartą!
               </p>
-              <div className="inline-block px-3 py-1 bg-purple-500/20 text-purple-400 text-xs font-semibold rounded-full">
-                W przygotowaniu
+              <div className="flex flex-wrap gap-3 mb-4 text-sm">
+                <span className="text-gray-500 flex items-center gap-1">
+                  <span>👥</span> 2-6 graczy
+                </span>
+                <span className="text-gray-500 flex items-center gap-1">
+                  <span>⏱️</span> ~10 min
+                </span>
+                <span className="text-gray-500 flex items-center gap-1">
+                  <span>🎯</span> Towarzyska
+                </span>
               </div>
+              <button disabled className="w-full py-3 bg-gray-700 text-gray-400 rounded-lg cursor-not-allowed font-semibold">
+                Wkrótce dostępne
+              </button>
+            </div>
+
+            {/* Remik */}
+            <div className="bg-[#243447] border border-gray-700/50 rounded-xl p-6 hover:border-yellow-500/50 transition-all opacity-75">
+              <div className="mb-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-green-500 rounded-lg flex items-center justify-center text-3xl mb-4">
+                  🍀
+                </div>
+                <div className="inline-block px-3 py-1 bg-yellow-500/20 text-yellow-400 text-xs font-semibold rounded-full mb-3">
+                  ⏳ Wkrótce
+                </div>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-3">Remik</h3>
+              <p className="text-gray-400 mb-4 leading-relaxed">
+                Klasyczna gra w układanie sekwensów i grup. Zbieraj karty i wykładaj kombinacje!
+              </p>
+              <div className="flex flex-wrap gap-3 mb-4 text-sm">
+                <span className="text-gray-500 flex items-center gap-1">
+                  <span>👥</span> 2-4 graczy
+                </span>
+                <span className="text-gray-500 flex items-center gap-1">
+                  <span>⏱️</span> ~30 min
+                </span>
+                <span className="text-gray-500 flex items-center gap-1">
+                  <span>🏆</span> Rankingowa
+                </span>
+              </div>
+              <button disabled className="w-full py-3 bg-gray-700 text-gray-400 rounded-lg cursor-not-allowed font-semibold">
+                Wkrótce dostępne
+              </button>
             </div>
           </div>
         </div>

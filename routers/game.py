@@ -822,8 +822,8 @@ async def return_to_lobby(
     redis: RedisService = Depends(get_redis)
 ):
     """
-    Głosuj za powrotem do lobby po zakończeniu meczu.
-    Gracz zostaje w lobby, inni mogą wyjść do dashboard.
+    Gracz klika "Powrót do lobby" - zostaje w lobby po zakończeniu meczu.
+    Ma 10 sekund na kliknięcie, potem timeout i gracz wychodzi.
     
     Args:
         game_id: ID gry
@@ -831,7 +831,7 @@ async def return_to_lobby(
         redis: Redis service
     
     Returns:
-        dict: Status głosowania
+        dict: Status
     """
     try:
         lobby_data = await redis.get_lobby(game_id)
@@ -842,7 +842,6 @@ async def return_to_lobby(
             )
         
         player_id = current_user['username']
-        user_id = current_user['id']
         
         # Sprawdź czy gra jest zakończona
         if lobby_data.get('status_partii') != 'ZAKONCZONA':
@@ -851,59 +850,28 @@ async def return_to_lobby(
                 detail="Gra nie jest zakończona"
             )
         
-        print(f"[Game] Gracz {player_id} głosuje za powrotem do lobby")
+        print(f"[Game] ✅ Gracz {player_id} klika: POWRÓT DO LOBBY")
         
-        # === SYSTEM GŁOSOWANIA ===
-        votes_key = f"return_to_lobby_votes:{game_id}"
-        votes_data = await redis.redis.get(votes_key)
-        
+        # Dodaj gracza do listy zostających
         import json
-        if votes_data:
-            votes = json.loads(votes_data)
-        else:
-            votes = {'stay': [], 'leave': []}
-            # Ustaw TTL na decyzję (60 sekund)
-            # Po tym czasie automatycznie zostają tylko głosujący
+        staying_key = f"staying_players:{game_id}"
+        staying_data = await redis.redis.get(staying_key)
+        staying = json.loads(staying_data) if staying_data else []
         
-        # Dodaj głos za pozostaniem
-        if player_id not in votes['stay']:
-            votes['stay'].append(player_id)
-            # Usuń z leave jeśli był
-            if player_id in votes['leave']:
-                votes['leave'].remove(player_id)
+        if player_id not in staying:
+            staying.append(player_id)
+            await redis.redis.set(staying_key, json.dumps(staying), ex=60)  # 60s TTL
         
-        await redis.redis.set(votes_key, json.dumps(votes), ex=120)  # 2 min TTL
-        
-        # Pobierz listę wszystkich graczy
-        all_players = [
-            s['nazwa'] for s in lobby_data.get('slots', []) 
-            if s.get('typ') in ['gracz', 'bot'] and s.get('nazwa')
-        ]
-        
-        # Broadcast info o głosowaniu
+        # Broadcast że gracz zostaje
         await manager.broadcast(game_id, {
-            'type': 'return_to_lobby_vote',
-            'player': player_id,
-            'action': 'stay',
-            'votes_stay': votes['stay'],
-            'votes_leave': votes['leave'],
-            'total_players': len(all_players)
+            'type': 'player_staying',
+            'player': player_id
         })
-        
-        # Sprawdź czy wszyscy już zdecydowali
-        decided = set(votes['stay'] + votes['leave'])
-        all_decided = decided >= set(all_players)
-        
-        if all_decided:
-            return await _finalize_lobby_return(game_id, lobby_data, votes, redis)
         
         return {
             "success": True,
-            "message": "Głos zapisany - zostajesz w lobby",
-            "your_choice": "stay",
-            "votes_stay": votes['stay'],
-            "votes_leave": votes['leave'],
-            "waiting": True
+            "message": "Zostajesz w lobby",
+            "staying": True
         }
         
     except HTTPException:
@@ -924,7 +892,8 @@ async def leave_to_dashboard(
     redis: RedisService = Depends(get_redis)
 ):
     """
-    Opuść grę i wróć do dashboard po zakończeniu meczu.
+    Gracz klika "Dashboard" - opuści grę i wróci na dashboard.
+    Nie dodaje się do staying_players, więc po timeout zostanie usunięty.
     
     Args:
         game_id: ID gry
@@ -932,7 +901,7 @@ async def leave_to_dashboard(
         redis: Redis service
     
     Returns:
-        dict: Status
+        dict: Status z przekierowaniem
     """
     try:
         lobby_data = await redis.get_lobby(game_id)
@@ -943,7 +912,6 @@ async def leave_to_dashboard(
             )
         
         player_id = current_user['username']
-        user_id = current_user['id']
         
         # Sprawdź czy gra jest zakończona
         if lobby_data.get('status_partii') != 'ZAKONCZONA':
@@ -952,54 +920,17 @@ async def leave_to_dashboard(
                 detail="Gra nie jest zakończona"
             )
         
-        print(f"[Game] Gracz {player_id} opuszcza grę (dashboard)")
+        print(f"[Game] 🚪 Gracz {player_id} klika: DASHBOARD (wychodzi)")
         
-        # === SYSTEM GŁOSOWANIA ===
-        votes_key = f"return_to_lobby_votes:{game_id}"
-        votes_data = await redis.redis.get(votes_key)
-        
-        import json
-        if votes_data:
-            votes = json.loads(votes_data)
-        else:
-            votes = {'stay': [], 'leave': []}
-        
-        # Dodaj głos za wyjściem
-        if player_id not in votes['leave']:
-            votes['leave'].append(player_id)
-            # Usuń z stay jeśli był
-            if player_id in votes['stay']:
-                votes['stay'].remove(player_id)
-        
-        await redis.redis.set(votes_key, json.dumps(votes), ex=120)
-        
-        # Pobierz listę wszystkich graczy
-        all_players = [
-            s['nazwa'] for s in lobby_data.get('slots', []) 
-            if s.get('typ') in ['gracz', 'bot'] and s.get('nazwa')
-        ]
-        
-        # Broadcast info o głosowaniu
+        # Broadcast że gracz wychodzi
         await manager.broadcast(game_id, {
-            'type': 'return_to_lobby_vote',
-            'player': player_id,
-            'action': 'leave',
-            'votes_stay': votes['stay'],
-            'votes_leave': votes['leave'],
-            'total_players': len(all_players)
+            'type': 'player_leaving',
+            'player': player_id
         })
-        
-        # Sprawdź czy wszyscy już zdecydowali
-        decided = set(votes['stay'] + votes['leave'])
-        all_decided = decided >= set(all_players)
-        
-        if all_decided:
-            return await _finalize_lobby_return(game_id, lobby_data, votes, redis)
         
         return {
             "success": True,
             "message": "Opuszczasz grę",
-            "your_choice": "leave",
             "redirect": "/dashboard"
         }
         
@@ -1012,6 +943,10 @@ async def leave_to_dashboard(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+# Stara funkcja _finalize_lobby_return - zachowana dla kompatybilności
+# ale główna logika jest teraz w bot_service._finalize_end_game_lobby
 
 
 async def _finalize_lobby_return(

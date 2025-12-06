@@ -1,20 +1,38 @@
 import { Link } from 'react-router-dom'
+import { useState } from 'react'
 
 const CHANGELOG = [
   {
+    version: '1.1.1',
+    date: '6 grudnia 2024',
+    type: 'fix', // 🔧
+    title: 'Poprawki i optymalizacje',
+    changes: [
+      'Grid 2x2 z 4 grami na stronie głównej (Pan, Remik jako placeholdery)',
+      'Szybsze boty - zmniejszono opóźnienia akcji',
+      'Naprawiono błąd 404 po zakończeniu meczu',
+      'Naprawiono naliczanie statystyk rozegranych gier',
+      'Nowy system końca meczu - 10s na decyzję o powrocie do lobby',
+    ],
+  },
+  {
     version: '1.1.0',
     date: '6 grudnia 2024',
-    title: '🎲 Tryb 3-osobowy i poprawki',
+    type: 'major', // 🎉
+    title: 'Tryb 3-osobowy i nowy design',
     changes: [
-      'Nowy tryb gry: 66 dla 3 graczy',
-      'Naprawiono wyświetlanie wyniku w podglądzie gry w toku',
-      'Synchronizacja punktów meczowych w czasie rzeczywistym',
+      'Nowy tryb gry: 66 dla 3 graczy (każdy na każdego)',
+      'System timeout/forfeit - 60s na powrót po rozłączeniu',
+      'Przeprojektowany interfejs z dark theme',
+      'Naprawiono wyświetlanie wyniku w podglądzie gry',
+      'Poprawione dymki akcji dla trybu 3-osobowego',
     ],
   },
   {
     version: '1.0.2',
     date: '6 grudnia 2024',
-    title: '🎮 Ulepszenia UI i statystyk',
+    type: 'fix', // 🔧
+    title: 'Ulepszenia UI i statystyk',
     changes: [
       'Nowy checkbox "Gra casual" - rozgrywki bez wpływu na ranking',
       'Nowy checkbox "Gra prywatna" - możliwość ustawienia hasła do lobby',
@@ -27,23 +45,22 @@ const CHANGELOG = [
   {
     version: '1.0.1',
     date: '5 grudnia 2024',
-    title: '🔧 Poprawki i ulepszenia',
+    type: 'fix', // 🔧
+    title: 'Poprawki i ulepszenia',
     changes: [
-      'Naprawiono wyświetlanie błędów logowania (błędne hasło, użytkownik nie istnieje)',
-      'Boty dodają się teraz na wybrany slot zamiast pierwszego wolnego',
-      'Nowy system powrotu do lobby po zakończeniu meczu - każdy gracz decyduje osobno',
-      'Możliwość dołączenia do gry którą opuściliśmy (60 sekund na powrót)',
+      'Naprawiono wyświetlanie błędów logowania',
+      'Boty dodają się na wybrany slot zamiast pierwszego wolnego',
+      'Nowy system powrotu do lobby po zakończeniu meczu',
+      'Możliwość dołączenia do gry którą opuściliśmy (60s na powrót)',
       'System heartbeat - dokładniejsze śledzenie statusów online/offline',
-      'Agresywniejsze czyszczenie nieaktywnych lobby (co 2 minuty)',
-      'Poprawiono linki w nawigacji strony powitalnej',
-      'Domyślna nazwa lobby przy tworzeniu gry',
-      'Naprawiono generowanie nazw gości',
+      'Agresywniejsze czyszczenie nieaktywnych lobby',
     ],
   },
   {
     version: '1.0.0',
     date: '5 grudnia 2024',
-    title: '🎉 Uruchomienie Miedziowych Kart!',
+    type: 'major', // 🎉
+    title: 'Uruchomienie Miedziowych Kart!',
     changes: [
       'Pierwsza publiczna wersja portalu',
       'Gra w 66 dla 4 graczy',
@@ -57,6 +74,20 @@ const CHANGELOG = [
 ]
 
 function Changelog() {
+  // Pierwszy wpis domyślnie rozwinięty, reszta zwinięta
+  const [expanded, setExpanded] = useState({ 0: true })
+
+  const toggleExpanded = (index) => {
+    setExpanded(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }))
+  }
+
+  const getEmoji = (type) => {
+    return type === 'major' ? '🎉' : '🔧'
+  }
+
   return (
     <div className="min-h-screen bg-[#1a2736]">
       {/* Header */}
@@ -82,31 +113,68 @@ function Changelog() {
         <h1 className="text-4xl font-bold text-white mb-2">📋 Changelog</h1>
         <p className="text-gray-400 mb-8">Historia zmian i aktualizacji</p>
 
-        <div className="space-y-8">
-          {CHANGELOG.map((release, index) => (
-            <div
-              key={index}
-              className="bg-[#1e2a3a] border border-gray-700/50 rounded-xl p-6"
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <span className="px-3 py-1 bg-teal-500/20 text-teal-400 font-mono font-bold rounded-lg">
-                  v{release.version}
-                </span>
-                <span className="text-gray-400 text-sm">{release.date}</span>
+        <div className="space-y-4">
+          {CHANGELOG.map((release, index) => {
+            const isExpanded = expanded[index] || false
+            const isLatest = index === 0
+            const emoji = getEmoji(release.type)
+
+            return (
+              <div
+                key={index}
+                className={`bg-[#1e2a3a] border rounded-xl overflow-hidden transition-all ${
+                  isLatest 
+                    ? 'border-teal-500/50 ring-1 ring-teal-500/20' 
+                    : 'border-gray-700/50'
+                }`}
+              >
+                {/* Header - zawsze widoczny, klikalny */}
+                <button
+                  onClick={() => toggleExpanded(index)}
+                  className="w-full p-6 flex items-center justify-between text-left hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <span className={`px-3 py-1 font-mono font-bold rounded-lg ${
+                      isLatest
+                        ? 'bg-teal-500/30 text-teal-300'
+                        : 'bg-gray-700/50 text-gray-300'
+                    }`}>
+                      v{release.version}
+                    </span>
+                    <span className="text-gray-400 text-sm">{release.date}</span>
+                    {isLatest && (
+                      <span className="px-2 py-0.5 bg-teal-500/20 text-teal-400 text-xs rounded-full">
+                        Najnowsza
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl font-bold text-white">
+                      {emoji} {release.title}
+                    </span>
+                    <span className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                      ▼
+                    </span>
+                  </div>
+                </button>
+
+                {/* Content - zwijany */}
+                {isExpanded && (
+                  <div className="px-6 pb-6 border-t border-gray-700/30">
+                    <ul className="space-y-2 mt-4">
+                      {release.changes.map((change, i) => (
+                        <li key={i} className="flex items-start gap-3 text-gray-300">
+                          <span className="text-teal-400 mt-1">•</span>
+                          <span>{change}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              
-              <h2 className="text-2xl font-bold text-white mb-4">{release.title}</h2>
-              
-              <ul className="space-y-2">
-                {release.changes.map((change, i) => (
-                  <li key={i} className="flex items-start gap-3 text-gray-300">
-                    <span className="text-teal-400 mt-1">•</span>
-                    <span>{change}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Footer info */}

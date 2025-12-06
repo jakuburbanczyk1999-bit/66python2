@@ -14,7 +14,21 @@ const GAME_MODES = {
     icon: '🎴',
     players: [2, 3, 4],
     description: 'Popularna polska gra',
-    disabled: true, // ⏳ Wkrótce
+    disabled: true,
+  },
+  'pan': {
+    name: 'Pan',
+    icon: '👑',
+    players: [2, 3, 4, 5, 6],
+    description: 'Dynamiczna gra towarzyska',
+    disabled: true,
+  },
+  'remik': {
+    name: 'Remik',
+    icon: '🍀',
+    players: [2, 3, 4],
+    description: 'Układanie sekwensów i grup',
+    disabled: true,
   },
 }
 
@@ -115,7 +129,7 @@ function CreateLobbyModal({ onClose, onSuccess }) {
             <label className="block text-white font-semibold mb-2 text-sm">
               Typ gry *
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 max-h-64 overflow-y-auto">
               {Object.entries(GAME_MODES).map(([key, game]) => (
                 <button
                   key={key}

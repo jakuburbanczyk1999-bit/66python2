@@ -1,60 +1,82 @@
-# Changelog - Miedziowe Karty
+# 📋 Changelog - Miedziowe Karty
 
-## [1.1.0] - 2024-12-06
-
-### 🎮 Nowe funkcje
-- **Tryb 3-osobowy w grze 66** - pełne wsparcie dla gry FFA (każdy na każdego)
-- **System timeout/forfeit** - gracze mają 60 sekund na powrót po rozłączeniu, po przekroczeniu czasu następuje walkower
-- **Timer rozłączenia** - wizualny countdown pokazujący czas do walkoweru
-- **Podgląd wyniku w lobby** - wyświetlanie aktualnego wyniku meczu w podglądzie lobby
-
-### 🎨 Zmiany UI/UX
-- **Przeprojektowany interfejs** - nowy dark theme z profesjonalnym wyglądem
-- **Modułowa architektura CSS** - reorganizacja stylów (base, components, layout, pages)
-- **Responsywny design** - lepsze dostosowanie do różnych rozmiarów ekranu
-- **Dynamiczne pozycjonowanie graczy** - poprawne rozmieszczenie dla 2p/3p/4p
-
-### 🐛 Naprawione błędy
-- **Modal podsumowania** - naprawiono z-index (modal był zasłonięty przez karty)
-- **Dymki akcji w 3p** - poprawione pozycjonowanie dla prawego gracza
-- **Nieskończona lufa** - dodana walidacja zapobiegająca wielokrotnemu dawaniu lufy
-- **Synchronizacja stanu** - naprawiona synchronizacja wyniku meczu po rozłączeniu
-- **Timeout gracza** - naprawiona logika wykrywania powrotu gracza
-
-### 🔧 Zmiany techniczne
-- Rozdzielenie logiki silnika gry dla 3p i 4p
-- Ulepszone zarządzanie stanem WebSocket
-- Lepsza obsługa błędów w komunikacji real-time
-- Optymalizacja re-renderów komponentów React
-
-### 📁 Struktura plików
-```
-frontend/src/
-├── styles/
-│   ├── base/           # Reset, zmienne, typography
-│   ├── components/     # Karty, przyciski, modele
-│   ├── layout/         # Header, grid, spacing
-│   └── pages/          # Strony specyficzne
-└── components/
-    ├── Game/           # Komponenty gry
-    ├── Lobby/          # Komponenty lobby
-    └── shared/         # Współdzielone
-```
+Wszystkie istotne zmiany w projekcie są dokumentowane w tym pliku.
 
 ---
 
-## [1.0.0] - 2024-12-01
+## 🔧 [1.1.1] - 2024-12-06
 
-### 🎮 Funkcje
+### Zmiany UI
+- **Sekcja gier na Landing** - grid 2x2 z 4 grami:
+  - Gra w 66 (Dostępne) - zaktualizowano opis "3-4 graczy"
+  - Tysiąc (Wkrótce)
+  - Pan (Wkrótce) - nowy placeholder
+  - Remik (Wkrótce) - nowy placeholder
+
+### Optymalizacje
+- **Szybsze boty** - zmniejszono opóźnienia:
+  - Pierwsza akcja: 0.8s → 0.2s
+  - Kolejne akcje: 0.8s → 0.6s
+  - Głosowanie: 2-5s → 0.5-1.5s
+
+### Naprawione błędy
+- **availableGames** - przywrócono wartość 1 (tylko 66 aktywne)
+- **Modal końca meczu** - naprawiono błąd 404 po ostatnim rozdaniu
+- **Statystyki gier** - naprawiono naliczanie rozegranych gier
+- **System końca meczu** - przepisana logika:
+  - 10s na kliknięcie "Powrót do lobby"
+  - Boty mają 20% szans na pozostanie
+  - Po timeout backend finalizuje lobby
+
+---
+
+<details>
+<summary><h2>🎉 [1.1.0] - 2024-12-06 - Tryb 3-osobowy</h2></summary>
+
+### Nowe funkcje
+- **Tryb 3-osobowy w grze 66** - pełne wsparcie dla gry FFA (każdy na każdego)
+- **System timeout/forfeit** - gracze mają 60s na powrót po rozłączeniu
+- **Timer rozłączenia** - wizualny countdown do walkoweru
+- **Podgląd wyniku w lobby** - aktualny wynik meczu w podglądzie
+
+### Zmiany UI/UX
+- **Przeprojektowany interfejs** - nowy dark theme
+- **Modułowa architektura CSS** - reorganizacja stylów
+- **Responsywny design** - lepsze dostosowanie do ekranów
+- **Dynamiczne pozycjonowanie graczy** - poprawne dla 2p/3p/4p
+
+### Naprawione błędy
+- Modal podsumowania - naprawiono z-index
+- Dymki akcji w 3p - poprawione pozycjonowanie
+- Nieskończona lufa - walidacja wielokrotnego dawania
+- Synchronizacja stanu po rozłączeniu
+- Timeout gracza - logika wykrywania powrotu
+
+### Zmiany techniczne
+- Rozdzielenie logiki silnika gry dla 3p i 4p
+- Ulepszone zarządzanie stanem WebSocket
+- Lepsza obsługa błędów real-time
+- Optymalizacja re-renderów React
+
+</details>
+
+---
+
+<details>
+<summary><h2>🎉 [1.0.0] - 2024-12-01 - Pierwsze wydanie</h2></summary>
+
+### Funkcje
 - Gra w 66 (tryb 4-osobowy, 2 vs 2)
 - Gra w Tysiąc (2-4 graczy)
 - System lobby z czatem
 - Matchmaking z botami AI
 - System rankingowy
-- Autonomiczne boty z różnymi osobowościami (MCTS + personality-based rewards)
+- Autonomiczne boty z osobowościami (MCTS)
 
-### 🔧 Stack technologiczny
+### Stack technologiczny
 - Backend: Python FastAPI + Redis
 - Frontend: React + Zustand + Tailwind CSS
 - Real-time: WebSocket
 - AI: MCTS z modyfikatorami osobowości
+
+</details>

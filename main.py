@@ -450,7 +450,7 @@ async def get_public_stats():
         return {
             "activePlayers": total_players,
             "totalGames": total_games,
-            "availableGames": 1,  # Na razie tylko 66 (Tysiąc w przygotowaniu)
+            "availableGames": 1,  # Na razie tylko 66
             "details": {
                 "registered": registered_users - bots_count,
                 "bots": bots_count,
