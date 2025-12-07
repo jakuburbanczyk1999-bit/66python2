@@ -1139,10 +1139,21 @@ class RozdanieTrzyOsoby:
         if self.faza == FazaGry.LUFA:
             # Sprawdź, czy to lufa wstępna (przy 4 kartach)
             czy_wstepna = self.gracze and self.gracze[0] and len(self.gracze[0].reka) == 4
+            
+            # Wspólna logika do_konca dla obu typów lufy
+            punkty_do_konca = [66 - g.punkty_meczu for g in self.gracze if g]
+            max_punkty_do_konca = max([0] + punkty_do_konca)
+            potencjalna_wartosc = self.oblicz_aktualna_stawke(mnoznik_dodatkowy=2)
+            mozliwe_do_konca = potencjalna_wartosc >= max_punkty_do_konca and max_punkty_do_konca > 0
+            
             if czy_wstepna:
                 if self.lufa_wstepna and gracz == self.grajacy: # Odpowiedź grającego na lufę wstępną
+                    if mozliwe_do_konca:
+                        return [{'typ': 'do_konca'}, {'typ': 'pas_lufa'}]
                     return [{'typ': 'kontra'}, {'typ': 'pas_lufa'}]
                 elif gracz in self.obroncy and gracz not in self.pasujacy_gracze: # Obrońca może dać lufę wstępną
+                    if mozliwe_do_konca:
+                        return [{'typ': 'do_konca'}, {'typ': 'pas_lufa'}]
                     return [{'typ': 'lufa', 'kontrakt': self.kontrakt, 'atut': self.atut}, {'typ': 'pas_lufa'}]
                 else: return [] # Inne przypadki (np. drugi pasujący obrońca w lufie wstępnej)
 
@@ -1152,13 +1163,9 @@ class RozdanieTrzyOsoby:
             if self.lufa_challenger and gracz not in [self.grajacy, self.lufa_challenger]: return []
             if not self.grajacy: return [] # Wymagane sprawdzenie
 
-            # Sprawdź możliwość 'do_konca'
-            punkty_do_konca = [66 - g.punkty_meczu for g in self.gracze if g]
-            max_punkty_do_konca = max([0] + punkty_do_konca)
-            potencjalna_wartosc = self.oblicz_aktualna_stawke(mnoznik_dodatkowy=2)
-
+            # Użyj już obliczonych wartości do_konca
             akcje = []
-            if potencjalna_wartosc >= max_punkty_do_konca and max_punkty_do_konca > 0:
+            if mozliwe_do_konca:
                 akcje.append({'typ': 'do_konca'})
             else:
                 # Określ typ podbicia (kontra dla grającego, lufa dla obrońcy)
@@ -1293,6 +1300,7 @@ class RozdanieTrzyOsoby:
                          else: self._zakoncz_lufe() # Błąd
                     # Jeśli tura nie została zmieniona (np. drugi obrońca myśli), znajdź następnego aktywnego
                     elif self._get_player_index(gracz) == self.kolej_gracza_idx:
+                         gracz_idx = self._get_player_index(gracz)
                          next_idx = (gracz_idx + 1) % 3
                          start_check_idx = next_idx # Zapamiętaj punkt startowy pętli
                          while self.gracze[next_idx] in self.pasujacy_gracze:

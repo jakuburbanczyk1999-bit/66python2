@@ -643,6 +643,9 @@ async def vote_next_round(
             missing = [p for p in all_players if p not in votes]
             print(f"[Game] Czekam na głosy: {missing}")
             
+            # === URUCHOM GŁOSOWANIE BOTÓW (W TLE) ===
+            asyncio.create_task(bot_service.trigger_bot_next_round_votes(game_id, engine, redis))
+            
             state = convert_enums_to_strings(engine.get_state_for_player(player_id))
             state['waiting_for_votes'] = True
             state['votes'] = votes

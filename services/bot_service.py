@@ -411,6 +411,27 @@ class BotService:
         except Exception as e:
             print(f"[Bot] Błąd _auto_next_round: {e}")
     
+    async def trigger_bot_next_round_votes(self, game_id: str, engine: Any, redis: RedisService) -> None:
+        """
+        Wywoływane gdy gracz zagłosował za następną rundą.
+        Uruchamia głosowanie wszystkich botów w grze.
+        """
+        import random
+        
+        try:
+            state = engine.game_state
+            
+            for gracz in state.gracze:
+                is_bot = await self._is_registered_bot_by_name(gracz.nazwa)
+                if is_bot:
+                    # Bot głosuje z losowym opóźnieniem
+                    delay = random.uniform(0.3, 1.0)
+                    await asyncio.sleep(delay)
+                    await self._bot_vote_next_round(game_id, gracz.nazwa, redis)
+                    
+        except Exception as e:
+            print(f"[Bot] Błąd trigger_bot_next_round_votes: {e}")
+    
     async def _bot_vote_next_round(self, game_id: str, bot_name: str, redis: RedisService) -> None:
         """Bot głosuje za następną rundą."""
         import json
@@ -571,6 +592,17 @@ class BotService:
             if not engine:
                 return
             
+            # === ZABEZPIECZENIE PRZED WIELOKROTNYM URUCHOMIENIEM ===
+            timer_key = f"return_timer_active:{game_id}"
+            already_running = await redis.redis.get(timer_key)
+            if already_running:
+                print(f"[Bot] Timer powrotu już aktywny dla {game_id[:8]} - pomijam")
+                return
+            
+            # Ustaw flagę że timer jest aktywny (15s TTL - trochę dłużej niż timer)
+            await redis.redis.set(timer_key, "1", ex=15)
+            # === KONIEC ZABEZPIECZENIA ===
+            
             state = engine.game_state
             staying_key = f"staying_players:{game_id}"
             
@@ -591,6 +623,17 @@ class BotService:
             # === TIMEOUT 10s ===
             print(f"⏳ [Gra {game_id[:8]}] Rozpoczęto timer 10s na powrót do lobby")
             await asyncio.sleep(10.0)
+            
+            # === SPRAWDZENIE PO TIMEOUT ===
+            # Może inny timer już sfinalizował lobby
+            lobby_data_after = await redis.get_lobby(game_id)
+            if not lobby_data_after:
+                print(f"[Bot] Lobby {game_id[:8]} już nie istnieje - pomijam finalizację")
+                return
+            if lobby_data_after.get('status_partii') != 'ZAKONCZONA':
+                print(f"[Bot] Lobby {game_id[:8]} już zfinalizowane (status: {lobby_data_after.get('status_partii')}) - pomijam")
+                return
+            # === KONIEC SPRAWDZENIA ===
             
             # Anuluj niedokończone taski botów
             for task in bot_tasks:

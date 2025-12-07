@@ -75,6 +75,12 @@ function Game() {
         setGameState(state)
         setError(null)
         
+        // Reset głosowania gdy faza to podsumowanie
+        if (state.faza === 'PODSUMOWANIE_ROZDANIA') {
+          setHasVotedNextRound(false)
+          setNextRoundVotes(null)
+        }
+        
         // Sprawdź czy mecz jest zakończony (gracz wchodzi do zakończonej gry)
         if (state.faza === 'ZAKONCZONE' && state.podsumowanie?.mecz_zakonczony) {
           setGameEndedInfo({
@@ -238,6 +244,12 @@ function Game() {
                 if (data.data.nazwa) setLobby(data.data)
                 if (data.data.rozdanie && (data.data.rozdanie.faza || data.data.rozdanie.rece_graczy)) {
                   setGameState(data.data.rozdanie)
+                  
+                  // Reset głosowania gdy pojawia się nowe podsumowanie
+                  if (data.data.rozdanie.faza === 'PODSUMOWANIE_ROZDANIA') {
+                    setHasVotedNextRound(false)
+                    setNextRoundVotes(null)
+                  }
                 }
               }
               break
@@ -315,6 +327,16 @@ function Game() {
             case 'lobby_closed':
               // Lobby zamknięte - wszyscy wyszli
               navigate('/dashboard')
+              break
+            
+            case 'player_staying':
+              // Gracz (lub bot) kliknął "zostań w lobby" - ignorujemy, czekamy na returned_to_lobby
+              console.log('Gracz zostaje:', data.player)
+              break
+            
+            case 'player_leaving':
+              // Gracz kliknął "dashboard" - ignorujemy, czekamy na returned_to_lobby
+              console.log('Gracz wychodzi:', data.player)
               break
               
             case 'player_disconnected':

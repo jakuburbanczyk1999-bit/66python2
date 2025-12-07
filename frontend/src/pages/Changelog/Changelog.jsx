@@ -3,6 +3,21 @@ import { useState } from 'react'
 
 const CHANGELOG = [
   {
+    version: '1.1.2',
+    date: '7 grudnia 2024',
+    type: 'fix', // 🔧
+    title: 'Profil gracza i bugfixy',
+    changes: [
+      'Strona profilu gracza (placeholder)',
+      'Filtrowanie lobby po typie gry i statusie',
+      'Klikalny avatar prowadzi do profilu',
+      'Naprawiono status offline przy odświeżeniu strony',
+      'Naprawiono blokadę przycisku "Następna runda"',
+      'Naprawiono nieskończoną lufę w trybie 3-osobowym',
+      'Naprawiono podwójny timer powrotu do lobby',
+    ],
+  },
+  {
     version: '1.1.1',
     date: '6 grudnia 2024',
     type: 'fix', // 🔧

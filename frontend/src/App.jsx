@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard/Dashboard'
 import Lobby from './pages/Lobby/Lobby'
 import Game from './pages/Game/Game'
 import Ranking from './pages/Ranking/Ranking'
+import Profile from './pages/Profile/Profile'
 import Zasady from './pages/Zasady/Zasady'
 import Changelog from './pages/Changelog/Changelog'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -43,31 +44,8 @@ function App() {
   }, []) // Tylko przy pierwszym renderze
 
   // Wylogowanie przy zamknięciu karty (status offline)
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      // Użyj sendBeacon do wysłania requesta przed zamknięciem
-      const token = localStorage.getItem('auth-storage')
-      if (token) {
-        try {
-          const parsed = JSON.parse(token)
-          const accessToken = parsed?.state?.token
-          if (accessToken) {
-            // sendBeacon wymaga Blob z odpowiednim Content-Type dla JSON
-            const blob = new Blob(
-              [JSON.stringify({ token: accessToken })],
-              { type: 'application/json' }
-            )
-            navigator.sendBeacon('/api/auth/offline', blob)
-          }
-        } catch (e) {
-          // Ignoruj błędy parsowania
-        }
-      }
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [])
+  // UWAGA: Nie używamy beforeunload bo wysyłało offline przy odświeżaniu strony
+  // Zamiast tego polegamy na heartbeat timeout (3 minuty bez heartbeat = offline)
 
   // Heartbeat - utrzymuj status online
   useEffect(() => {
@@ -165,6 +143,24 @@ function App() {
           element={
             <ProtectedRoute>
               <Zasady />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Profil - własny lub innego gracza */}
+        <Route 
+          path="/profile" 
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/profile/:username" 
+          element={
+            <ProtectedRoute>
+              <Profile />
             </ProtectedRoute>
           } 
         />

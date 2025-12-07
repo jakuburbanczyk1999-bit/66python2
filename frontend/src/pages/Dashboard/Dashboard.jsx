@@ -13,8 +13,12 @@ function Dashboard() {
   const [activeTab, setActiveTab] = useState('browse') // 'browse' | 'history' | 'friends'
   const [successMessage, setSuccessMessage] = useState(null)
   
+  // Filtry
+  const [filterGame, setFilterGame] = useState('all') // 'all' | '66' | 'tysiac'
+  const [filterStatus, setFilterStatus] = useState('all') // 'all' | 'joinable' | 'in_progress'
+  
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore() // ← POPRAWIONE: usunąłem isGuest
+  const { user, logout } = useAuthStore()
   
   // Ref do śledzenia czy jest pierwszy load
   const isFirstLoad = useRef(true)
@@ -67,12 +71,39 @@ function Dashboard() {
     navigate('/')
   }
 
+  // Filtrowanie lobby
+  const filteredLobbies = lobbies.filter(lobby => {
+    // Filtr po typie gry
+    if (filterGame !== 'all' && lobby.typ_gry !== filterGame) {
+      return false
+    }
+    
+    // Filtr po statusie
+    if (filterStatus === 'joinable') {
+      const isInLobby = lobby.status_partii === 'LOBBY'
+      const playerCount = lobby.slots?.filter(s => s.typ !== 'pusty').length || 0
+      const maxPlayers = lobby.max_graczy || lobby.opcje?.max_graczy || 4
+      const hasSpace = playerCount < maxPlayers
+      return isInLobby && hasSpace
+    }
+    
+    if (filterStatus === 'in_progress') {
+      return lobby.status_partii === 'W_GRZE' || lobby.status_partii === 'W_TRAKCIE'
+    }
+    
+    return true
+  })
+
   return (
     <div className="min-h-screen bg-[#1a2736] flex">
       {/* Sidebar */}
       <aside className="w-64 bg-[#1e2a3a] border-r border-gray-700/50 flex flex-col">
-        {/* User Info */}
-        <div className="p-6 border-b border-gray-700/50">
+        {/* User Info - KLIKALNY! */}
+        <div 
+          className="p-6 border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/30 transition-all"
+          onClick={() => navigate('/profile')}
+          title="Zobacz swój profil"
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold">
               {user?.username?.[0]?.toUpperCase()}
@@ -83,6 +114,9 @@ function Dashboard() {
                 {user?.is_guest ? '👤 Gość' : '✨ Gracz'}
               </div>
             </div>
+          </div>
+          <div className="text-xs text-teal-400 hover:text-teal-300">
+            Zobacz profil →
           </div>
         </div>
 
@@ -151,7 +185,7 @@ function Dashboard() {
           </button>
         </nav>
 
-        {/* Admin Panel Button - POPRAWIONA POZYCJA! */}
+        {/* Admin Panel Button */}
         {user?.is_admin && (
           <div className="p-4 border-t border-gray-700/50">
             <button
@@ -206,26 +240,46 @@ function Dashboard() {
             )}
           </div>
 
-          {/* Stats - tylko dla browse */}
+          {/* Filtry - tylko dla browse */}
           {activeTab === 'browse' && (
-            <div className="flex gap-6">
-              <div>
-                <div className="text-2xl font-bold text-teal-400">{lobbies.length}</div>
-                <div className="text-xs text-gray-400">Wszystkich gier</div>
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Filtr typu gry */}
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm">Typ gry:</span>
+                <select
+                  value={filterGame}
+                  onChange={(e) => setFilterGame(e.target.value)}
+                  className="px-3 py-1.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
+                >
+                  <option value="all">Wszystkie</option>
+                  <option value="66">🃏 Gra w 66</option>
+                  <option value="tysiac">🎴 Tysiąc</option>
+                </select>
               </div>
-              <div>
-                <div className="text-2xl font-bold text-green-400">
-                  {lobbies.filter(l => l.status_partii === 'LOBBY' && 
-                    (l.slots?.filter(s => s.typ !== 'pusty').length || 0) < (l.max_graczy || l.opcje?.max_graczy || 4)
-                  ).length}
-                </div>
-                <div className="text-xs text-gray-400">Można dołączyć</div>
+
+              {/* Filtr statusu */}
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm">Status:</span>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="px-3 py-1.5 bg-gray-700/50 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-teal-500"
+                >
+                  <option value="all">Wszystkie</option>
+                  <option value="joinable">✅ Można dołączyć</option>
+                  <option value="in_progress">🎮 W trakcie gry</option>
+                </select>
               </div>
-              <div>
-                <div className="text-2xl font-bold text-red-400">
-                  {lobbies.filter(l => l.status_partii === 'W_GRZE' || l.status_partii === 'W_TRAKCIE').length}
+
+              {/* Statystyki */}
+              <div className="flex-1"></div>
+              <div className="flex gap-4 text-sm">
+                <div>
+                  <span className="text-teal-400 font-bold">{filteredLobbies.length}</span>
+                  <span className="text-gray-400 ml-1">
+                    {filteredLobbies.length !== lobbies.length ? `/ ${lobbies.length}` : ''} gier
+                  </span>
                 </div>
-                <div className="text-xs text-gray-400">W trakcie gry</div>
               </div>
             </div>
           )}
@@ -265,28 +319,41 @@ function Dashboard() {
               )}
 
               {/* Empty State */}
-              {!loading && lobbies.length === 0 && (
+              {!loading && filteredLobbies.length === 0 && (
                 <div className="text-center py-12">
                   <div className="text-6xl mb-4">🎮</div>
                   <h3 className="text-xl font-bold text-white mb-2">
-                    Brak dostępnych gier
+                    {lobbies.length === 0 ? 'Brak dostępnych gier' : 'Brak gier pasujących do filtrów'}
                   </h3>
                   <p className="text-gray-400 mb-6">
-                    Bądź pierwszy - stwórz nową grę!
+                    {lobbies.length === 0 
+                      ? 'Bądź pierwszy - stwórz nową grę!'
+                      : 'Zmień filtry lub stwórz nową grę'
+                    }
                   </p>
-                  <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-all font-semibold"
-                  >
-                    ➕ Stwórz Grę
-                  </button>
+                  <div className="flex justify-center gap-3">
+                    {lobbies.length > 0 && (
+                      <button
+                        onClick={() => { setFilterGame('all'); setFilterStatus('all'); }}
+                        className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-all font-semibold"
+                      >
+                        Wyczyść filtry
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowCreateModal(true)}
+                      className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-all font-semibold"
+                    >
+                      ➕ Stwórz Grę
+                    </button>
+                  </div>
                 </div>
               )}
 
               {/* Lobby Grid */}
-              {!loading && lobbies.length > 0 && (
+              {!loading && filteredLobbies.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {lobbies.map((lobby) => {
+                  {filteredLobbies.map((lobby) => {
                     const isInGame = lobby.status_partii === 'W_GRZE' || lobby.status_partii === 'W_TRAKCIE'
                     const isUserInLobby = lobby.slots?.some(s => 
                       s.typ === 'gracz' && 

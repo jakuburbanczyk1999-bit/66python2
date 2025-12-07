@@ -472,8 +472,15 @@ class BotMatchmakingWorker:
         
         game_id = str(uuid.uuid4())[:8]
         
+        # 10% szans na lobby 3-osobowe dla gry 66
+        if self.preferred_game_type == "66" and random.random() < 0.10:
+            num_players = 3
+            print(f"🎲 [{bot.username}] Tworzy lobby 3-osobowe (10% szans)")
+        else:
+            num_players = self.preferred_players
+        
         slots = []
-        for i in range(self.preferred_players):
+        for i in range(num_players):
             if i == 0:
                 slots.append({
                     'numer_gracza': i,
@@ -499,11 +506,11 @@ class BotMatchmakingWorker:
             "id_gry": game_id,
             "id": f"Lobby_{game_id[:4]}",
             "nazwa": f"Gra {bot.username}",
-            "max_graczy": self.preferred_players,
+            "max_graczy": num_players,
             "status_partii": "LOBBY",
             "slots": slots,
             "opcje": {
-                "tryb_gry": f"{self.preferred_players}p",
+                "tryb_gry": f"{num_players}p",
                 "rankingowa": True,
                 "typ_gry": self.preferred_game_type,
                 "haslo": None

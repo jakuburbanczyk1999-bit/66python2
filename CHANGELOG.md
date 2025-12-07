@@ -4,6 +4,26 @@ Wszystkie istotne zmiany w projekcie są dokumentowane w tym pliku.
 
 ---
 
+## 🔧 [1.1.2] - 2024-12-07
+
+### Nowe funkcje
+- **Strona profilu** - placeholder dla przyszłych statystyk gracza (ELO, wygrane, historia)
+- **Filtrowanie lobby** - możliwość filtrowania po typie gry i statusie (można dołączyć / w trakcie)
+
+### Zmiany UI
+- Klikalny avatar w sidebar prowadzi do profilu
+- Dropdowny do filtrowania na liście lobby
+- Przycisk "Wyczyść filtry" gdy brak wyników
+
+### Naprawione błędy
+- **Status offline przy odświeżeniu** - usunięto `beforeunload` event który wysyłał offline przy F5
+- **Logi INFO** - wyłączono spam logów HTTP w konsoli backend
+- **Przycisk "Następna runda"** - naprawiono blokadę gdy boty czekały na gracza
+- **Nieskończona lufa 3p** - dodano warunek `do_konca` w lufie wstępnej trybu 3-osobowego
+- **Powrót do lobby** - naprawiono podwójne uruchamianie timera powrotu
+
+---
+
 ## 🔧 [1.1.1] - 2024-12-06
 
 ### Zmiany UI
