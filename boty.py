@@ -1498,23 +1498,37 @@ class RandomBot:
 
 # Słownik mapujący nazwy algorytmów na funkcje tworzące boty
 # Każdy algorytm to funkcja zwracająca instancję bota
+#
+# UWAGA: MCTS boty są WYŁĄCZONE (zbyt wolne, zasobożerne)
+# Stare nazwy przekierowują na NN boty lub heuristic jako fallback
+
+def _create_nn_or_fallback(temperature=0.5, greedy=False, personality=None):
+    """Tworzy NN bota lub fallback do heuristic/random."""
+    nn_class = _get_nn_bot_class()
+    if nn_class:
+        return nn_class(temperature=temperature, greedy=greedy, personality=personality)
+    else:
+        # Fallback do heuristic (lepszy niż random)
+        return AdvancedHeuristicBot()
+
 BOT_ALGORITHMS = {
-    # === BOTY MCTS Z OSOBOWOŚCIAMI ===
-    'topplayer': lambda: MCTS_Bot(personality='topplayer'),
-    'szaleniec': lambda: MCTS_Bot(personality='szaleniec'),
-    'gorsza_enjoyer': lambda: MCTS_Bot(personality='gorsza_enjoyer'),
-    'lepsza_enjoyer': lambda: MCTS_Bot(personality='lepsza_enjoyer'),
-    'beginner': lambda: MCTS_Bot(personality='beginner'),
-    'chaotic': lambda: MCTS_Bot(personality='chaotic'),
-    'counter': lambda: MCTS_Bot(personality='counter'),
-    'nie_lubie_pytac': lambda: MCTS_Bot(personality='nie_lubie_pytac'),
+    # === STARE NAZWY (przekierowane na NN) ===
+    # Te nazwy są zachowane dla kompatybilności z istniejącymi kontami botów
+    'topplayer': lambda: _create_nn_or_fallback(temperature=0.3, greedy=True),
+    'szaleniec': lambda: _create_nn_or_fallback(temperature=1.0, personality='aggressive'),
+    'gorsza_enjoyer': lambda: _create_nn_or_fallback(temperature=0.5, personality='gorsza_enjoyer'),
+    'lepsza_enjoyer': lambda: _create_nn_or_fallback(temperature=0.5, personality='lepsza_enjoyer'),
+    'beginner': lambda: _create_nn_or_fallback(temperature=0.3, personality='cautious'),
+    'chaotic': lambda: _create_nn_or_fallback(temperature=1.5, personality='chaotic'),
+    'counter': lambda: _create_nn_or_fallback(temperature=0.8, personality='aggressive'),
+    'nie_lubie_pytac': lambda: _create_nn_or_fallback(temperature=0.5),
     
     # === BOTY SIECI NEURONOWEJ (szybkie, skalowalne) ===
-    'nn_topplayer': lambda: _get_nn_bot_class()(temperature=0.3, greedy=True) if _get_nn_bot_class() else RandomBot(),
-    'nn_aggressive': lambda: _get_nn_bot_class()(temperature=1.0, personality='aggressive') if _get_nn_bot_class() else RandomBot(),
-    'nn_cautious': lambda: _get_nn_bot_class()(temperature=0.3, personality='cautious') if _get_nn_bot_class() else RandomBot(),
-    'nn_chaotic': lambda: _get_nn_bot_class()(temperature=1.5, personality='chaotic') if _get_nn_bot_class() else RandomBot(),
-    'nn_calculated': lambda: _get_nn_bot_class()(temperature=0.2, greedy=True, personality='calculated') if _get_nn_bot_class() else RandomBot(),
+    'nn_topplayer': lambda: _create_nn_or_fallback(temperature=0.3, greedy=True),
+    'nn_aggressive': lambda: _create_nn_or_fallback(temperature=1.0, personality='aggressive'),
+    'nn_cautious': lambda: _create_nn_or_fallback(temperature=0.3, personality='cautious'),
+    'nn_chaotic': lambda: _create_nn_or_fallback(temperature=1.5, personality='chaotic'),
+    'nn_calculated': lambda: _create_nn_or_fallback(temperature=0.2, greedy=True, personality='calculated'),
     
     # === INNE TYPY BOTÓW ===
     'heuristic': lambda: AdvancedHeuristicBot(),

@@ -60,14 +60,14 @@ BOTY_DO_STWORZENIA = [
     # === BOTY SIECI NEURONOWEJ (szybkie, 91x szybsze od MCTS) ===
     ("NeuralMaster", "nn_topplayer"),
     ("DeepPlayer66", "nn_topplayer"),
-    ("AIAgressor", "nn_aggressive"),
+    ("AAgressor", "nn_aggressive"),
     ("NNKiller", "nn_aggressive"),
-    ("SafeBot", "nn_cautious"),
-    ("Ostrozny_AI", "nn_cautious"),
-    ("RandomNeural", "nn_chaotic"),
-    ("ChaoticAI", "nn_chaotic"),
+    ("Safe", "nn_cautious"),
+    ("Ostrozny", "nn_cautious"),
+    ("Neurony", "nn_chaotic"),
+    ("GPT", "nn_chaotic"),
     ("Kalkulator", "nn_calculated"),
-    ("PrecyzyjnyBot", "nn_calculated"),
+    ("PrecyzyjnyStefek", "nn_calculated"),
 ]
 
 
