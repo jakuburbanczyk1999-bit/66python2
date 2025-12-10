@@ -85,7 +85,6 @@ class SixtySixEngine(AbstractGameEngine):
                 nazwa_druzyny_2 = nazwy_druzyn_mapa['Oni']
             else:
                 # Fallback, jeśli nazwy nie zostały przekazane
-                print("OSTRZEŻENIE (Silnik): Nie przekazano nazw drużyn, używam domyślnych 'Drużyna 1/2'.")
                 nazwa_druzyny_1 = "Drużyna 1"
                 nazwa_druzyny_2 = "Drużyna 2"
             

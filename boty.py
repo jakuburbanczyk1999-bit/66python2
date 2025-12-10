@@ -18,6 +18,21 @@ from engines.abstract_game_engine import AbstractGameEngine
 from engines.sixtysix_engine import SixtySixEngine
 # === KONIEC NOWYCH IMPORTÓW ===
 
+# === IMPORT BOTA NN (lazy loading) ===
+_nn_bot_class = None
+def _get_nn_bot_class():
+    """Lazy loading klasy NeuralNetworkBot - ładuje model tylko gdy potrzebny."""
+    global _nn_bot_class
+    if _nn_bot_class is None:
+        try:
+            from nn_training.nn_bot import NeuralNetworkBot
+            _nn_bot_class = NeuralNetworkBot
+        except ImportError as e:
+            print(f"OSTRZEŻENIE: Nie można załadować NeuralNetworkBot: {e}")
+            _nn_bot_class = False  # Oznacz że próbowano i nie udało się
+    return _nn_bot_class if _nn_bot_class else None
+# === KONIEC IMPORTU BOTA NN ===
+
 
 # ==========================================================================
 # SEKCJA 1: IMPORTY I STAŁE
@@ -1494,8 +1509,16 @@ BOT_ALGORITHMS = {
     'counter': lambda: MCTS_Bot(personality='counter'),
     'nie_lubie_pytac': lambda: MCTS_Bot(personality='nie_lubie_pytac'),
     
+    # === BOTY SIECI NEURONOWEJ (szybkie, skalowalne) ===
+    'nn_topplayer': lambda: _get_nn_bot_class()(temperature=0.3, greedy=True) if _get_nn_bot_class() else RandomBot(),
+    'nn_aggressive': lambda: _get_nn_bot_class()(temperature=1.0, personality='aggressive') if _get_nn_bot_class() else RandomBot(),
+    'nn_cautious': lambda: _get_nn_bot_class()(temperature=0.3, personality='cautious') if _get_nn_bot_class() else RandomBot(),
+    'nn_chaotic': lambda: _get_nn_bot_class()(temperature=1.5, personality='chaotic') if _get_nn_bot_class() else RandomBot(),
+    'nn_calculated': lambda: _get_nn_bot_class()(temperature=0.2, greedy=True, personality='calculated') if _get_nn_bot_class() else RandomBot(),
+    
     # === INNE TYPY BOTÓW ===
     'heuristic': lambda: AdvancedHeuristicBot(),
+    'random': lambda: RandomBot(),
 }
 
 # Dostępne nazwy algorytmów (dla walidacji)
@@ -1546,10 +1569,22 @@ BOTY_DO_STWORZENIA = [
     # === HEURYSTYCZNY (prostszy, przewidywalny) ===
     ("Esssa", "heuristic"),
     ("67676767", "heuristic"),
+    
+    # === BOTY SIECI NEURONOWEJ (szybkie, skalowalne) ===
+    ("NeuralMaster", "nn_topplayer"),
+    ("DeepPlayer66", "nn_topplayer"),
+    ("AIAgressor", "nn_aggressive"),
+    ("NNKiller", "nn_aggressive"),
+    ("SafeBot", "nn_cautious"),
+    ("Ostrozny_AI", "nn_cautious"),
+    ("RandomNeural", "nn_chaotic"),
+    ("ChaoticAI", "nn_chaotic"),
+    ("Kalkulator", "nn_calculated"),
+    ("PrecyzyjnyBot", "nn_calculated"),
 ]
 
 
-def stworz_bota(algorytm: str) -> Union[MCTS_Bot, AdvancedHeuristicBot, None]:
+def stworz_bota(algorytm: str) -> Union[MCTS_Bot, AdvancedHeuristicBot, RandomBot, Any, None]:
     """
     Tworzy instancję bota na podstawie nazwy algorytmu.
     
@@ -1558,6 +1593,10 @@ def stworz_bota(algorytm: str) -> Union[MCTS_Bot, AdvancedHeuristicBot, None]:
     
     Returns:
         Instancja bota lub None jeśli algorytm nie istnieje
+        
+    Note:
+        Boty 'nn_*' zwracają NeuralNetworkBot (szybki, ~100x szybszy od MCTS)
+        Jeśli model NN nie jest dostępny, automatycznie fallback do RandomBot
     """
     if algorytm in BOT_ALGORITHMS:
         return BOT_ALGORITHMS[algorytm]()

@@ -56,6 +56,18 @@ BOTY_DO_STWORZENIA = [
     # === HEURYSTYCZNY (prostszy, przewidywalny) ===
     ("Esssa", "heuristic"),
     ("67676767", "heuristic"),
+    
+    # === BOTY SIECI NEURONOWEJ (szybkie, 91x szybsze od MCTS) ===
+    ("NeuralMaster", "nn_topplayer"),
+    ("DeepPlayer66", "nn_topplayer"),
+    ("AIAgressor", "nn_aggressive"),
+    ("NNKiller", "nn_aggressive"),
+    ("SafeBot", "nn_cautious"),
+    ("Ostrozny_AI", "nn_cautious"),
+    ("RandomNeural", "nn_chaotic"),
+    ("ChaoticAI", "nn_chaotic"),
+    ("Kalkulator", "nn_calculated"),
+    ("PrecyzyjnyBot", "nn_calculated"),
 ]
 
 
