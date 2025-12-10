@@ -27,3 +27,7 @@ cloudpickle>=3.0.0
 
 # Async support
 anyio>=4.0.0
+
+# Neural Network Bot (CPU version - smaller image)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0

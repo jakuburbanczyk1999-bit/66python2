@@ -1,0 +1,13 @@
+# nn_training/.gitignore
+
+# Cache
+__pycache__/
+*.pyc
+
+# Dane treningowe (duże pliki)
+data/
+logs/
+
+# Stare checkpointy - zachowaj tylko best_model.pt
+checkpoints/*
+!checkpoints/best_model.pt
