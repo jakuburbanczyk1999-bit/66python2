@@ -213,7 +213,11 @@ function Ranking() {
                               {player.username[0]?.toUpperCase()}
                             </div>
                             <div>
-                              <p className={`font-semibold ${isMe ? 'text-teal-300' : 'text-white'}`}>
+                              <p 
+                                className="font-semibold"
+                                style={{ color: player.rank?.color || (isMe ? '#5eead4' : '#fff') }}
+                              >
+                                {player.is_admin && <span className="text-red-500">🅰️</span>}
                                 {player.username}
                                 {isMe && <span className="ml-2 text-xs text-teal-400">(Ty)</span>}
                               </p>

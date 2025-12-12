@@ -40,7 +40,7 @@ function PytaniePanel({ onAction, loading }) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          Nie pytam (z 3)
+          Nie pytam
         </button>
       </div>
     </div>

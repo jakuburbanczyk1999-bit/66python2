@@ -21,7 +21,7 @@ router = APIRouter()
 async def get_ranks_for_usernames(usernames: list) -> dict:
     """
     Pobiera rangi dla listy użytkowników.
-    Zwraca dict {username: rank_info}
+    Zwraca dict {username: rank_info} z dodatkowymi polami is_admin
     """
     if not usernames:
         return {}
@@ -29,18 +29,21 @@ async def get_ranks_for_usernames(usernames: list) -> dict:
     ranks = {}
     try:
         async with async_sessionmaker() as session:
-            # Pobierz najwyższe ELO dla każdego użytkownika
+            # Pobierz użytkowników z ich danymi
             users_query = select(User).where(User.username.in_(usernames))
             users_result = await session.execute(users_query)
-            users = {u.username: u.id for u in users_result.scalars().all()}
+            users_data = {u.username: {'id': u.id, 'is_admin': u.is_admin} for u in users_result.scalars().all()}
             
             for username in usernames:
-                if username not in users:
+                if username not in users_data:
                     # Nowy gracz bez statystyk - domyślna ranga
-                    ranks[username] = get_rank_for_elo(1200)
+                    rank_info = get_rank_for_elo(1200)
+                    rank_info['is_admin'] = False
+                    ranks[username] = rank_info
                     continue
                 
-                user_id = users[username]
+                user_info = users_data[username]
+                user_id = user_info['id']
                 
                 # Pobierz najwyższe ELO
                 stats_query = select(func.max(PlayerGameStats.elo_rating)).where(
@@ -49,13 +52,17 @@ async def get_ranks_for_usernames(usernames: list) -> dict:
                 stats_result = await session.execute(stats_query)
                 max_elo = stats_result.scalar() or 1200
                 
-                ranks[username] = get_rank_for_elo(max_elo)
+                rank_info = get_rank_for_elo(max_elo)
+                rank_info['is_admin'] = user_info['is_admin']
+                ranks[username] = rank_info
     except Exception as e:
         print(f"[⚠️ Stats] Błąd pobierania rang: {e}")
         # Fallback - domyślna ranga dla wszystkich
         for username in usernames:
             if username not in ranks:
-                ranks[username] = get_rank_for_elo(1200)
+                rank_info = get_rank_for_elo(1200)
+                rank_info['is_admin'] = False
+                ranks[username] = rank_info
     
     return ranks
 
@@ -201,7 +208,8 @@ async def get_ranking(
                     'games_played': int(games),
                     'games_won': int(wins),
                     'win_rate': win_rate,
-                    'is_bot': is_bot
+                    'is_bot': is_bot,
+                    'is_admin': user.is_admin
                 })
             
             # Policz całkowitą liczbę graczy
@@ -323,6 +331,7 @@ async def get_player_stats(username: str):
                 'avatar_url': user.avatar_url or 'default_avatar.png',
                 'created_at': user.created_at.isoformat() if user.created_at else None,
                 'is_bot': is_bot,
+                'is_admin': user.is_admin,
                 'global_stats': {
                     'elo': round(highest_elo),
                     'rank': global_rank,

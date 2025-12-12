@@ -3,6 +3,19 @@ import { useState } from 'react'
 
 const CHANGELOG = [
   {
+    version: '1.1.3.1',
+    date: '12 grudnia 2024',
+    type: 'fix', // 🔧
+    title: 'Łatka rang i adminów',
+    changes: [
+      'Kolory nicków odpowiadające klasom (Klasa 3 brązowy, Klasa 2 srebrny, Klasa 1 złoty, Mistrz pomarańczowy)',
+      'Wyświetlanie znacznika Admin (🅰️) przy administratorach',
+      'Czerwony napis "Admin" na profilu administratora',
+      'Kolory rang widoczne w: lobby, grze, podglądzie, rankingu, profilu',
+      'Usunięto wizualne oznaczenia botów z rankingu i profili',
+    ],
+  },
+  {
     version: '1.1.3',
     date: '12 grudnia 2024',
     type: 'major', // 🎉

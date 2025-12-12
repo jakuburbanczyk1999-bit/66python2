@@ -300,8 +300,15 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                           }`}>
                             {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-white text-sm truncate">{playerRanks[player.nazwa]?.emoji} {player.nazwa}</div>
+                        <div 
+                          className="flex-1 min-w-0">
+                            <div 
+                              className="font-semibold text-sm truncate"
+                              style={{ color: playerRanks[player.nazwa]?.color || '#fff' }}
+                            >
+                              {playerRanks[player.nazwa]?.is_admin && <span className="text-red-500">🅰️</span>}
+                              {playerRanks[player.nazwa]?.emoji} {player.nazwa}
+                            </div>
                             <div className="text-xs text-gray-500 flex items-center gap-1">
                               {player.is_host && <span className="text-yellow-400">👑</span>}
                               {player.typ === 'bot' && <span className="text-purple-400">Bot</span>}
@@ -339,7 +346,13 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                             {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-white text-sm truncate">{playerRanks[player.nazwa]?.emoji} {player.nazwa}</div>
+                            <div 
+                              className="font-semibold text-sm truncate"
+                              style={{ color: playerRanks[player.nazwa]?.color || '#fff' }}
+                            >
+                              {playerRanks[player.nazwa]?.is_admin && <span className="text-red-500">🅰️</span>}
+                              {playerRanks[player.nazwa]?.emoji} {player.nazwa}
+                            </div>
                             <div className="text-xs text-gray-500 flex items-center gap-1">
                               {player.is_host && <span className="text-yellow-400">👑</span>}
                               {player.typ === 'bot' && <span className="text-purple-400">Bot</span>}
@@ -374,7 +387,13 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-white">{playerRanks[player.nazwa]?.emoji} {player.nazwa}</span>
+                          <span 
+                            className="font-semibold"
+                            style={{ color: playerRanks[player.nazwa]?.color || '#fff' }}
+                          >
+                            {playerRanks[player.nazwa]?.is_admin && <span className="text-red-500">🅰️</span>}
+                            {playerRanks[player.nazwa]?.emoji} {player.nazwa}
+                          </span>
                           {player.is_host && (
                             <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
                               👑 Host

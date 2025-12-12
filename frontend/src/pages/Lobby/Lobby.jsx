@@ -675,8 +675,14 @@ function SlotCard({
                 <div className="text-xs text-gray-400 mb-1">{prefix}</div>
               )}
               <div className="flex items-center gap-2 mb-1">
+                {rank?.is_admin && <span className="text-red-500" title="Admin">🅰️</span>}
                 {rank && <span title={rank.name}>{rank.emoji}</span>}
-                <p className="text-white font-bold text-lg">{slot.nazwa}</p>
+                <p 
+                  className="font-bold text-lg"
+                  style={{ color: rank?.color || '#fff' }}
+                >
+                  {slot.nazwa}
+                </p>
               </div>
               {isMe && <span className="text-teal-400 text-xs font-semibold mb-2">(Ty)</span>}
               {isPlayer && (

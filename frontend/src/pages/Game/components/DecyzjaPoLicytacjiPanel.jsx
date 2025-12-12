@@ -27,7 +27,7 @@ function DecyzjaPoLicytacjiPanel({ onAction, loading }) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          Gorsza z 3
+          Gorsza
         </button>
 
         {/* Lepsza z 3 */}
@@ -40,7 +40,7 @@ function DecyzjaPoLicytacjiPanel({ onAction, loading }) {
             disabled:opacity-50 disabled:cursor-not-allowed
           "
         >
-          Lepsza z 3
+          Lepsza
         </button>
 
         {/* Graj Normalnie */}

@@ -1102,7 +1102,10 @@ function Game() {
                     </span>
                   )}
                   {getPlayerPrefix(topOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
-                  <p className="text-white font-bold text-sm">{playerRanks[topOpponent.name]?.emoji} {topOpponent.name}</p>
+                  <p className="font-bold text-sm" style={{ color: playerRanks[topOpponent.name]?.color || '#fff' }}>
+                    {playerRanks[topOpponent.name]?.is_admin && <span className="text-red-500">🅰️</span>}
+                    {playerRanks[topOpponent.name]?.emoji} {topOpponent.name}
+                  </p>
                 </div>
                 
                 <div className="flex gap-1 flex-row">
@@ -1237,7 +1240,10 @@ function Game() {
                     </span>
                   )}
                   {getPlayerPrefix(leftOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
-                  <p className="text-white font-bold text-sm">{playerRanks[leftOpponent.name]?.emoji} {leftOpponent.name}</p>
+                  <p className="font-bold text-sm" style={{ color: playerRanks[leftOpponent.name]?.color || '#fff' }}>
+                    {playerRanks[leftOpponent.name]?.is_admin && <span className="text-red-500">🅰️</span>}
+                    {playerRanks[leftOpponent.name]?.emoji} {leftOpponent.name}
+                  </p>
                 </div>
                 
                 <div className="flex gap-1 flex-col">
@@ -1293,7 +1299,10 @@ function Game() {
                     </span>
                   )}
                   {getPlayerPrefix(rightOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
-                  <p className="text-white font-bold text-sm">{playerRanks[rightOpponent.name]?.emoji} {rightOpponent.name}</p>
+                  <p className="font-bold text-sm" style={{ color: playerRanks[rightOpponent.name]?.color || '#fff' }}>
+                    {playerRanks[rightOpponent.name]?.is_admin && <span className="text-red-500">🅰️</span>}
+                    {playerRanks[rightOpponent.name]?.emoji} {rightOpponent.name}
+                  </p>
                 </div>
               </div>
             )}
@@ -1591,7 +1600,10 @@ function Game() {
                         <span className="text-xs text-gray-400">{myPrefix}</span>
                       )}
                       {myPrefix && <span className="text-gray-600">·</span>}
-                      <span className="text-teal-400 font-bold text-sm">{playerRanks[user?.username]?.emoji} {user?.username}</span>
+                      <span className="font-bold text-sm" style={{ color: playerRanks[user?.username]?.color || '#5eead4' }}>
+                        {playerRanks[user?.username]?.is_admin && <span className="text-red-500">🅰️</span>}
+                        {playerRanks[user?.username]?.emoji} {user?.username}
+                      </span>
                     </div>
                   </div>
                 )
@@ -1694,7 +1706,9 @@ function Game() {
                     <div className="space-y-1">
                       {Object.entries(roundPoints).map(([name, points]) => (
                         <div key={name} className="flex justify-between text-xs">
-                          <span className={name === user?.username ? 'text-teal-400' : 'text-gray-300'}>
+                          <span 
+                            style={{ color: playerRanks[name]?.color || (name === user?.username ? '#5eead4' : '#d1d5db') }}
+                          >
                             {playerRanks[name]?.emoji} {name}
                           </span>
                           <span className="text-white font-bold">{points}</span>
@@ -1719,9 +1733,11 @@ function Game() {
                         {getPlayerPrefix(player) && (
                           <span className="text-xs text-gray-500">{getPlayerPrefix(player)}</span>
                         )}
-                        <span className={`font-medium text-xs truncate ${
-                          player.name === user?.username ? 'text-teal-400' : 'text-white'
-                        }`}>
+                        <span 
+                          className="font-medium text-xs truncate"
+                          style={{ color: playerRanks[player.name]?.color || (player.name === user?.username ? '#5eead4' : '#fff') }}
+                        >
+                          {playerRanks[player.name]?.is_admin && <span className="text-red-500">🅰️</span>}
                           {playerRanks[player.name]?.emoji} {player.name}
                         </span>
                       </div>
@@ -1752,9 +1768,11 @@ function Game() {
                           {getPlayerPrefix(player) && (
                             <span className="text-xs text-gray-500">{getPlayerPrefix(player)}</span>
                           )}
-                          <span className={`font-medium text-xs truncate ${
-                            player.name === user?.username ? 'text-teal-400' : 'text-white'
-                          }`}>
+                          <span 
+                            className="font-medium text-xs truncate"
+                            style={{ color: playerRanks[player.name]?.color || (player.name === user?.username ? '#5eead4' : '#fff') }}
+                          >
+                            {playerRanks[player.name]?.is_admin && <span className="text-red-500">🅰️</span>}
                             {playerRanks[player.name]?.emoji} {player.name}
                           </span>
                         </div>
@@ -1772,9 +1790,11 @@ function Game() {
                           {getPlayerPrefix(player) && (
                             <span className="text-xs text-gray-500">{getPlayerPrefix(player)}</span>
                           )}
-                          <span className={`font-medium text-xs truncate ${
-                            player.name === user?.username ? 'text-teal-400' : 'text-white'
-                          }`}>
+                          <span 
+                            className="font-medium text-xs truncate"
+                            style={{ color: playerRanks[player.name]?.color || (player.name === user?.username ? '#5eead4' : '#fff') }}
+                          >
+                            {playerRanks[player.name]?.is_admin && <span className="text-red-500">🅰️</span>}
                             {playerRanks[player.name]?.emoji} {player.name}
                           </span>
                         </div>
@@ -1803,9 +1823,10 @@ function Game() {
                   return (
                     <div key={idx} className="p-2 rounded-lg bg-gray-800/50">
                       <div className="flex items-center justify-between mb-1">
-                        <span className={`text-xs font-semibold ${
-                          player.name === user?.username ? 'text-teal-400' : 'text-white'
-                        }`}>
+                        <span 
+                          className="text-xs font-semibold"
+                          style={{ color: playerRanks[player.name]?.color || (player.name === user?.username ? '#5eead4' : '#fff') }}
+                        >
                           {playerRanks[player.name]?.emoji} {player.name}
                         </span>
                         <span className="text-yellow-400 font-bold text-sm">

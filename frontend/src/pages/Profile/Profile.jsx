@@ -139,19 +139,22 @@ function Profile() {
               <div className="bg-[#1e2a3a] border border-gray-700/50 rounded-xl p-6">
                 <div className="flex items-start gap-6">
                   {/* Avatar */}
-                  <div className={`w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-bold text-white
-                    ${stats.is_bot ? 'bg-gradient-to-br from-purple-500 to-pink-500' : 'bg-gradient-to-br from-teal-500 to-cyan-500'}
-                  `}>
-                    {stats.is_bot ? '🤖' : stats.username[0]?.toUpperCase()}
+                  <div className="w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-bold text-white bg-gradient-to-br from-teal-500 to-cyan-500">
+                    {stats.username[0]?.toUpperCase()}
                   </div>
                   
                   {/* Info */}
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <h2 className="text-2xl font-bold text-white">{stats.username}</h2>
-                      {stats.is_bot && (
-                        <span className="px-2 py-1 bg-purple-500/20 text-purple-400 text-xs rounded-full">
-                          Bot
+                      <h2 
+                        className="text-2xl font-bold"
+                        style={{ color: stats.global_stats?.rank?.color || '#fff' }}
+                      >
+                        {stats.username}
+                      </h2>
+                      {stats.is_admin && (
+                        <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded-full font-semibold">
+                          Admin
                         </span>
                       )}
                       {isOwnProfile && (
