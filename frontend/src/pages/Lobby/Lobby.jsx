@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
-import { lobbyAPI } from '../../services/api'
+import { lobbyAPI, statsAPI } from '../../services/api'
 
 function Lobby() {
   const { id } = useParams()
@@ -24,6 +24,9 @@ function Lobby() {
   // Swap state
   const [swapMode, setSwapMode] = useState(false)
   const [swapFirstSlot, setSwapFirstSlot] = useState(null)
+
+  // Ranks state
+  const [playerRanks, setPlayerRanks] = useState({})
 
   const loadLobby = async () => {
     try {
@@ -74,6 +77,30 @@ function Lobby() {
       loadChat()
     }
   }, [lobby])
+
+  // Pobierz rangi graczy
+  const slotsKey = JSON.stringify(lobby?.slots?.map(s => s.nazwa).filter(Boolean) || [])
+  useEffect(() => {
+    const loadRanks = async () => {
+      if (!lobby?.slots) return
+      
+      const usernames = lobby.slots
+        .filter(s => s.typ !== 'pusty' && s.nazwa)
+        .map(s => s.nazwa)
+      
+      if (usernames.length === 0) return
+      
+      try {
+        const data = await statsAPI.getRanksBatch(usernames)
+        console.log('Rangi pobrane:', data)
+        setPlayerRanks(data.ranks || {})
+      } catch (err) {
+        console.error('Błąd pobierania rang:', err)
+      }
+    }
+    
+    loadRanks()
+  }, [slotsKey])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -390,6 +417,7 @@ function Lobby() {
                   key={index}
                   slot={slot}
                   index={index}
+                  rank={slot.nazwa ? playerRanks[slot.nazwa] : null}
                   isMe={slot.id_uzytkownika === user?.id || (slot.typ === 'gracz' && slot.nazwa === user?.username)}
                   isHost={isHost}
                   isInLobby={isInLobby}
@@ -579,7 +607,8 @@ function Lobby() {
 
 function SlotCard({ 
   slot, 
-  index, 
+  index,
+  rank,
   isMe, 
   isHost, 
   isInLobby, 
@@ -646,6 +675,7 @@ function SlotCard({
                 <div className="text-xs text-gray-400 mb-1">{prefix}</div>
               )}
               <div className="flex items-center gap-2 mb-1">
+                {rank && <span title={rank.name}>{rank.emoji}</span>}
                 <p className="text-white font-bold text-lg">{slot.nazwa}</p>
               </div>
               {isMe && <span className="text-teal-400 text-xs font-semibold mb-2">(Ty)</span>}

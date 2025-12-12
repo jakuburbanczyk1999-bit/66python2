@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 # Import routerów
-from routers import auth, lobby, game, pages, websocket_router, admin
+from routers import auth, lobby, game, pages, websocket_router, admin, stats
 
 # Import services
 from services.redis_service import init_redis, close_redis
@@ -135,7 +135,7 @@ async def lifespan(app: FastAPI):
         print(f"⚠️ OSTRZEŻENIE logging: {e}")
     
     # 1. Inicjalizacja bazy danych
-    print("\n📦 [1/3] Inicjalizacja bazy danych...")
+    print("\n📦 [1/6] Inicjalizacja bazy danych...")
     try:
         await init_db()
         print("✅ Baza danych gotowa!")
@@ -143,8 +143,17 @@ async def lifespan(app: FastAPI):
         print(f"❌ BŁĄD bazy danych: {e}")
         raise
     
+    # 1b. Inicjalizacja typów gier
+    print("\n🎲 [1b/6] Inicjalizacja typów gier...")
+    try:
+        from routers.stats import ensure_game_types_exist
+        await ensure_game_types_exist()
+        print("✅ Typy gier gotowe!")
+    except Exception as e:
+        print(f"⚠️ OSTRZEŻENIE typy gier: {e}")
+    
     # 2. Inicjalizacja Redis
-    print("\n🔴 [2/3] Inicjalizacja Redis...")
+    print("\n🔴 [2/6] Inicjalizacja Redis...")
     try:
         await init_redis()
         print("✅ Redis gotowy!")
@@ -319,6 +328,12 @@ app.include_router(
 app.include_router(
     pages.router,
     tags=["📄 Pages"]
+)
+# Stats: /api/stats/*
+app.include_router(
+    stats.router,
+    prefix="/api/stats",
+    tags=["📊 Stats"]
 )
 # Pages (Admin): /admin/*
 app.include_router(

@@ -438,6 +438,60 @@ export const clearAuth = () => {
 export default api
 
 // ============================================
+// STATS API
+// ============================================
+
+export const statsAPI = {
+  /**
+   * Get ranking
+   * @param {object} params { game_type, limit, offset }
+   * @returns {Promise} { ranking, total_players, limit, offset }
+   */
+  getRanking: async (params = {}) => {
+    const response = await api.get('/stats/ranking', { params })
+    return response.data
+  },
+
+  /**
+   * Get player stats
+   * @param {string} username
+   * @returns {Promise} player stats object
+   */
+  getPlayerStats: async (username) => {
+    const response = await api.get(`/stats/player/${username}`)
+    return response.data
+  },
+
+  /**
+   * Get my stats (shortcut)
+   * @returns {Promise} player stats object
+   */
+  getMyStats: async () => {
+    const response = await api.get('/stats/my-stats')
+    return response.data
+  },
+
+  /**
+   * Get all ranks
+   * @returns {Promise} { ranks: [...] }
+   */
+  getRanks: async () => {
+    const response = await api.get('/stats/ranks')
+    return response.data
+  },
+
+  /**
+   * Get ranks for multiple players
+   * @param {string[]} usernames
+   * @returns {Promise} { ranks: {username: rank_info} }
+   */
+  getRanksBatch: async (usernames) => {
+    const response = await api.post('/stats/ranks/batch', usernames)
+    return response.data
+  },
+}
+
+// ============================================
 // ADMIN API 
 // ============================================
 

@@ -570,6 +570,60 @@ async def vote_next_round(
                 print(f"[⚠️ Stats] Błąd inkrementacji: {stats_err}")
             # === KONIEC INKREMENTACJI ===
             
+            # === AKTUALIZACJA STATYSTYK GRACZY (ELO, wygrane/przegrane) ===
+            try:
+                from routers.stats import update_player_stats_after_game
+                
+                # Określ typ gry
+                game_type_name = "Tysiąc" if isinstance(engine, TysiacEngine) else "66"
+                
+                # Sprawdź czy gra casual
+                is_casual = lobby_data.get('is_casual', False) if lobby_data else False
+                
+                # Zidentyfikuj zwycięzców i przegranych
+                winner_usernames = []
+                loser_usernames = []
+                
+                if isinstance(engine, TysiacEngine):
+                    # Tysiąc - indywidualni gracze
+                    for gracz in engine.game_state.gracze:
+                        if gracz.nazwa == zwyciezca_meczu:
+                            winner_usernames.append(gracz.nazwa)
+                        else:
+                            loser_usernames.append(gracz.nazwa)
+                else:
+                    # 66 - drużyny lub indywidualni gracze
+                    if hasattr(engine.game_state, 'druzyny') and engine.game_state.druzyny:
+                        # Tryb 4p z drużynami
+                        for druzyna in engine.game_state.druzyny:
+                            if druzyna.nazwa == zwyciezca_meczu:
+                                # Dodaj obu graczy z wygrywającej drużyny
+                                winner_usernames.extend([g.nazwa for g in druzyna.gracze])
+                            else:
+                                # Dodaj obu graczy z przegrywającej drużyny
+                                loser_usernames.extend([g.nazwa for g in druzyna.gracze])
+                    else:
+                        # Tryb 3p - indywidualni gracze
+                        for gracz in engine.game_state.gracze:
+                            if gracz.nazwa == zwyciezca_meczu:
+                                winner_usernames.append(gracz.nazwa)
+                            else:
+                                loser_usernames.append(gracz.nazwa)
+                
+                # Aktualizuj statystyki (w tle)
+                asyncio.create_task(
+                    update_player_stats_after_game(
+                        winner_usernames=winner_usernames,
+                        loser_usernames=loser_usernames,
+                        game_type_name=game_type_name,
+                        is_casual=is_casual
+                    )
+                )
+                print(f"[📊 Stats] Aktualizacja: winners={winner_usernames}, losers={loser_usernames}, casual={is_casual}")
+            except Exception as stats_err:
+                print(f"[⚠️ Stats] Błąd aktualizacji statystyk: {stats_err}")
+            # === KONIEC AKTUALIZACJI STATYSTYK ===
+            
             # Pobierz stan dla gracza
             final_state = convert_enums_to_strings(engine.get_state_for_player(player_id))
             final_state['mecz_zakonczony'] = True

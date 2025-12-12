@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useAuthStore from '../store/authStore'
+import { statsAPI } from '../services/api'
 
 function LobbyCard({ lobby, onJoin, onRefresh }) {
   const [showPreview, setShowPreview] = useState(false)
+  const [playerRanks, setPlayerRanks] = useState({})
   const { user } = useAuthStore()
   
   const { id_gry, nazwa, opcje, slots, status_partii } = lobby
@@ -47,6 +49,28 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
   
   // Punkty meczowe (jeśli gra w toku) - sprawdź różne ścieżki
   const matchScore = lobby?.punkty_meczowe || lobby?.rozdanie?.punkty_meczowe || lobby?.game_state?.punkty_meczowe || null
+
+  // Pobierz rangi graczy
+  const slotsKey = JSON.stringify(slots?.map(s => s.nazwa).filter(Boolean) || [])
+  useEffect(() => {
+    const loadRanks = async () => {
+      const usernames = slots
+        ?.filter(s => s.typ !== 'pusty' && s.nazwa)
+        .map(s => s.nazwa) || []
+      
+      if (usernames.length === 0) return
+      
+      try {
+        const data = await statsAPI.getRanksBatch(usernames)
+        console.log('Rangi pobrane (card):', data)
+        setPlayerRanks(data.ranks || {})
+      } catch (err) {
+        console.error('Błąd pobierania rang:', err)
+      }
+    }
+    
+    loadRanks()
+  }, [slotsKey])
 
   return (
     <>
@@ -95,7 +119,8 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                 if (slot.typ === 'bot') prefixes.push('Bot')
                 if (slot.is_host) prefixes.push('Host')
                 const prefix = prefixes.length > 0 ? `[${prefixes.join(' · ')}] ` : ''
-                return `${prefix}${slot.nazwa}`
+                const rankEmoji = playerRanks[slot.nazwa]?.emoji ? `${playerRanks[slot.nazwa].emoji} ` : ''
+                return `${prefix}${rankEmoji}${slot.nazwa}`
               }
               
               return (
@@ -276,7 +301,7 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                             {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-white text-sm truncate">{player.nazwa}</div>
+                            <div className="font-semibold text-white text-sm truncate">{playerRanks[player.nazwa]?.emoji} {player.nazwa}</div>
                             <div className="text-xs text-gray-500 flex items-center gap-1">
                               {player.is_host && <span className="text-yellow-400">👑</span>}
                               {player.typ === 'bot' && <span className="text-purple-400">Bot</span>}
@@ -314,7 +339,7 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                             {player.typ === 'bot' ? '🤖' : player.nazwa?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-white text-sm truncate">{player.nazwa}</div>
+                            <div className="font-semibold text-white text-sm truncate">{playerRanks[player.nazwa]?.emoji} {player.nazwa}</div>
                             <div className="text-xs text-gray-500 flex items-center gap-1">
                               {player.is_host && <span className="text-yellow-400">👑</span>}
                               {player.typ === 'bot' && <span className="text-purple-400">Bot</span>}
@@ -349,7 +374,7 @@ function LobbyCard({ lobby, onJoin, onRefresh }) {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-white">{player.nazwa}</span>
+                          <span className="font-semibold text-white">{playerRanks[player.nazwa]?.emoji} {player.nazwa}</span>
                           {player.is_host && (
                             <span className="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded">
                               👑 Host

@@ -3,6 +3,21 @@ import { useState } from 'react'
 
 const CHANGELOG = [
   {
+    version: '1.1.3',
+    date: '12 grudnia 2024',
+    type: 'major', // 🎉
+    title: 'System rang i ranking',
+    changes: [
+      'Działająca strona rankingu graczy',
+      'System rang: Klasa 3, Klasa 2, Klasa 1, Mistrz (z punktami)',
+      'System ELO - punkty zmieniają się po każdym meczu rankingowym',
+      'Wyświetlanie rang (emoji) przy nickach w lobby i grze',
+      'Statystyki wygrane/przegrane dla graczy i botów',
+      'Strona profilu ze szczegółowymi statystykami',
+      'Naprawiono logikę ostatniej lewy - przy remisie wygrywa biorący ostatnią lewę',
+    ],
+  },
+  {
     version: '1.1.2',
     date: '7 grudnia 2024',
     type: 'fix', // 🔧

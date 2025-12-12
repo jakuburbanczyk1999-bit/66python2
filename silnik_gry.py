@@ -606,13 +606,10 @@ class Rozdanie:
         # --- Ustal zwycięzcę rozdania ---
         if self.zwyciezca_rozdania: # Jeśli zwycięzca ustalony przedwcześnie (np. meldunkiem, Gorsza/Lepsza)
             druzyna_wygrana = self.zwyciezca_rozdania
-        elif self.kontrakt == Kontrakt.NORMALNA and self.zwyciezca_ostatniej_lewy:
-            # W NORMALNEJ ostatnia lewa decyduje (jeśli nikt nie osiągnął 66 pkt)
-            druzyna_wygrana = self.zwyciezca_ostatniej_lewy.druzyna
         elif self.kontrakt == Kontrakt.GORSZA and self.grajacy and not any(k for g in self.grajacy.druzyna.gracze for k in g.wygrane_karty):
             # Warunek wygranej Gorszej (grający nie wziął żadnej lewy)
             druzyna_wygrana = self.grajacy.druzyna
-        elif self.grajacy: # W pozostałych przypadkach porównaj punkty w kartach
+        elif self.grajacy: # Porównaj punkty w kartach
              punkty_grajacego = self.punkty_w_rozdaniu.get(self.grajacy.druzyna.nazwa, 0)
              przeciwnicy = self.grajacy.druzyna.przeciwnicy
              punkty_przeciwnikow = self.punkty_w_rozdaniu.get(przeciwnicy.nazwa, 0) if przeciwnicy else 0
@@ -620,9 +617,12 @@ class Rozdanie:
              if punkty_grajacego >= 66: druzyna_wygrana = self.grajacy.druzyna
              # Jeśli przeciwnicy mają >= 66 pkt
              elif punkty_przeciwnikow >= 66 and przeciwnicy: druzyna_wygrana = przeciwnicy
-             # Jeśli skończyły się karty i nikt nie ma 66 pkt
+             # Nikt nie ma 66 pkt - wygrywa ten kto wziął ostatnią lewę
+             elif self.kontrakt == Kontrakt.NORMALNA and self.zwyciezca_ostatniej_lewy:
+                  druzyna_wygrana = self.zwyciezca_ostatniej_lewy.druzyna
+                  if not self.powod_zakonczenia: self.powod_zakonczenia = "wzięcie ostatniej lewy"
+             # Fallback - wygrywa ten kto ma więcej punktów
              elif not any(g.reka for g in self.gracze if g != self.nieaktywny_gracz):
-                  # Wygrywa ten, kto ma więcej punktów w kartach
                   if punkty_grajacego > punkty_przeciwnikow: druzyna_wygrana = self.grajacy.druzyna
                   elif przeciwnicy: druzyna_wygrana = przeciwnicy
 
@@ -868,9 +868,7 @@ class Rozdanie:
 
         if kart_wygranych + kart_w_lewie == liczba_kart_w_grze:
             self.zwyciezca_ostatniej_lewy = zwyciezca_lewy
-            # W NORMALNEJ, dodaj  pkt za ostatnią lewę
-            if self.kontrakt == Kontrakt.NORMALNA and zwyciezca_lewy.druzyna:
-                 self._dodaj_log('bonus_ostatnia_lewa', gracz=zwyciezca_lewy.nazwa)
+            self._dodaj_log('ostatnia_lewa', gracz=zwyciezca_lewy.nazwa)
 
         # Resetowanie stanu lewy
         self.aktualna_lewa.clear()
@@ -1642,11 +1640,25 @@ class RozdanieTrzyOsoby:
         elif self.grajacy: # Fallback
              punkty_grajacego = self.punkty_w_rozdaniu.get(self.grajacy.nazwa, 0)
              punkty_obrony_sum = sum(self.punkty_w_rozdaniu.get(o.nazwa, 0) for o in self.obroncy)
-             if self.kontrakt == Kontrakt.GORSZA: wygrani = [self.grajacy] if not any(self.grajacy.wygrane_karty) else self.obroncy
-             elif self.kontrakt == Kontrakt.LEPSZA: wygrani = [self.grajacy] if not any(o.wygrane_karty for o in self.obroncy) else self.obroncy
-             elif self.kontrakt == Kontrakt.NORMALNA and self.zwyciezca_ostatniej_lewy: wygrani = [self.grajacy] if self.zwyciezca_ostatniej_lewy == self.grajacy else self.obroncy
-             elif punkty_grajacego > punkty_obrony_sum: wygrani = [self.grajacy]
-             else: wygrani = self.obroncy
+             # Specjalne kontrakty
+             if self.kontrakt == Kontrakt.GORSZA: 
+                 wygrani = [self.grajacy] if not any(self.grajacy.wygrane_karty) else self.obroncy
+             elif self.kontrakt == Kontrakt.LEPSZA: 
+                 wygrani = [self.grajacy] if not any(o.wygrane_karty for o in self.obroncy) else self.obroncy
+             # Ktoś ma >= 66 pkt
+             elif punkty_grajacego >= 66: 
+                 wygrani = [self.grajacy]
+             elif punkty_obrony_sum >= 66: 
+                 wygrani = self.obroncy
+             # Nikt nie ma 66 pkt - wygrywa ten kto wziął ostatnią lewę
+             elif self.kontrakt == Kontrakt.NORMALNA and self.zwyciezca_ostatniej_lewy: 
+                 wygrani = [self.grajacy] if self.zwyciezca_ostatniej_lewy == self.grajacy else self.obroncy
+                 powod = "wzięcie ostatniej lewy"
+             # Fallback - wygrywa ten kto ma więcej punktów
+             elif punkty_grajacego > punkty_obrony_sum: 
+                 wygrani = [self.grajacy]
+             else: 
+                 wygrani = self.obroncy
              if not wygrani: print("BŁĄD KRYTYCZNY (fallback, 3p): Nie ustalono zwycięzcy!")
         else: print("BŁĄD KRYTYCZNY (rozlicz, 3p): Brak grającego!")
 

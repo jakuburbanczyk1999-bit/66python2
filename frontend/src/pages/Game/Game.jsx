@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
-import { gameAPI, lobbyAPI } from '../../services/api'
+import { gameAPI, lobbyAPI, statsAPI } from '../../services/api'
 import {
   LufaPanel,
   DeclarationPanel,
@@ -63,6 +63,9 @@ function Game() {
   const isConnectingRef = useRef(false)
   const [wsConnected, setWsConnected] = useState(false)
   const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0)
+
+  // Rangi graczy
+  const [playerRanks, setPlayerRanks] = useState({})
 
   // ============================================
   // LOAD GAME STATE
@@ -538,6 +541,30 @@ function Game() {
       loadChat()
     }
   }, [lobby])
+
+  // Pobierz rangi graczy
+  const slotsKey = JSON.stringify(lobby?.slots?.map(s => s.nazwa).filter(Boolean) || [])
+  useEffect(() => {
+    const loadRanks = async () => {
+      if (!lobby?.slots) return
+      
+      const usernames = lobby.slots
+        .filter(s => s.typ !== 'pusty' && s.nazwa)
+        .map(s => s.nazwa)
+      
+      if (usernames.length === 0) return
+      
+      try {
+        const data = await statsAPI.getRanksBatch(usernames)
+        console.log('Rangi pobrane (gra):', data)
+        setPlayerRanks(data.ranks || {})
+      } catch (err) {
+        console.error('Błąd pobierania rang:', err)
+      }
+    }
+    
+    loadRanks()
+  }, [slotsKey])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -1075,7 +1102,7 @@ function Game() {
                     </span>
                   )}
                   {getPlayerPrefix(topOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
-                  <p className="text-white font-bold text-sm">{topOpponent.name}</p>
+                  <p className="text-white font-bold text-sm">{playerRanks[topOpponent.name]?.emoji} {topOpponent.name}</p>
                 </div>
                 
                 <div className="flex gap-1 flex-row">
@@ -1210,7 +1237,7 @@ function Game() {
                     </span>
                   )}
                   {getPlayerPrefix(leftOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
-                  <p className="text-white font-bold text-sm">{leftOpponent.name}</p>
+                  <p className="text-white font-bold text-sm">{playerRanks[leftOpponent.name]?.emoji} {leftOpponent.name}</p>
                 </div>
                 
                 <div className="flex gap-1 flex-col">
@@ -1266,7 +1293,7 @@ function Game() {
                     </span>
                   )}
                   {getPlayerPrefix(rightOpponent, !isTysiac) && <span className="text-gray-600">·</span>}
-                  <p className="text-white font-bold text-sm">{rightOpponent.name}</p>
+                  <p className="text-white font-bold text-sm">{playerRanks[rightOpponent.name]?.emoji} {rightOpponent.name}</p>
                 </div>
               </div>
             )}
@@ -1564,7 +1591,7 @@ function Game() {
                         <span className="text-xs text-gray-400">{myPrefix}</span>
                       )}
                       {myPrefix && <span className="text-gray-600">·</span>}
-                      <span className="text-teal-400 font-bold text-sm">{user?.username}</span>
+                      <span className="text-teal-400 font-bold text-sm">{playerRanks[user?.username]?.emoji} {user?.username}</span>
                     </div>
                   </div>
                 )
@@ -1668,7 +1695,7 @@ function Game() {
                       {Object.entries(roundPoints).map(([name, points]) => (
                         <div key={name} className="flex justify-between text-xs">
                           <span className={name === user?.username ? 'text-teal-400' : 'text-gray-300'}>
-                            {name}
+                            {playerRanks[name]?.emoji} {name}
                           </span>
                           <span className="text-white font-bold">{points}</span>
                         </div>
@@ -1695,7 +1722,7 @@ function Game() {
                         <span className={`font-medium text-xs truncate ${
                           player.name === user?.username ? 'text-teal-400' : 'text-white'
                         }`}>
-                          {player.name}
+                          {playerRanks[player.name]?.emoji} {player.name}
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1728,7 +1755,7 @@ function Game() {
                           <span className={`font-medium text-xs truncate ${
                             player.name === user?.username ? 'text-teal-400' : 'text-white'
                           }`}>
-                            {player.name}
+                            {playerRanks[player.name]?.emoji} {player.name}
                           </span>
                         </div>
                         {gameState.kolej_gracza === player.name && (
@@ -1748,7 +1775,7 @@ function Game() {
                           <span className={`font-medium text-xs truncate ${
                             player.name === user?.username ? 'text-teal-400' : 'text-white'
                           }`}>
-                            {player.name}
+                            {playerRanks[player.name]?.emoji} {player.name}
                           </span>
                         </div>
                         {gameState.kolej_gracza === player.name && (
@@ -1779,7 +1806,7 @@ function Game() {
                         <span className={`text-xs font-semibold ${
                           player.name === user?.username ? 'text-teal-400' : 'text-white'
                         }`}>
-                          {player.name}
+                          {playerRanks[player.name]?.emoji} {player.name}
                         </span>
                         <span className="text-yellow-400 font-bold text-sm">
                           {punkty}

@@ -396,6 +396,53 @@ class BotService:
                     print(f"[⚠️ Stats] Błąd inkrementacji: {stats_err}")
                 # === KONIEC INKREMENTACJI ===
                 
+                # === AKTUALIZACJA STATYSTYK GRACZY (ELO, wygrane/przegrane) ===
+                try:
+                    from routers.stats import update_player_stats_after_game
+                    from engines.tysiac_engine import TysiacEngine
+                    
+                    # Określ typ gry
+                    game_type_name = "Tysiąc" if isinstance(engine, TysiacEngine) else "66"
+                    
+                    # Sprawdź czy gra casual
+                    is_casual = lobby_data.get('is_casual', False) if lobby_data else False
+                    
+                    # Zidentyfikuj zwycięzców i przegranych
+                    winner_usernames = []
+                    loser_usernames = []
+                    
+                    if hasattr(state, 'druzyny') and state.druzyny:
+                        # Tryb 4p z drużynami
+                        for druzyna in state.druzyny:
+                            if druzyna.punkty_meczu >= 66:
+                                # Wygrywająca drużyna
+                                winner_usernames.extend([g.nazwa for g in druzyna.gracze])
+                            else:
+                                # Przegrywająca drużyna
+                                loser_usernames.extend([g.nazwa for g in druzyna.gracze])
+                    else:
+                        # Tryb 3p lub Tysiąc - indywidualni gracze
+                        target_points = 1000 if isinstance(engine, TysiacEngine) else 66
+                        for gracz in state.gracze:
+                            if gracz.punkty_meczu >= target_points:
+                                winner_usernames.append(gracz.nazwa)
+                            else:
+                                loser_usernames.append(gracz.nazwa)
+                    
+                    # Aktualizuj statystyki
+                    await update_player_stats_after_game(
+                        winner_usernames=winner_usernames,
+                        loser_usernames=loser_usernames,
+                        game_type_name=game_type_name,
+                        is_casual=is_casual
+                    )
+                    print(f"[📊 Stats] Aktualizacja botów: winners={winner_usernames}, losers={loser_usernames}")
+                except Exception as stats_err:
+                    print(f"[⚠️ Stats] Błąd aktualizacji statystyk: {stats_err}")
+                    import traceback
+                    traceback.print_exc()
+                # === KONIEC AKTUALIZACJI STATYSTYK ===
+                
                 # Boty głosują za powrotem do lobby
                 await self._bots_vote_return_to_lobby(game_id, engine, redis)
                 return
